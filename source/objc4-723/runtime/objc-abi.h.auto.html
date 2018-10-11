@@ -1,0 +1,441 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-abi.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-abi.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-abi.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2009 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_ABI_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_ABI_H</span>
+
+<span class="enscript-comment">/* 
+ * WARNING  DANGER  HAZARD  BEWARE  EEK
+ * 
+ * Everything in this file is for Apple Internal use only.
+ * These will change in arbitrary OS updates and in unpredictable ways.
+ * When your program breaks, you get to keep both pieces.
+ */</span>
+
+<span class="enscript-comment">/*
+ * objc-abi.h: Declarations for functions used by compiler codegen.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc/malloc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;TargetConditionals.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/runtime.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/message.h&gt;</span>
+
+<span class="enscript-comment">/* Runtime startup. */</span>
+
+<span class="enscript-comment">// Old static initializer. Used by old crt1.o and old bug workarounds.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objcInit</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/* Images */</span>
+
+<span class="enscript-comment">// Description of an Objective-C image.
+</span><span class="enscript-comment">// __DATA,__objc_imageinfo stores one of these.
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> objc_image_info {
+    uint32_t version; <span class="enscript-comment">// currently 0
+</span>    uint32_t flags;
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__cplusplus</span> &gt;= 201103L
+  <span class="enscript-reference">private</span>:
+    <span class="enscript-type">enum</span> : uint32_t {
+        IsReplacement       = 1&lt;&lt;0,  <span class="enscript-comment">// used for Fix&amp;Continue, now ignored
+</span>        SupportsGC          = 1&lt;&lt;1,  <span class="enscript-comment">// image supports GC
+</span>        RequiresGC          = 1&lt;&lt;2,  <span class="enscript-comment">// image requires GC
+</span>        OptimizedByDyld     = 1&lt;&lt;3,  <span class="enscript-comment">// image is from an optimized shared cache
+</span>        CorrectedSynthesize = 1&lt;&lt;4,  <span class="enscript-comment">// used for an old workaround, now ignored
+</span>        IsSimulated         = 1&lt;&lt;5,  <span class="enscript-comment">// image compiled for a simulator platform
+</span>        HasCategoryClassProperties  = 1&lt;&lt;6,  <span class="enscript-comment">// class properties in category_t
+</span>
+        SwiftVersionMaskShift = 8,
+        SwiftVersionMask    = 0xff &lt;&lt; SwiftVersionMaskShift  <span class="enscript-comment">// Swift ABI version
+</span>
+    };
+   <span class="enscript-reference">public</span>:
+    <span class="enscript-type">enum</span> : uint32_t {
+        SwiftVersion1   = 1,
+        SwiftVersion1_2 = 2,
+        SwiftVersion2   = 3,
+        SwiftVersion3   = 4
+    };
+
+  <span class="enscript-reference">public</span>:
+    bool isReplacement()   <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> flags &amp; IsReplacement; }
+    bool supportsGC()      <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> flags &amp; SupportsGC; }
+    bool requiresGC()      <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> flags &amp; RequiresGC; }
+    bool optimizedByDyld() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> flags &amp; OptimizedByDyld; }
+    bool hasCategoryClassProperties() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> flags &amp; HasCategoryClassProperties; }
+    bool containsSwift()   <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> (flags &amp; SwiftVersionMask) != 0; }
+    uint32_t swiftVersion() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> (flags &amp; SwiftVersionMask) &gt;&gt; SwiftVersionMaskShift; }
+#<span class="enscript-reference">endif</span>
+} objc_image_info;
+
+<span class="enscript-comment">/* 
+IsReplacement:
+   Once used for Fix&amp;Continue in old OS X object files (not final linked images)
+   Not currently used.
+
+SupportsGC:
+   App: GC is required. Framework: GC is supported but not required.
+
+RequiresGC:
+   Framework: GC is required.
+
+OptimizedByDyld:
+   Assorted metadata precooked in the dyld shared cache.
+   Never set for images outside the shared cache file itself.
+
+CorrectedSynthesize:
+   Once used on old iOS to mark images that did not have a particular 
+   miscompile. Not used by the runtime.
+
+IsSimulated:
+   Image was compiled for a simulator platform. Not used by the runtime.
+
+HasClassProperties:
+   New ABI: category_t.classProperties fields are present.
+   Old ABI: Set by some compilers. Not used by the runtime.
+*/</span>
+
+
+<span class="enscript-comment">/* Properties */</span>
+
+<span class="enscript-comment">// Read or write an object property. Not all object properties use these.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_getProperty</span>(id _Nullable self, SEL _Nonnull _cmd,
+                 ptrdiff_t offset, BOOL atomic)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_setProperty</span>(id _Nullable self, SEL _Nonnull _cmd, ptrdiff_t offset,
+                 id _Nullable newValue, BOOL atomic, <span class="enscript-type">signed</span> <span class="enscript-type">char</span> shouldCopy)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_setProperty_atomic</span>(id _Nullable self, SEL _Nonnull _cmd,
+                        id _Nullable newValue, ptrdiff_t offset)
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_setProperty_nonatomic</span>(id _Nullable self, SEL _Nonnull _cmd,
+                           id _Nullable newValue, ptrdiff_t offset)
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_setProperty_atomic_copy</span>(id _Nullable self, SEL _Nonnull _cmd,
+                             id _Nullable newValue, ptrdiff_t offset)
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_setProperty_nonatomic_copy</span>(id _Nullable self, SEL _Nonnull _cmd,
+                                id _Nullable newValue, ptrdiff_t offset)
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+
+<span class="enscript-comment">// Read or write a non-object property. Not all uses are C structs, 
+</span><span class="enscript-comment">// and not all C struct properties use this.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_copyStruct</span>(<span class="enscript-type">void</span> * _Nonnull dest, <span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nonnull src,
+                ptrdiff_t size, BOOL atomic, BOOL hasStrong)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Perform a copy of a C++ object using striped locks. Used by non-POD C++ typed atomic properties.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_copyCppObjectAtomic</span>(<span class="enscript-type">void</span> * _Nonnull dest, <span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nonnull src,
+                         <span class="enscript-type">void</span> (* _Nonnull copyHelper)
+                           (<span class="enscript-type">void</span> * _Nonnull dest, <span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nonnull source))
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/* Classes. */</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+OBJC_EXPORT IMP _Nonnull _objc_empty_vtable
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+#<span class="enscript-reference">endif</span>
+OBJC_EXPORT <span class="enscript-type">struct</span> objc_cache _objc_empty_cache
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+
+<span class="enscript-comment">/* Messages */</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+<span class="enscript-comment">// objc_msgSendSuper2() takes the current search class, not its superclass.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSendSuper2</span>(<span class="enscript-type">struct</span> objc_super * _Nonnull super, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.6, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper2_stret</span>(<span class="enscript-type">struct</span> objc_super * _Nonnull super,
+                         SEL _Nonnull op,...)
+    OBJC_AVAILABLE(10.6, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+<span class="enscript-comment">// objc_msgSend_noarg() may be faster for methods with no additional arguments.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSend_noarg</span>(id _Nullable self, SEL _Nonnull _cmd)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+<span class="enscript-comment">// Debug messengers. Messengers used by the compiler have a debug flavor that 
+</span><span class="enscript-comment">// may perform extra sanity checking. 
+</span><span class="enscript-comment">// Old objc_msgSendSuper() does not have a debug version; this is OBJC2 only.
+</span><span class="enscript-comment">// *_fixup() do not have debug versions; use non-fixup only for debug mode.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSend_debug</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSendSuper2_debug</span>(<span class="enscript-type">struct</span> objc_super * _Nonnull super,
+                         SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_stret_debug</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper2_stret_debug</span>(<span class="enscript-type">struct</span> objc_super * _Nonnull super,
+                               SEL _Nonnull op,...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+# <span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__i386__</span>)
+OBJC_EXPORT <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSend_fpret_debug</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+# <span class="enscript-reference">elif</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__x86_64__</span>)
+OBJC_EXPORT <span class="enscript-type">long</span> <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSend_fpret_debug</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+#  <span class="enscript-reference">if</span> <span class="enscript-variable-name">__STDC_VERSION__</span> &gt;= 199901L
+OBJC_EXPORT _Complex <span class="enscript-type">long</span> <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSend_fp2ret_debug</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+#  <span class="enscript-reference">else</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fp2ret_debug</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+#  <span class="enscript-reference">endif</span>
+# <span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+<span class="enscript-comment">// Lookup messengers.
+</span><span class="enscript-comment">// These are not callable C functions. Do not call them directly.
+</span><span class="enscript-comment">// The caller should set the method parameters, call objc_msgLookup(), 
+</span><span class="enscript-comment">// then immediately call the returned IMP.
+</span><span class="enscript-comment">// 
+</span><span class="enscript-comment">// Generic ABI:
+</span><span class="enscript-comment">// - Callee-saved registers are preserved.
+</span><span class="enscript-comment">// - Receiver and selector registers may be modified. These values must 
+</span><span class="enscript-comment">//   be passed to the called IMP. Other parameter registers are preserved.
+</span><span class="enscript-comment">// - Caller-saved non-parameter registers are not preserved. Some of 
+</span><span class="enscript-comment">//   these registers are used to pass data from objc_msgLookup() to 
+</span><span class="enscript-comment">//   the called IMP and must not be disturbed by the caller.
+</span><span class="enscript-comment">// - Red zone is not preserved.
+</span><span class="enscript-comment">// See each architecture's implementation for details.
+</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookup</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookupSuper2</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookup_stret</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookupSuper2_stret</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+# <span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__i386__</span>)
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookup_fpret</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+# <span class="enscript-reference">elif</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__x86_64__</span>)
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookup_fpret</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgLookup_fp2ret</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+# <span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_OSX</span>  &amp;&amp;  <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__x86_64__</span>)
+<span class="enscript-comment">// objc_msgSend_fixup() is used for vtable-dispatchable call sites.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fixup</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;fixup dispatch is no longer optimized&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_stret_fixup</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;fixup dispatch is no longer optimized&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper2_fixup</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;fixup dispatch is no longer optimized&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper2_stret_fixup</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;fixup dispatch is no longer optimized&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fpret_fixup</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;fixup dispatch is no longer optimized&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fp2ret_fixup</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;fixup dispatch is no longer optimized&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/* C++-compatible exception handling. */</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+
+<span class="enscript-comment">// fixme these conflict with C++ compiler's internal definitions
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__cplusplus</span>)
+
+<span class="enscript-comment">// Vtable for C++ exception typeinfo for Objective-C types.
+</span>OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullableobjc_ehtype_vtable[]
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// C++ exception typeinfo for type `id`.
+</span>OBJC_EXPORT <span class="enscript-type">struct</span> objc_typeinfo OBJC_EHTYPE_id
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Exception personality function for Objective-C and Objective-C++ code.
+</span><span class="enscript-type">struct</span> _Unwind_Exception;
+<span class="enscript-type">struct</span> _Unwind_Context;
+OBJC_EXPORT <span class="enscript-type">int</span>
+<span class="enscript-function-name">__objc_personality_v0</span>(<span class="enscript-type">int</span> version,
+                      <span class="enscript-type">int</span> actions,
+                      uint64_t exceptionClass,
+                      <span class="enscript-type">struct</span> _Unwind_Exception * _Nonnull exceptionObject,
+                      <span class="enscript-type">struct</span> _Unwind_Context * _Nonnull context)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/* ARC */</span>
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_retainBlock</span>(id _Nullable)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+
+<span class="enscript-comment">/* Non-pointer isa */</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+
+<span class="enscript-comment">// Extract class pointer from an isa field.
+</span>    
+#<span class="enscript-reference">if</span>  <span class="enscript-variable-name">TARGET_OS_SIMULATOR</span>
+    <span class="enscript-comment">// No simulators use nonpointer isa yet.
+</span>    
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">__LP64__</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_HAVE_NONPOINTER_ISA</span> 1
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_HAVE_PACKED_NONPOINTER_ISA</span> 1
+
+<span class="enscript-comment">// Packed-isa version. This one is used directly by Swift code.
+</span><span class="enscript-comment">// (Class)(isa &amp; (uintptr_t)&amp;objc_absolute_packed_isa_class_mask) == class ptr
+</span>OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">struct</span> { <span class="enscript-type">char</span> c; } objc_absolute_packed_isa_class_mask
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">__ARM_ARCH_7K__</span> &gt;= 2
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_HAVE_NONPOINTER_ISA</span> 1
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_HAVE_INDEXED_NONPOINTER_ISA</span> 1
+
+<span class="enscript-comment">// Indexed-isa version.
+</span><span class="enscript-comment">// if (isa &amp; (uintptr_t)&amp;objc_absolute_indexed_isa_magic_mask == (uintptr_t)&amp;objc_absolute_indexed_isa_magic_value) {
+</span><span class="enscript-comment">//     uintptr_t index = (isa &amp; (uintptr_t)&amp;objc_absolute_indexed_isa_index_mask) &gt;&gt; (uintptr_t)&amp;objc_absolute_indexed_isa_index_shift;
+</span><span class="enscript-comment">//     cls = objc_indexed_classes[index];
+</span><span class="enscript-comment">// } else
+</span><span class="enscript-comment">//     cls = (Class)isa;
+</span><span class="enscript-comment">// }
+</span>OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">struct</span> { <span class="enscript-type">char</span> c; } objc_absolute_indexed_isa_magic_mask
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">struct</span> { <span class="enscript-type">char</span> c; } objc_absolute_indexed_isa_magic_value
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">struct</span> { <span class="enscript-type">char</span> c; } objc_absolute_indexed_isa_index_mask
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">struct</span> { <span class="enscript-type">char</span> c; } objc_absolute_indexed_isa_index_shift
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// OBJC2
+</span>#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// _OBJC_ABI_H
+</span>#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

@@ -1,0 +1,586 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-msg-arm64.s</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-msg-arm64.s&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-msg-arm64.s">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ <span class="enscript-keyword">*</span> @APPLE_LICENSE_HEADER_START@
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> Copyright (c) 2011 Apple Inc.  All Rights Reserved.
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> This file contains Original Code and/or Modifications of Original Code
+ <span class="enscript-keyword">*</span> as defined in and that are subject to the Apple Public Source License
+ <span class="enscript-keyword">*</span> Version 2.0 (the 'License'). You may not use this file except in
+ <span class="enscript-keyword">*</span> compliance with the License. Please obtain a copy of the License at
+ <span class="enscript-keyword">*</span> <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ <span class="enscript-keyword">*</span> file.
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> The Original Code and all software distributed under the License are
+ <span class="enscript-keyword">*</span> distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ <span class="enscript-keyword">*</span> EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ <span class="enscript-keyword">*</span> INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ <span class="enscript-keyword">*</span> FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ <span class="enscript-keyword">*</span> Please see the License for the specific language governing rights and
+ <span class="enscript-keyword">*</span> limitations under the License.
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> @APPLE_LICENSE_HEADER_END@
+ <span class="enscript-keyword">*/
+</span>/********************************************************************
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span>  objc-msg-arm64.s - ARM64 code to support objc messaging
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+#ifdef __arm64__
+	<span class="enscript-keyword">
+</span>#include &lt;arm/arch.h&gt;
+
+
+.data
+
+// _objc_entryPoints and _objc_exitPoints are used by method dispatch
+// caching code to figure out whether any threads are actively 
+// in the cache for dispatching.  The labels surround the asm code
+// that do cache lookups.  The tables are zero-terminated.
+
+.align 4
+.private_extern _objc_entryPoints
+<span class="enscript-function-name">_objc_entryPoints:</span>
+	<span class="enscript-keyword">.quad</span>   _cache_getImp
+	<span class="enscript-keyword">.quad</span>   _objc_msgSend
+	<span class="enscript-keyword">.quad</span>   _objc_msgSendSuper
+	<span class="enscript-keyword">.quad</span>   _objc_msgSendSuper2
+	<span class="enscript-keyword">.quad</span>   _objc_msgLookup
+	<span class="enscript-keyword">.quad</span>   _objc_msgLookupSuper2
+	<span class="enscript-keyword">.quad</span>   0
+
+.private_extern _objc_exitPoints
+<span class="enscript-function-name">_objc_exitPoints:</span>
+	<span class="enscript-keyword">.quad</span>   LExit_cache_getImp
+	<span class="enscript-keyword">.quad</span>   LExit_objc_msgSend
+	<span class="enscript-keyword">.quad</span>   LExit_objc_msgSendSuper
+	<span class="enscript-keyword">.quad</span>   LExit_objc_msgSendSuper2
+	<span class="enscript-keyword">.quad</span>   LExit_objc_msgLookup
+	<span class="enscript-keyword">.quad</span>   LExit_objc_msgLookupSuper2
+	<span class="enscript-keyword">.quad</span>   0
+
+
+/********************************************************************
+* List every exit insn from every messenger for debugger use.
+* Format:
+* (
+*   1 word instruction's address
+*   1 word type (ENTER or FAST_EXIT or SLOW_EXIT or NIL_EXIT)
+* )
+* 1 word zero
+*
+* ENTER is the start of a dispatcher
+* FAST_EXIT is method dispatch
+* SLOW_EXIT is uncached method lookup
+* NIL_EXIT is returning zero from a message sent to nil
+* These must match objc-gdb.h.
+********************************************************************/
+	<span class="enscript-keyword">
+</span>#define ENTER     1
+#define FAST_EXIT 2
+#define SLOW_EXIT 3
+#define NIL_EXIT  4
+
+.section __DATA,__objc_msg_break
+.globl _gdb_objc_messenger_breakpoints
+<span class="enscript-function-name">_gdb_objc_messenger_breakpoints:</span>
+// contents populated by the macros below
+
+.macro MESSENGER_START
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> ENTER
+	<span class="enscript-keyword">.text
+</span>.endmacro
+.macro MESSENGER_END_FAST
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> FAST_EXIT
+	<span class="enscript-keyword">.text
+</span>.endmacro
+.macro MESSENGER_END_SLOW
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> SLOW_EXIT
+	<span class="enscript-keyword">.text
+</span>.endmacro
+.macro MESSENGER_END_NIL
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> NIL_EXIT
+	<span class="enscript-keyword">.text
+</span>.endmacro
+
+
+/* objc_super parameter to sendSuper */
+#define RECEIVER         0
+#define CLASS            8
+
+/* Selected field offsets in class structure */
+#define SUPERCLASS       8
+#define CACHE            16
+
+/* Selected field offsets in isa field */
+#define ISA_MASK         0x0000000ffffffff8
+
+/* Selected field offsets in method structure */
+#define METHOD_NAME      0
+#define METHOD_TYPES     8
+#define METHOD_IMP       16
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> ENTRY functionName
+ <span class="enscript-keyword">*</span> STATIC_ENTRY functionName
+ <span class="enscript-keyword">*</span> END_ENTRY functionName
+ <span class="enscript-keyword">********************************************************************/
+</span>
+.macro ENTRY /* name */
+	<span class="enscript-keyword">.text
+</span>	<span class="enscript-keyword">.align</span> 5
+	<span class="enscript-keyword">.globl</span>    $0
+<span class="enscript-function-name">$0:</span>
+.endmacro
+
+.macro STATIC_ENTRY /*name*/
+	<span class="enscript-keyword">.text
+</span>	<span class="enscript-keyword">.align</span> 5
+	<span class="enscript-keyword">.private_extern</span> $0
+<span class="enscript-function-name">$0:</span>
+.endmacro
+
+.macro END_ENTRY /* name */
+<span class="enscript-function-name">LExit$0:</span>
+.endmacro
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> UNWIND name, flags
+ <span class="enscript-keyword">*</span> Unwind info generation	
+ <span class="enscript-keyword">********************************************************************/
+</span>.macro UNWIND
+	<span class="enscript-keyword">.section</span> __LD,__compact_unwind,regular,debug
+	<span class="enscript-keyword">.quad</span> $0
+	<span class="enscript-keyword">.set</span>  LUnwind$0, LExit$0 - $0
+	<span class="enscript-keyword">.long</span> LUnwind$0
+	<span class="enscript-keyword">.long</span> $1
+	<span class="enscript-keyword">.quad</span> 0	 /* no personality */
+	<span class="enscript-keyword">.quad</span> 0  /* no LSDA */
+	<span class="enscript-keyword">.text
+</span>.endmacro
+
+#define NoFrame 0x02000000  // no frame, no SP adjustment
+#define FrameWithNoSaves 0x04000000  // frame, no non-volatile saves
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> CacheLookup NORMAL|GETIMP|LOOKUP
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> Locate the implementation for a selector in a class method cache.
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> Takes:
+ <span class="enscript-keyword">*</span>	 x1 = selector
+ <span class="enscript-keyword">*</span>	 x16 = class to be searched
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> Kills:
+ <span class="enscript-keyword">*</span> 	 x9,x10,x11,x12, x17
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> On exit: (found) calls or returns IMP
+ <span class="enscript-keyword">*</span>                  with x16 = class, x17 = IMP
+ <span class="enscript-keyword">*</span>          (not found) jumps to LCacheMiss
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+#define NORMAL 0
+#define GETIMP 1
+#define LOOKUP 2
+
+.macro CacheHit
+.if $0 == NORMAL
+	<span class="enscript-keyword">MESSENGER_END_FAST
+</span>	<span class="enscript-keyword">br</span>	x17			// call imp
+.elseif $0 == GETIMP
+	<span class="enscript-keyword">mov</span>	x0, x17			// return imp
+	<span class="enscript-keyword">ret
+</span>.elseif $0 == LOOKUP
+	<span class="enscript-keyword">ret</span>				// return imp via x17
+.else
+.abort oops
+.endif
+.endmacro
+
+.macro CheckMiss
+	<span class="enscript-keyword">//</span> miss if bucket-&gt;sel == 0
+.if $0 == GETIMP
+	<span class="enscript-keyword">cbz</span>	x9, LGetImpMiss
+.elseif $0 == NORMAL
+	<span class="enscript-keyword">cbz</span>	x9, __objc_msgSend_uncached
+.elseif $0 == LOOKUP
+	<span class="enscript-keyword">cbz</span>	x9, __objc_msgLookup_uncached
+.else
+.abort oops
+.endif
+.endmacro
+
+.macro JumpMiss
+.if $0 == GETIMP
+	<span class="enscript-keyword">b</span>	LGetImpMiss
+.elseif $0 == NORMAL
+	<span class="enscript-keyword">b</span>	__objc_msgSend_uncached
+.elseif $0 == LOOKUP
+	<span class="enscript-keyword">b</span>	__objc_msgLookup_uncached
+.else
+.abort oops
+.endif
+.endmacro
+
+.macro CacheLookup
+	<span class="enscript-keyword">//</span> x1 = SEL, x16 = isa
+	<span class="enscript-keyword">ldp</span>	x10, x11, [x16, #CACHE]	// x10 = buckets, x11 = occupied|mask
+	<span class="enscript-keyword">and</span>	w12, w1, w11		// x12 = _cmd &amp; mask
+	<span class="enscript-keyword">add</span>	x12, x10, x12, LSL #4	// x12 = buckets + ((_cmd &amp; mask)&lt;&lt;4)
+
+	<span class="enscript-keyword">ldp</span>	x9, x17, [x12]		// {x9, x17} = *bucket
+<span class="enscript-function-name">1:</span>	cmp	x9, x1			// if (bucket-&gt;sel != _cmd)
+	<span class="enscript-keyword">b.ne</span>	2f			//     scan more
+	<span class="enscript-keyword">CacheHit</span> $0			// call or return imp
+	<span class="enscript-keyword">
+</span><span class="enscript-function-name">2:</span>	// not hit: x12 = not-hit bucket
+	<span class="enscript-keyword">CheckMiss</span> $0			// miss if bucket-&gt;sel == 0
+	<span class="enscript-keyword">cmp</span>	x12, x10		// wrap if bucket == buckets
+	<span class="enscript-keyword">b.eq</span>	3f
+	<span class="enscript-keyword">ldp</span>	x9, x17, [x12, #-16]!	// {x9, x17} = *--bucket
+	<span class="enscript-keyword">b</span>	1b			// loop
+
+<span class="enscript-function-name">3:</span>	// wrap: x12 = first bucket, w11 = mask
+	<span class="enscript-keyword">add</span>	x12, x12, w11, UXTW #4	// x12 = buckets+(mask&lt;&lt;4)
+
+	<span class="enscript-keyword">//</span> Clone scanning loop to miss instead of hang when cache is corrupt.
+	<span class="enscript-keyword">//</span> The slow path may detect any corruption and halt later.
+
+	<span class="enscript-keyword">ldp</span>	x9, x17, [x12]		// {x9, x17} = *bucket
+<span class="enscript-function-name">1:</span>	cmp	x9, x1			// if (bucket-&gt;sel != _cmd)
+	<span class="enscript-keyword">b.ne</span>	2f			//     scan more
+	<span class="enscript-keyword">CacheHit</span> $0			// call or return imp
+	<span class="enscript-keyword">
+</span><span class="enscript-function-name">2:</span>	// not hit: x12 = not-hit bucket
+	<span class="enscript-keyword">CheckMiss</span> $0			// miss if bucket-&gt;sel == 0
+	<span class="enscript-keyword">cmp</span>	x12, x10		// wrap if bucket == buckets
+	<span class="enscript-keyword">b.eq</span>	3f
+	<span class="enscript-keyword">ldp</span>	x9, x17, [x12, #-16]!	// {x9, x17} = *--bucket
+	<span class="enscript-keyword">b</span>	1b			// loop
+
+<span class="enscript-function-name">3:</span>	// double wrap
+	<span class="enscript-keyword">JumpMiss</span> $0
+	<span class="enscript-keyword">
+</span>.endmacro
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> id objc_msgSend(id self, SEL _cmd, ...)<span class="enscript-comment">;
+ * IMP objc_msgLookup(id self, SEL _cmd, ...);
+</span> <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> objc_msgLookup ABI:
+ <span class="enscript-keyword">*</span> IMP returned in x17
+ <span class="enscript-keyword">*</span> x16 reserved for our use but not used
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">.data
+</span>	<span class="enscript-keyword">.align</span> 3
+	<span class="enscript-keyword">.globl</span> _objc_debug_taggedpointer_classes
+<span class="enscript-function-name">_objc_debug_taggedpointer_classes:</span>
+	<span class="enscript-keyword">.fill</span> 16, 8, 0
+	<span class="enscript-keyword">.globl</span> _objc_debug_taggedpointer_ext_classes
+<span class="enscript-function-name">_objc_debug_taggedpointer_ext_classes:</span>
+	<span class="enscript-keyword">.fill</span> 256, 8, 0
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSend, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>
+	<span class="enscript-keyword">cmp</span>	x0, #0			// nil check and tagged pointer check
+	<span class="enscript-keyword">b.le</span>	LNilOrTagged		//  (MSB tagged pointer looks negative)
+	<span class="enscript-keyword">ldr</span>	x13, [x0]		// x13 = isa
+	<span class="enscript-keyword">and</span>	x16, x13, #ISA_MASK	// x16 = class	
+<span class="enscript-function-name">LGetIsaDone:</span>
+	<span class="enscript-keyword">CacheLookup</span> NORMAL		// calls imp or objc_msgSend_uncached
+
+<span class="enscript-function-name">LNilOrTagged:</span>
+	<span class="enscript-keyword">b.eq</span>	LReturnZero		// nil check
+
+	<span class="enscript-keyword">//</span> tagged
+	<span class="enscript-keyword">mov</span>	x10, #0xf000000000000000
+	<span class="enscript-keyword">cmp</span>	x0, x10
+	<span class="enscript-keyword">b.hs</span>	LExtTag
+	<span class="enscript-keyword">adrp</span>	x10, _objc_debug_taggedpointer_classes@PAGE
+	<span class="enscript-keyword">add</span>	x10, x10, _objc_debug_taggedpointer_classes@PAGEOFF
+	<span class="enscript-keyword">ubfx</span>	x11, x0, #60, #4
+	<span class="enscript-keyword">ldr</span>	x16, [x10, x11, LSL #3]
+	<span class="enscript-keyword">b</span>	LGetIsaDone
+
+<span class="enscript-function-name">LExtTag:</span>
+	<span class="enscript-keyword">//</span> ext tagged
+	<span class="enscript-keyword">adrp</span>	x10, _objc_debug_taggedpointer_ext_classes@PAGE
+	<span class="enscript-keyword">add</span>	x10, x10, _objc_debug_taggedpointer_ext_classes@PAGEOFF
+	<span class="enscript-keyword">ubfx</span>	x11, x0, #52, #8
+	<span class="enscript-keyword">ldr</span>	x16, [x10, x11, LSL #3]
+	<span class="enscript-keyword">b</span>	LGetIsaDone
+	<span class="enscript-keyword">
+</span><span class="enscript-function-name">LReturnZero:</span>
+	<span class="enscript-keyword">//</span> x0 is already zero
+	<span class="enscript-keyword">mov</span>	x1, #0
+	<span class="enscript-keyword">movi</span>	d0, #0
+	<span class="enscript-keyword">movi</span>	d1, #0
+	<span class="enscript-keyword">movi</span>	d2, #0
+	<span class="enscript-keyword">movi</span>	d3, #0
+	<span class="enscript-keyword">MESSENGER_END_NIL
+</span>	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgLookup
+	<span class="enscript-keyword">UNWIND</span> _objc_msgLookup, NoFrame
+
+	<span class="enscript-keyword">cmp</span>	x0, #0			// nil check and tagged pointer check
+	<span class="enscript-keyword">b.le</span>	LLookup_NilOrTagged	//  (MSB tagged pointer looks negative)
+	<span class="enscript-keyword">ldr</span>	x13, [x0]		// x13 = isa
+	<span class="enscript-keyword">and</span>	x16, x13, #ISA_MASK	// x16 = class	
+<span class="enscript-function-name">LLookup_GetIsaDone:</span>
+	<span class="enscript-keyword">CacheLookup</span> LOOKUP		// returns imp
+
+<span class="enscript-function-name">LLookup_NilOrTagged:</span>
+	<span class="enscript-keyword">b.eq</span>	LLookup_Nil	// nil check
+
+	<span class="enscript-keyword">//</span> tagged
+	<span class="enscript-keyword">mov</span>	x10, #0xf000000000000000
+	<span class="enscript-keyword">cmp</span>	x0, x10
+	<span class="enscript-keyword">b.hs</span>	LLookup_ExtTag
+	<span class="enscript-keyword">adrp</span>	x10, _objc_debug_taggedpointer_classes@PAGE
+	<span class="enscript-keyword">add</span>	x10, x10, _objc_debug_taggedpointer_classes@PAGEOFF
+	<span class="enscript-keyword">ubfx</span>	x11, x0, #60, #4
+	<span class="enscript-keyword">ldr</span>	x16, [x10, x11, LSL #3]
+	<span class="enscript-keyword">b</span>	LLookup_GetIsaDone
+
+<span class="enscript-function-name">LLookup_ExtTag:</span>	
+	<span class="enscript-keyword">adrp</span>	x10, _objc_debug_taggedpointer_ext_classes@PAGE
+	<span class="enscript-keyword">add</span>	x10, x10, _objc_debug_taggedpointer_ext_classes@PAGEOFF
+	<span class="enscript-keyword">ubfx</span>	x11, x0, #52, #8
+	<span class="enscript-keyword">ldr</span>	x16, [x10, x11, LSL #3]
+	<span class="enscript-keyword">b</span>	LLookup_GetIsaDone
+
+<span class="enscript-function-name">LLookup_Nil:</span>
+	<span class="enscript-keyword">adrp</span>	x17, __objc_msgNil@PAGE
+	<span class="enscript-keyword">add</span>	x17, x17, __objc_msgNil@PAGEOFF
+	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgNil
+
+	<span class="enscript-keyword">//</span> x0 is already zero
+	<span class="enscript-keyword">mov</span>	x1, #0
+	<span class="enscript-keyword">movi</span>	d0, #0
+	<span class="enscript-keyword">movi</span>	d1, #0
+	<span class="enscript-keyword">movi</span>	d2, #0
+	<span class="enscript-keyword">movi</span>	d3, #0
+	<span class="enscript-keyword">ret
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> __objc_msgNil
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSendSuper, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>
+	<span class="enscript-keyword">ldp</span>	x0, x16, [x0]		// x0 = real receiver, x16 = class
+	<span class="enscript-keyword">CacheLookup</span> NORMAL		// calls imp or objc_msgSend_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper
+
+	<span class="enscript-keyword">//</span> no _objc_msgLookupSuper
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSendSuper2, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>
+	<span class="enscript-keyword">ldp</span>	x0, x16, [x0]		// x0 = real receiver, x16 = class
+	<span class="enscript-keyword">ldr</span>	x16, [x16, #SUPERCLASS]	// x16 = class-&gt;superclass
+	<span class="enscript-keyword">CacheLookup</span> NORMAL
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgLookupSuper2
+	<span class="enscript-keyword">UNWIND</span> _objc_msgLookupSuper2, NoFrame
+
+	<span class="enscript-keyword">ldp</span>	x0, x16, [x0]		// x0 = real receiver, x16 = class
+	<span class="enscript-keyword">ldr</span>	x16, [x16, #SUPERCLASS]	// x16 = class-&gt;superclass
+	<span class="enscript-keyword">CacheLookup</span> LOOKUP
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookupSuper2
+
+
+.macro MethodTableLookup
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> push frame
+	<span class="enscript-keyword">stp</span>	fp, lr, [sp, #-16]!
+	<span class="enscript-keyword">mov</span>	fp, sp
+
+	<span class="enscript-keyword">//</span> save parameter registers: x0..x8, q0..q7
+	<span class="enscript-keyword">sub</span>	sp, sp, #(10*8 + 8*16)
+	<span class="enscript-keyword">stp</span>	q0, q1, [sp, #(0*16)]
+	<span class="enscript-keyword">stp</span>	q2, q3, [sp, #(2*16)]
+	<span class="enscript-keyword">stp</span>	q4, q5, [sp, #(4*16)]
+	<span class="enscript-keyword">stp</span>	q6, q7, [sp, #(6*16)]
+	<span class="enscript-keyword">stp</span>	x0, x1, [sp, #(8*16+0*8)]
+	<span class="enscript-keyword">stp</span>	x2, x3, [sp, #(8*16+2*8)]
+	<span class="enscript-keyword">stp</span>	x4, x5, [sp, #(8*16+4*8)]
+	<span class="enscript-keyword">stp</span>	x6, x7, [sp, #(8*16+6*8)]
+	<span class="enscript-keyword">str</span>	x8,     [sp, #(8*16+8*8)]
+
+	<span class="enscript-keyword">//</span> receiver and selector already in x0 and x1
+	<span class="enscript-keyword">mov</span>	x2, x16
+	<span class="enscript-keyword">bl</span>	__class_lookupMethodAndLoadCache3
+
+	<span class="enscript-keyword">//</span> imp in x0
+	<span class="enscript-keyword">mov</span>	x17, x0
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> restore registers and return
+	<span class="enscript-keyword">ldp</span>	q0, q1, [sp, #(0*16)]
+	<span class="enscript-keyword">ldp</span>	q2, q3, [sp, #(2*16)]
+	<span class="enscript-keyword">ldp</span>	q4, q5, [sp, #(4*16)]
+	<span class="enscript-keyword">ldp</span>	q6, q7, [sp, #(6*16)]
+	<span class="enscript-keyword">ldp</span>	x0, x1, [sp, #(8*16+0*8)]
+	<span class="enscript-keyword">ldp</span>	x2, x3, [sp, #(8*16+2*8)]
+	<span class="enscript-keyword">ldp</span>	x4, x5, [sp, #(8*16+4*8)]
+	<span class="enscript-keyword">ldp</span>	x6, x7, [sp, #(8*16+6*8)]
+	<span class="enscript-keyword">ldr</span>	x8,     [sp, #(8*16+8*8)]
+
+	<span class="enscript-keyword">mov</span>	sp, fp
+	<span class="enscript-keyword">ldp</span>	fp, lr, [sp], #16
+
+.endmacro
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgSend_uncached
+	<span class="enscript-keyword">UNWIND</span> __objc_msgSend_uncached, FrameWithNoSaves
+
+	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band x16 is the class to search
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">MethodTableLookup
+</span>	<span class="enscript-keyword">br</span>	x17
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgSend_uncached
+
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgLookup_uncached
+	<span class="enscript-keyword">UNWIND</span> __objc_msgLookup_uncached, FrameWithNoSaves
+
+	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band x16 is the class to search
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">MethodTableLookup
+</span>	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgLookup_uncached
+
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> _cache_getImp
+
+	<span class="enscript-keyword">and</span>	x16, x0, #ISA_MASK
+	<span class="enscript-keyword">CacheLookup</span> GETIMP
+
+<span class="enscript-function-name">LGetImpMiss:</span>
+	<span class="enscript-keyword">mov</span>	x0, #0
+	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> _cache_getImp
+
+
+/********************************************************************
+*
+* id _objc_msgForward(id self, SEL _cmd,...)<span class="enscript-comment">;
+*
+</span>* _objc_msgForward is the externally-callable
+*   function returned by things like method_getImplementation().
+* _objc_msgForward_impcache is the function pointer actually stored in
+*   method caches.
+*
+********************************************************************/
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgForward_impcache
+
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">nop
+</span>	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>
+	<span class="enscript-keyword">//</span> No stret specialization.
+	<span class="enscript-keyword">b</span>	__objc_msgForward
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgForward_impcache
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> __objc_msgForward
+
+	<span class="enscript-keyword">adrp</span>	x17, __objc_forward_handler@PAGE
+	<span class="enscript-keyword">ldr</span>	x17, [x17, __objc_forward_handler@PAGEOFF]
+	<span class="enscript-keyword">br</span>	x17
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> __objc_msgForward
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_noarg
+	<span class="enscript-keyword">b</span>	_objc_msgSend
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_noarg
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_debug
+	<span class="enscript-keyword">b</span>	_objc_msgSend
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_debug
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2_debug
+	<span class="enscript-keyword">b</span>	_objc_msgSendSuper2
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_debug
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _method_invoke
+	<span class="enscript-keyword">//</span> x1 is method triplet instead of SEL
+	<span class="enscript-keyword">ldr</span>	x17, [x1, #METHOD_IMP]
+	<span class="enscript-keyword">ldr</span>	x1, [x1, #METHOD_NAME]
+	<span class="enscript-keyword">br</span>	x17
+	<span class="enscript-keyword">END_ENTRY</span> _method_invoke
+
+#endif
+</pre>
+<hr />
+</body></html>

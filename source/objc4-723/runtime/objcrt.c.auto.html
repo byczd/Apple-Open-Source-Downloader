@@ -1,0 +1,123 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objcrt.c</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objcrt.c&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objcrt.c">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">WIN32_LEAN_AND_MEAN</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;windows.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objcrt.h&quot;</span>
+
+<span class="enscript-comment">// Boundary symbols for metadata sections
+</span>
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_module_info$A&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_module_info$A&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_modStart = 0;
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_module_info$C&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_module_info$C&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_modEnd = 0;
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_protocol$A&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_protocol$A&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_protoStart = 0;
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_protocol$C&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_protocol$C&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_protoEnd = 0;
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_image_info$A&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_image_info$A&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_iiStart = 0;
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_image_info$C&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_image_info$C&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_iiEnd = 0;
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_message_refs$A&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_message_refs$A&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_selrefsStart = 0;
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_message_refs$C&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_message_refs$C&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_selrefsEnd = 0;
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_class_refs$A&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_class_refs$A&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_clsrefsStart = 0;
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.objc_class_refs$C&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.objc_class_refs$C&quot;</span>)
+<span class="enscript-type">static</span> uintptr_t __objc_clsrefsEnd = 0;
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>()
+
+<span class="enscript-comment">// Merge all metadata into .data
+</span><span class="enscript-comment">// fixme order these by usage?
+</span>#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">comment</span>(<span class="enscript-variable-name">linker</span>, <span class="enscript-string">&quot;/MERGE:.objc_module_info=.data&quot;</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">comment</span>(<span class="enscript-variable-name">linker</span>, <span class="enscript-string">&quot;/MERGE:.objc_protocol=.data&quot;</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">comment</span>(<span class="enscript-variable-name">linker</span>, <span class="enscript-string">&quot;/MERGE:.objc_image_info=.data&quot;</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">comment</span>(<span class="enscript-variable-name">linker</span>, <span class="enscript-string">&quot;/MERGE:.objc_message_refs=.data&quot;</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">comment</span>(<span class="enscript-variable-name">linker</span>, <span class="enscript-string">&quot;/MERGE:.objc_class_refs=.data&quot;</span>)
+
+
+<span class="enscript-comment">// Image initializers
+</span>
+<span class="enscript-type">static</span> <span class="enscript-type">void</span> *__hinfo = NULL;  <span class="enscript-comment">// cookie from runtime
+</span><span class="enscript-type">extern</span> IMAGE_DOS_HEADER __ImageBase;  <span class="enscript-comment">// this image's header
+</span>
+<span class="enscript-type">static</span> <span class="enscript-type">int</span> <span class="enscript-function-name">__objc_init</span>(<span class="enscript-type">void</span>)
+{
+    objc_sections sections = {
+        5, 
+        &amp;__objc_modStart, &amp;__objc_modEnd, 
+        &amp;__objc_protoStart, &amp;__objc_protoEnd, 
+        &amp;__objc_iiStart, &amp;__objc_iiEnd, 
+        &amp;__objc_selrefsStart, &amp;__objc_selrefsEnd, 
+        &amp;__objc_clsrefsStart, &amp;__objc_clsrefsEnd, 
+    };
+    __hinfo = _objc_init_image((HMODULE)&amp;__ImageBase, &amp;sections);
+    <span class="enscript-keyword">return</span> 0;
+}
+
+<span class="enscript-type">static</span> <span class="enscript-type">void</span> <span class="enscript-function-name">__objc_unload</span>(<span class="enscript-type">void</span>)
+{
+    _objc_unload_image((HMODULE)&amp;__ImageBase, __hinfo);
+}
+
+<span class="enscript-type">static</span> <span class="enscript-type">int</span> <span class="enscript-function-name">__objc_load</span>(<span class="enscript-type">void</span>)
+{
+    _objc_load_image((HMODULE)&amp;__ImageBase, __hinfo);
+    <span class="enscript-keyword">return</span> 0;
+}
+
+<span class="enscript-comment">// run _objc_init_image ASAP
+</span>#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.CRT$XIAA&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.CRT$XIAA&quot;</span>)
+<span class="enscript-type">static</span> <span class="enscript-type">void</span> *__objc_init_fn = &amp;__objc_init;
+
+<span class="enscript-comment">// run _objc_load_image (+load methods) after all other initializers; 
+</span><span class="enscript-comment">// otherwise constant NSStrings are not initialized yet
+</span>#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">section</span>(<span class="enscript-string">&quot;.CRT$XCUO&quot;</span>,<span class="enscript-variable-name">long</span>,<span class="enscript-variable-name">read</span>,<span class="enscript-variable-name">write</span>)
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>(<span class="enscript-string">&quot;.CRT$XCUO&quot;</span>)
+<span class="enscript-type">static</span> <span class="enscript-type">void</span> *__objc_load_fn = &amp;__objc_load;
+
+<span class="enscript-comment">// _objc_unload_image is called by atexit(), not by an image terminator
+</span>
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">data_seg</span>()
+</pre>
+<hr />
+</body></html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50PCI.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50PCI.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50PCI.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2008 Apple Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * ApplePCI16X50Serial.cpp
+ * This file contains the implementation of device driver for a 16650-family
+ * serial device connected as a PCI device.  This subclass provides only the routines
+ * necessary to detect and initialize the hardware, as well as map the
+ * device registers and field interrupts.  All other functions are handled
+ * by the client-class &quot;com_apple_driver_16X50UARTSync&quot;.
+ * 
+ * 2002-02-15	dreece	I/O Kit port, based on NeXT drvISASerialPort DriverKit driver.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50PCI.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/serial/IOSerialKeys.h&gt;</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">BAR_OFFSET_TO_REFCON</span>(bar, off)	( (void *)( ((bar)&amp;0x07)|((off)&amp;0x18) ) )
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">REFCON_TO_OFFSET</span>(ref)		( (UInt32)( ((UInt32)ref) &amp; 0x18 ) )
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">REFCON_TO_BAR</span>(ref)		( (UInt32)( ((UInt32)ref) &amp; 0x07 ) )
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">super</span> Apple16X50BusInterface
+<span class="enscript-function-name">OSDefineMetaClassAndStructors</span>(com_apple_driver_16X50PCI, com_apple_driver_16X50BusInterface)
+
+IOService *Apple16X50PCI::
+<span class="enscript-function-name">probe</span>(IOService *provider, SInt32 *score)
+{
+    Provider = OSDynamicCast(IOPCIDevice, provider);
+    <span class="enscript-keyword">if</span> (!Provider) {
+        IOLog (<span class="enscript-string">&quot;Apple16X50PCI: Attached to non-IOPCIDevice provider!  Failing probe()\n&quot;</span>);
+        <span class="enscript-keyword">return</span> NULL;
+    }
+
+    <span class="enscript-keyword">if</span> (!super::probe(provider, score)) <span class="enscript-keyword">return</span> NULL;
+
+    <span class="enscript-type">char</span> buf[80];
+    UInt8 dev  = Provider-&gt;getDeviceNumber();
+    UInt8 func = Provider-&gt;getFunctionNumber();
+    UInt8 bus  = Provider-&gt;getBusNumber();
+    
+    OSData *propData = OSDynamicCast(OSData, Provider-&gt;getProperty(<span class="enscript-string">&quot;AAPL,slot-name&quot;</span>));
+    <span class="enscript-keyword">if</span> (propData &amp;&amp; (propData-&gt;getLength()) &lt; 16)
+        snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;PCI %s Bus=%d Dev=%d Func=%d&quot;</span>, (<span class="enscript-type">char</span> *)(propData-&gt;getBytesNoCopy()), bus, dev, func);
+    <span class="enscript-keyword">else</span>
+        snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;PCI Bus=%d Dev=%d Func=%d&quot;</span>, bus, dev, func);
+    setProperty(kLocationKey, buf);
+    Location = (OSDynamicCast(OSString, getProperty(kLocationKey))-&gt;getCStringNoCopy());
+
+    setProperty(kIOTTYBaseNameKey, <span class="enscript-string">&quot;pci-serial&quot;</span>);  <span class="enscript-comment">// this will be the TTY base name for all UARTS
+</span>    InterfaceBaseName=<span class="enscript-string">&quot;PCI Serial Adapter&quot;</span>; <span class="enscript-comment">// this will (eventually) be displayed in NetworkPrefs
+</span>    
+    InterfaceInstance=dev;
+
+    snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;Apple16X50PCI%d&quot;</span>, (<span class="enscript-type">int</span>)InterfaceInstance);
+    setName(buf);
+    
+    <span class="enscript-comment">// turn off all access except Config space (for now)
+</span>    Provider-&gt;setMemoryEnable(false);
+    Provider-&gt;setIOEnable(false);
+    Provider-&gt;setBusMasterEnable(false);
+
+    <span class="enscript-keyword">return</span> <span class="enscript-keyword">this</span>;
+}
+
+Apple16X50UARTSync *Apple16X50PCI::
+<span class="enscript-function-name">probeUART</span>(<span class="enscript-type">void</span>* refCon, Apple16X50UARTSync *uart, OSDictionary *properties)
+{
+    <span class="enscript-type">char</span> buf[80];
+
+    uart = super::probeUART(refCon, uart, properties);
+    <span class="enscript-keyword">if</span> (!uart) <span class="enscript-keyword">return</span> false;
+    
+    snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;%s BAR=%lu Offset=%lu&quot;</span>, Location, REFCON_TO_BAR((uintptr_t)refCon), REFCON_TO_OFFSET((uintptr_t)refCon));
+    uart-&gt;setProperty(kLocationKey, buf);
+    <span class="enscript-keyword">return</span> uart;    
+}
+
+<span class="enscript-comment">// This routine examines a base address register (BAR) in the PCI Device's
+</span><span class="enscript-comment">// Config space.  If the BAR meets all the criteria, then it is mapped
+</span><span class="enscript-type">bool</span> Apple16X50PCI::
+<span class="enscript-function-name">setupBAR</span> (UInt32 bar, UInt32 maxUARTs)
+{
+    <span class="enscript-type">register</span> UInt32 barsize, implemented;
+    UInt32 barbase, addr=kIOPCIConfigBaseAddress0+(bar&lt;&lt;2);
+    barbase = Provider-&gt;configRead32(addr);	
+    Provider-&gt;configWrite32(addr, ~barbase);
+    implemented = barbase ^ (Provider-&gt;configRead32(addr)); <span class="enscript-comment">// implemented bits are 1, all others 0
+</span>    <span class="enscript-keyword">if</span> ((barbase &amp; implemented) == 0)
+        <span class="enscript-keyword">goto</span> <span class="enscript-reference">skip</span>;  <span class="enscript-comment">// This BAR is not configured
+</span>    Provider-&gt;configWrite32(addr, barbase);
+    <span class="enscript-comment">// BAR size determined by least-significant implemented bit
+</span>    <span class="enscript-keyword">for</span> (barsize=1; barsize; barsize&lt;&lt;=1)
+        <span class="enscript-keyword">if</span> (barsize &amp; implemented) <span class="enscript-keyword">break</span>;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: BAR[%d]=0x%08x:0x%08x (len=%d bytes)\n&quot;</span>, Name,
+                (<span class="enscript-type">int</span>)bar, (<span class="enscript-type">int</span>)barbase, (<span class="enscript-type">int</span>)implemented, (<span class="enscript-type">int</span>)barsize);
+    <span class="enscript-keyword">if</span> ((barbase &amp; 0x01) != 0x01) <span class="enscript-keyword">goto</span> <span class="enscript-reference">skip</span>; <span class="enscript-comment">// not an I/O Range
+</span>    <span class="enscript-keyword">if</span> (barsize &gt; (maxUARTs*kREG_Size)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">skip</span>; <span class="enscript-comment">// range is too big
+</span>    <span class="enscript-keyword">if</span> (barsize &lt; (kREG_Size)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">skip</span>; <span class="enscript-comment">// range is too small
+</span>    Map[bar] = Provider-&gt;mapDeviceMemoryWithRegister(addr);
+    <span class="enscript-keyword">if</span> (!(Map[bar])) <span class="enscript-keyword">goto</span> <span class="enscript-reference">skip</span>;
+    Len[bar]=barsize;
+    <span class="enscript-keyword">return</span> true;
+    
+   <span class="enscript-reference">skip</span>:
+    RELEASE(Map[bar]);
+    Len[bar]=0;
+    <span class="enscript-keyword">return</span> false;
+}
+
+UInt32 Apple16X50PCI::
+<span class="enscript-function-name">scanBARforUARTs</span> (UInt32 bar, UInt32 maxUARTs)
+{
+    <span class="enscript-type">register</span> UInt32 count=0, offset;
+    
+    <span class="enscript-keyword">if</span> (Map[bar] &amp;&amp; Len[bar]) {
+	<span class="enscript-keyword">for</span> (offset=0; offset&lt;Len[bar]; offset+=kREG_Size) {
+            <span class="enscript-keyword">if</span> (probeUART(BAR_OFFSET_TO_REFCON(bar,offset)))
+                count++;
+            <span class="enscript-keyword">else</span> <span class="enscript-keyword">break</span>; <span class="enscript-comment">// look no further
+</span>        }
+	<span class="enscript-keyword">if</span> (!count) { <span class="enscript-comment">// no UARTs were found
+</span>            RELEASE(Map[bar]);
+            Len[bar]=0;
+	}
+    }
+    <span class="enscript-keyword">return</span> count;
+}
+
+<span class="enscript-type">bool</span> Apple16X50PCI::
+<span class="enscript-function-name">start</span>(IOService *provider)
+{
+    UInt32 bar;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: %s ID=%04x:%04x SID=%04x:%04x Class=%02x:%02x:%02x Int=%d\n&quot;</span>,
+        Name, Location,
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead16(kIOPCIConfigVendorID)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead16(kIOPCIConfigDeviceID)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead16(kIOPCIConfigSubSystemVendorID)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead16(kIOPCIConfigSubSystemID)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead8(kIOPCIConfigClassCode+2)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead8(kIOPCIConfigClassCode+1)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead8(kIOPCIConfigClassCode+0)),
+        (<span class="enscript-type">int</span>)(Provider-&gt;configRead8(kIOPCIConfigInterruptPin))
+    );
+
+    <span class="enscript-comment">// Setup all relevant BARs in a single pass before enabling IO space
+</span>    <span class="enscript-keyword">for</span> (bar=0; bar&lt;MAX_BARS; bar++)
+        setupBAR(bar, bar?1:4);
+        
+    <span class="enscript-comment">// Examine the first MAX_BARS bars.  We allow up to four
+</span>    <span class="enscript-comment">// uarts concatinated in the first bar, or one uart per bar.
+</span>    <span class="enscript-comment">// This covers both common addressing schemes without too many false hits.
+</span>    <span class="enscript-comment">// XXX - This should be alterable via a property
+</span>    Provider-&gt;setIOEnable(true);
+    <span class="enscript-keyword">for</span> (bar=0; bar&lt;MAX_BARS; bar++) {
+        UInt32 count = scanBARforUARTs(bar, bar?1:4);
+        <span class="enscript-keyword">if</span> (count != 1) <span class="enscript-keyword">break</span>;
+    }
+
+    <span class="enscript-keyword">if</span> (UARTInstance==0) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (!super::start(provider)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    
+    IOLog(<span class="enscript-string">&quot;%s: Identified %d Serial channels at %s\n&quot;</span>, Name, (<span class="enscript-type">int</span>)UARTInstance, Location);
+    startUARTs();
+
+    <span class="enscript-keyword">return</span> true;
+
+<span class="enscript-reference">fail</span>:
+    Provider-&gt;setIOEnable(false);
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-type">void</span> Apple16X50PCI::
+<span class="enscript-function-name">stop</span>(IOService *provider)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: stop(%p)\n&quot;</span>, Name, provider);
+    <span class="enscript-reference">super</span>::stop(provider);
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::stop() releasing UARTs\n&quot;</span>, Name);
+    <span class="enscript-keyword">for</span> (UInt32 i=0; i&lt;UARTInstance; i++)
+        RELEASE(UART[i]);
+    Provider-&gt;setIOEnable(false);
+}
+
+<span class="enscript-type">void</span> Apple16X50PCI::
+<span class="enscript-function-name">free</span>()
+{
+    UInt32 i;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: free()\n&quot;</span>, Name);
+    <span class="enscript-keyword">for</span> (i=0; i&lt;MAX_BARS; i++) RELEASE(Map[i]);
+    <span class="enscript-reference">super</span>::free();
+}
+
+UInt8 Apple16X50PCI::
+<span class="enscript-function-name">getReg</span>(UInt32 reg, <span class="enscript-type">void</span> *refCon)
+{
+    <span class="enscript-keyword">return</span> (Provider-&gt;ioRead8(reg+REFCON_TO_OFFSET((uintptr_t)refCon), Map[REFCON_TO_BAR((uintptr_t)refCon)]));
+}
+
+<span class="enscript-type">void</span> Apple16X50PCI::
+<span class="enscript-function-name">setReg</span>(UInt32 reg, UInt8 val, <span class="enscript-type">void</span> *refCon)
+{
+    Provider-&gt;ioWrite8(reg+REFCON_TO_OFFSET((uintptr_t)refCon), val, Map[REFCON_TO_BAR((uintptr_t)refCon)]);
+}
+
+</pre>
+<hr />
+</body></html>

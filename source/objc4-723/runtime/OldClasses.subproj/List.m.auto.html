@@ -1,0 +1,319 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>List.m</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">List.m&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="List.m">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ * Copyright (c) 1999-2001, 2005-2006 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code <span class="enscript-type">and</span>/<span class="enscript-type">or</span> Modifications of Original Code
+ * as defined in <span class="enscript-type">and</span> that are subject to the Apple Public Source License
+ * Version 2.0 (the <span class="enscript-string">'License'</span>). You may <span class="enscript-type">not</span> use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> <span class="enscript-type">and</span> read it before using this
+ * file.
+ * 
+ * The Original Code <span class="enscript-type">and</span> <span class="enscript-type">all</span> software distributed under the License are
+ * distributed on an <span class="enscript-string">'AS IS'</span> basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License <span class="enscript-keyword">for</span> the specific language governing rights <span class="enscript-type">and</span>
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */
+/*
+	List.m
+  	Copyright 1988-1996 NeXT Software, Inc.
+	Written by: Bryan Yamamoto
+	Responsibility: Bertrand Serlet
+*/
+
+#ifndef __OBJC2__
+
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+#include &lt;objc/List.h&gt;
+
+#define DATASIZE(count) ((count) * sizeof(id))
+
+@implementation  List
+
++ (id)initialize
+{
+    <span class="enscript-type">[</span>self setVersion: 1<span class="enscript-type">]</span>;
+    <span class="enscript-keyword">return</span> self;
+}
+
+- (id)initCount:(unsigned)numSlots
+{
+    maxElements = numSlots;
+    <span class="enscript-keyword">if</span> (maxElements) 
+	dataPtr = (id *)malloc(DATASIZE(maxElements));
+    <span class="enscript-keyword">return</span> self;
+}
+
++ (id)newCount:(unsigned)numSlots
+{
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span><span class="enscript-type">[</span>self alloc<span class="enscript-type">]</span> initCount:numSlots<span class="enscript-type">]</span>;
+}
+
++ (id)new
+{
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>self newCount:0<span class="enscript-type">]</span>;
+}
+
+- (id)init
+{
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>self initCount:0<span class="enscript-type">]</span>;
+}
+
+- (id)free
+{
+    free(dataPtr);
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>super free<span class="enscript-type">]</span>;
+}
+
+- (id)freeObjects
+{
+    id element;
+    <span class="enscript-keyword">while</span> ((element = <span class="enscript-type">[</span>self removeLastObject<span class="enscript-type">]</span>))
+	<span class="enscript-type">[</span>element free<span class="enscript-type">]</span>;
+    <span class="enscript-keyword">return</span> self;
+}
+
+- (id)copyFromZone:(void *)z
+{
+    List	*new = <span class="enscript-type">[</span><span class="enscript-type">[</span><span class="enscript-type">[</span>self <span class="enscript-type">class</span><span class="enscript-type">]</span> alloc<span class="enscript-type">]</span> initCount: numElements<span class="enscript-type">]</span>;
+    new-&gt;numElements = numElements;
+    bcopy ((const <span class="enscript-type">char</span>*)dataPtr, (<span class="enscript-type">char</span>*)new-&gt;dataPtr, DATASIZE(numElements));
+    <span class="enscript-keyword">return</span> new;
+}
+
+- (BOOL) isEqual: anObject
+{
+    List	*other;
+    <span class="enscript-keyword">if</span> (! <span class="enscript-type">[</span>anObject isKindOf: <span class="enscript-type">[</span>self <span class="enscript-type">class</span><span class="enscript-type">]</span><span class="enscript-type">]</span>) <span class="enscript-keyword">return</span> NO;
+    other = (List *) anObject;
+    <span class="enscript-keyword">return</span> (numElements == other-&gt;numElements) 
+    	&amp;&amp; (bcmp ((const <span class="enscript-type">char</span>*)dataPtr, (const <span class="enscript-type">char</span>*)other-&gt;dataPtr, DATASIZE(numElements)) == 0);
+}
+
+- (unsigned)capacity
+{
+    <span class="enscript-keyword">return</span> maxElements;
+}
+
+- (unsigned)count
+{
+    <span class="enscript-keyword">return</span> numElements;
+}
+
+- (id)objectAt:(unsigned)index
+{
+    <span class="enscript-keyword">if</span> (index &gt;= numElements)
+	<span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">return</span> dataPtr<span class="enscript-type">[</span>index<span class="enscript-type">]</span>;
+}
+
+- (unsigned)indexOf:anObject
+{
+    register id *this = dataPtr;
+    register id *last = this + numElements;
+    <span class="enscript-keyword">while</span> (this &lt; last) {
+        <span class="enscript-keyword">if</span> (*this == anObject)
+	    <span class="enscript-keyword">return</span> this - dataPtr;
+	this++;
+    }
+    <span class="enscript-keyword">return</span> NX_NOT_IN_LIST;
+}
+
+- (id)lastObject
+{
+    <span class="enscript-keyword">if</span> (! numElements)
+	<span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">return</span> dataPtr<span class="enscript-type">[</span>numElements - 1<span class="enscript-type">]</span>;
+}
+
+- (id)setAvailableCapacity:(unsigned)numSlots
+{
+    volatile id *tempDataPtr;
+    <span class="enscript-keyword">if</span> (numSlots &lt; numElements) <span class="enscript-keyword">return</span> nil;
+    tempDataPtr = (id *) realloc (dataPtr, DATASIZE(numSlots));
+    dataPtr = (id *)tempDataPtr;
+    maxElements = numSlots;
+    <span class="enscript-keyword">return</span> self;
+}
+
+- (id)insertObject:anObject at:(unsigned)index
+{
+    register id *this, *last, *prev;
+    <span class="enscript-keyword">if</span> (! anObject) <span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">if</span> (index &gt; numElements)
+        <span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">if</span> ((numElements + 1) &gt; maxElements) {
+    volatile id *tempDataPtr;
+	/* we <span class="enscript-type">double</span> the capacity, also a good <span class="enscript-type">size</span> <span class="enscript-keyword">for</span> malloc */
+	maxElements += maxElements + 1;
+	tempDataPtr = (id *) realloc (dataPtr, DATASIZE(maxElements));
+	dataPtr = (id*)tempDataPtr;
+    }
+    this = dataPtr + numElements;
+    prev = this - 1;
+    last = dataPtr + index;
+    <span class="enscript-keyword">while</span> (this &gt; last) 
+	*this-- = *prev--;
+    *last = anObject;
+    numElements++;
+    <span class="enscript-keyword">return</span> self;
+}
+
+- (id)addObject:anObject
+{
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>self insertObject:anObject at:numElements<span class="enscript-type">]</span>;
+    
+}
+
+
+- (id)addObjectIfAbsent:anObject
+{
+    register id *this, *last;
+    <span class="enscript-keyword">if</span> (! anObject) <span class="enscript-keyword">return</span> nil;
+    this = dataPtr;
+    last = dataPtr + numElements;
+    <span class="enscript-keyword">while</span> (this &lt; last) {
+        <span class="enscript-keyword">if</span> (*this == anObject)
+	    <span class="enscript-keyword">return</span> self;
+	this++;
+    }
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>self insertObject:anObject at:numElements<span class="enscript-type">]</span>;
+    
+}
+
+
+- (id)removeObjectAt:(unsigned)index
+{
+    register id *this, *last, *next;
+    id retval;
+    <span class="enscript-keyword">if</span> (index &gt;= numElements)
+        <span class="enscript-keyword">return</span> nil;
+    this = dataPtr + index;
+    last = dataPtr + numElements;
+    next = this + 1;
+    retval = *this;
+    <span class="enscript-keyword">while</span> (next &lt; last)
+	*this++ = *next++;
+    numElements--;
+    <span class="enscript-keyword">return</span> retval;
+}
+
+- (id)removeObject:anObject
+{
+    register id *this, *last;
+    this = dataPtr;
+    last = dataPtr + numElements;
+    <span class="enscript-keyword">while</span> (this &lt; last) {
+	<span class="enscript-keyword">if</span> (*this == anObject)
+	    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>self removeObjectAt:this - dataPtr<span class="enscript-type">]</span>;
+	this++;
+    }
+    <span class="enscript-keyword">return</span> nil;
+}
+
+- (id)removeLastObject
+{
+    <span class="enscript-keyword">if</span> (! numElements)
+	<span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">return</span> <span class="enscript-type">[</span>self removeObjectAt: numElements - 1<span class="enscript-type">]</span>;
+}
+
+- (id)empty
+{
+    numElements = 0;
+    <span class="enscript-keyword">return</span> self;
+}
+
+- (id)replaceObject:anObject with:newObject
+{
+    register id *this, *last;
+    <span class="enscript-keyword">if</span> (! newObject)
+        <span class="enscript-keyword">return</span> nil;
+    this = dataPtr;
+    last = dataPtr + numElements;
+    <span class="enscript-keyword">while</span> (this &lt; last) {
+	<span class="enscript-keyword">if</span> (*this == anObject) {
+	    *this = newObject;
+	    <span class="enscript-keyword">return</span> anObject;
+	}
+	this++;
+    }
+    <span class="enscript-keyword">return</span> nil;
+}
+
+- (id)replaceObjectAt:(unsigned)index with:newObject
+{
+    register id *this;
+    id retval;
+    <span class="enscript-keyword">if</span> (! newObject)
+        <span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">if</span> (index &gt;= numElements)
+        <span class="enscript-keyword">return</span> nil;
+    this = dataPtr + index;
+    retval = *this;
+    *this = newObject;
+    <span class="enscript-keyword">return</span> retval;
+}
+
+- (id)makeObjectsPerform:(SEL)aSelector
+{
+    unsigned	count = numElements;
+    <span class="enscript-keyword">while</span> (count--)
+	<span class="enscript-type">[</span>dataPtr<span class="enscript-type">[</span>count<span class="enscript-type">]</span> perform: aSelector<span class="enscript-type">]</span>;
+    <span class="enscript-keyword">return</span> self;
+}
+
+- (id)makeObjectsPerform:(SEL)aSelector with:anObject
+{
+    unsigned	count = numElements;
+    <span class="enscript-keyword">while</span> (count--)
+	<span class="enscript-type">[</span>dataPtr<span class="enscript-type">[</span>count<span class="enscript-type">]</span> perform: aSelector with: anObject<span class="enscript-type">]</span>;
+    <span class="enscript-keyword">return</span> self;
+}
+
+-(id)appendList: (List *)otherList
+{
+    unsigned <span class="enscript-type">i</span>, count;
+    
+    <span class="enscript-keyword">for</span> (<span class="enscript-type">i</span> = 0, count = <span class="enscript-type">[</span>otherList count<span class="enscript-type">]</span>; <span class="enscript-type">i</span> &lt; count; <span class="enscript-type">i</span>++)
+	<span class="enscript-type">[</span>self addObject: <span class="enscript-type">[</span>otherList objectAt: <span class="enscript-type">i</span><span class="enscript-type">]</span><span class="enscript-type">]</span>;
+    <span class="enscript-keyword">return</span> self;
+}
+
+@<span class="enscript-keyword">end</span>
+
+#endif
+</pre>
+<hr />
+</body></html>

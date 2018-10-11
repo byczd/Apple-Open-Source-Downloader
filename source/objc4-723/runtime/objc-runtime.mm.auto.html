@@ -1,0 +1,1071 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-runtime.mm</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-runtime.mm&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-runtime.mm">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ * Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */
+/***********************************************************************
+* objc-runtime.m
+* Copyright 1988-1996, NeXT Software, Inc.
+* Author:	s. naroff
+*
+**********************************************************************/
+
+
+
+/***********************************************************************
+* Imports.
+**********************************************************************/
+
+#include &quot;objc-private.h&quot;
+#include &quot;objc-loadmethod.h&quot;
+#include &quot;message.h&quot;
+
+OBJC_EXPORT Class getOriginalClassForPosingClass(Class);
+
+
+/***********************************************************************
+* Exports.
+**********************************************************************/
+
+// Settings from environment variables
+#define OPTION(var, env, help) bool var = false;
+#include &quot;objc-env.h&quot;
+#undef OPTION
+
+struct option_t {
+    bool* var;
+    const char *env;
+    const char *help;
+    size_t envlen;
+};
+
+const option_t Settings[] = {
+#define OPTION(var, env, help) option_t{&amp;var, #env, help, strlen(#env)}, 
+#include &quot;objc-env.h&quot;
+#undef OPTION
+};
+
+
+// objc's key for pthread_getspecific
+static tls_key_t _objc_pthread_key;
+
+// Selectors
+SEL SEL_load = NULL;
+SEL SEL_initialize = NULL;
+SEL SEL_resolveInstanceMethod = NULL;
+SEL SEL_resolveClassMethod = NULL;
+SEL SEL_cxx_construct = NULL;
+SEL SEL_cxx_destruct = NULL;
+SEL SEL_retain = NULL;
+SEL SEL_release = NULL;
+SEL SEL_autorelease = NULL;
+SEL SEL_retainCount = NULL;
+SEL SEL_alloc = NULL;
+SEL SEL_allocWithZone = NULL;
+SEL SEL_dealloc = NULL;
+SEL SEL_copy = NULL;
+SEL SEL_new = NULL;
+SEL SEL_forwardInvocation = NULL;
+SEL SEL_tryRetain = NULL;
+SEL SEL_isDeallocating = NULL;
+SEL SEL_retainWeakReference = NULL;
+SEL SEL_allowsWeakReference = NULL;
+
+
+header_info *FirstHeader = 0;  // NULL means empty list
+header_info *LastHeader  = 0;  // NULL means invalid; recompute it
+int HeaderCount = 0;
+
+
+// Set to true on the child side of fork() 
+// if the parent process was multithreaded when fork() was called.
+bool MultithreadedForkChild = false;
+
+
+/***********************************************************************
+* objc_noop_imp. Used when we need to install a do-nothing method somewhere.
+**********************************************************************/
+id objc_noop_imp(id self, SEL _cmd __unused) {
+    return self;
+}
+
+
+/***********************************************************************
+* objc_getClass.  Return the id of the named class.  If the class does
+* not exist, call _objc_classLoader and then objc_classHandler, either of 
+* which may create a new class.
+* Warning: doesn't work if aClassName is the name of a posed-for class's isa!
+**********************************************************************/
+Class objc_getClass(const char *aClassName)
+{
+    if (!aClassName) return Nil;
+
+    // NO unconnected, YES class handler
+    return look_up_class(aClassName, NO, YES);
+}
+
+
+/***********************************************************************
+* objc_getRequiredClass.  
+* Same as objc_getClass, but kills the process if the class is not found. 
+* This is used by ZeroLink, where failing to find a class would be a 
+* compile-time link error without ZeroLink.
+**********************************************************************/
+Class objc_getRequiredClass(const char *aClassName)
+{
+    Class cls = objc_getClass(aClassName);
+    if (!cls) _objc_fatal(&quot;link error: class '%s' not found.&quot;, aClassName);
+    return cls;
+}
+
+
+/***********************************************************************
+* objc_lookUpClass.  Return the id of the named class.
+* If the class does not exist, call _objc_classLoader, which may create 
+* a new class.
+*
+* Formerly objc_getClassWithoutWarning ()
+**********************************************************************/
+Class objc_lookUpClass(const char *aClassName)
+{
+    if (!aClassName) return Nil;
+
+    // NO unconnected, NO class handler
+    return look_up_class(aClassName, NO, NO);
+}
+
+
+/***********************************************************************
+* objc_getMetaClass.  Return the id of the meta class the named class.
+* Warning: doesn't work if aClassName is the name of a posed-for class's isa!
+**********************************************************************/
+Class objc_getMetaClass(const char *aClassName)
+{
+    Class cls;
+
+    if (!aClassName) return Nil;
+
+    cls = objc_getClass (aClassName);
+    if (!cls)
+    {
+        _objc_inform (&quot;class `%s' not linked into application&quot;, aClassName);
+        return Nil;
+    }
+
+    return cls-&gt;ISA();
+}
+
+
+/***********************************************************************
+* appendHeader.  Add a newly-constructed header_info to the list. 
+**********************************************************************/
+void appendHeader(header_info *hi)
+{
+    // Add the header to the header list. 
+    // The header is appended to the list, to preserve the bottom-up order.
+    HeaderCount++;
+    hi-&gt;setNext(NULL);
+    if (!FirstHeader) {
+        // list is empty
+        FirstHeader = LastHeader = hi;
+    } else {
+        if (!LastHeader) {
+            // list is not empty, but LastHeader is invalid - recompute it
+            LastHeader = FirstHeader;
+            while (LastHeader-&gt;getNext()) LastHeader = LastHeader-&gt;getNext();
+        }
+        // LastHeader is now valid
+        LastHeader-&gt;setNext(hi);
+        LastHeader = hi;
+    }
+}
+
+
+/***********************************************************************
+* removeHeader
+* Remove the given header from the header list.
+* FirstHeader is updated. 
+* LastHeader is set to NULL. Any code that uses LastHeader must 
+* detect this NULL and recompute LastHeader by traversing the list.
+**********************************************************************/
+void removeHeader(header_info *hi)
+{
+    header_info *prev = NULL;
+    header_info *current = NULL;
+
+    for (current = FirstHeader; current != NULL; current = current-&gt;getNext()) {
+        if (current == hi) {
+            header_info *deadHead = current;
+
+            // Remove from the linked list.
+            if (prev)
+                prev-&gt;setNext(current-&gt;getNext());
+            else
+                FirstHeader = current-&gt;getNext(); // no prev so removing head
+            
+            // Update LastHeader if necessary.
+            if (LastHeader == deadHead) {
+                LastHeader = NULL;  // will be recomputed next time it's used
+            }
+
+            HeaderCount--;
+            break;
+        }
+        prev = current;
+    }
+}
+
+
+/***********************************************************************
+* environ_init
+* Read environment variables that affect the runtime.
+* Also print environment variable help, if requested.
+**********************************************************************/
+void environ_init(void) 
+{
+    if (issetugid()) {
+        // All environment variables are silently ignored when setuid or setgid
+        // This includes OBJC_HELP and OBJC_PRINT_OPTIONS themselves.
+        return;
+    } 
+
+    bool PrintHelp = false;
+    bool PrintOptions = false;
+    bool maybeMallocDebugging = false;
+
+    // Scan environ[] directly instead of calling getenv() a lot.
+    // This optimizes the case where none are set.
+    for (char **p = *_NSGetEnviron(); *p != nil; p++) {
+        if (0 == strncmp(*p, &quot;Malloc&quot;, 6)  ||  0 == strncmp(*p, &quot;DYLD&quot;, 4)  ||  
+            0 == strncmp(*p, &quot;NSZombiesEnabled&quot;, 16))
+        {
+            maybeMallocDebugging = true;
+        }
+
+        if (0 != strncmp(*p, &quot;OBJC_&quot;, 5)) continue;
+        
+        if (0 == strncmp(*p, &quot;OBJC_HELP=&quot;, 10)) {
+            PrintHelp = true;
+            continue;
+        }
+        if (0 == strncmp(*p, &quot;OBJC_PRINT_OPTIONS=&quot;, 19)) {
+            PrintOptions = true;
+            continue;
+        }
+        
+        const char *value = strchr(*p, '=');
+        if (!*value) continue;
+        value++;
+        
+        for (size_t i = 0; i &lt; sizeof(Settings)/sizeof(Settings[0]); i++) {
+            const option_t *opt = &amp;Settings[i];
+            if ((size_t)(value - *p) == 1+opt-&gt;envlen  &amp;&amp;  
+                0 == strncmp(*p, opt-&gt;env, opt-&gt;envlen))
+            {
+                *opt-&gt;var = (0 == strcmp(value, &quot;YES&quot;));
+                break;
+            }
+        }            
+    }
+
+    // Special case: enable some autorelease pool debugging 
+    // when some malloc debugging is enabled 
+    // and OBJC_DEBUG_POOL_ALLOCATION is not set to something other than NO.
+    if (maybeMallocDebugging) {
+        const char *insert = getenv(&quot;DYLD_INSERT_LIBRARIES&quot;);
+        const char *zombie = getenv(&quot;NSZombiesEnabled&quot;);
+        const char *pooldebug = getenv(&quot;OBJC_DEBUG_POOL_ALLOCATION&quot;);
+        if ((getenv(&quot;MallocStackLogging&quot;)
+             || getenv(&quot;MallocStackLoggingNoCompact&quot;)
+             || (zombie &amp;&amp; (*zombie == 'Y' || *zombie == 'y'))
+             || (insert &amp;&amp; strstr(insert, &quot;libgmalloc&quot;)))
+            &amp;&amp;
+            (!pooldebug || 0 == strcmp(pooldebug, &quot;YES&quot;)))
+        {
+            DebugPoolAllocation = true;
+        }
+    }
+
+    // Print OBJC_HELP and OBJC_PRINT_OPTIONS output.
+    if (PrintHelp  ||  PrintOptions) {
+        if (PrintHelp) {
+            _objc_inform(&quot;Objective-C runtime debugging. Set variable=YES to enable.&quot;);
+            _objc_inform(&quot;OBJC_HELP: describe available environment variables&quot;);
+            if (PrintOptions) {
+                _objc_inform(&quot;OBJC_HELP is set&quot;);
+            }
+            _objc_inform(&quot;OBJC_PRINT_OPTIONS: list which options are set&quot;);
+        }
+        if (PrintOptions) {
+            _objc_inform(&quot;OBJC_PRINT_OPTIONS is set&quot;);
+        }
+
+        for (size_t i = 0; i &lt; sizeof(Settings)/sizeof(Settings[0]); i++) {
+            const option_t *opt = &amp;Settings[i];            
+            if (PrintHelp) _objc_inform(&quot;%s: %s&quot;, opt-&gt;env, opt-&gt;help);
+            if (PrintOptions &amp;&amp; *opt-&gt;var) _objc_inform(&quot;%s is set&quot;, opt-&gt;env);
+        }
+    }
+}
+
+
+/***********************************************************************
+* logReplacedMethod
+* OBJC_PRINT_REPLACED_METHODS implementation
+**********************************************************************/
+void 
+logReplacedMethod(const char *className, SEL s, 
+                  bool isMeta, const char *catName, 
+                  IMP oldImp, IMP newImp)
+{
+    const char *oldImage = &quot;??&quot;;
+    const char *newImage = &quot;??&quot;;
+
+    // Silently ignore +load replacement because category +load is special
+    if (s == SEL_load) return;
+
+#if TARGET_OS_WIN32
+    // don't know dladdr()/dli_fname equivalent
+#else
+    Dl_info dl;
+
+    if (dladdr((void*)oldImp, &amp;dl)  &amp;&amp;  dl.dli_fname) oldImage = dl.dli_fname;
+    if (dladdr((void*)newImp, &amp;dl)  &amp;&amp;  dl.dli_fname) newImage = dl.dli_fname;
+#endif
+    
+    _objc_inform(&quot;REPLACED: %c[%s %s]  %s%s  (IMP was %p (%s), now %p (%s))&quot;,
+                 isMeta ? '+' : '-', className, sel_getName(s), 
+                 catName ? &quot;by category &quot; : &quot;&quot;, catName ? catName : &quot;&quot;, 
+                 oldImp, oldImage, newImp, newImage);
+}
+
+
+
+/***********************************************************************
+* objc_setMultithreaded.
+**********************************************************************/
+void objc_setMultithreaded (BOOL flag)
+{
+    OBJC_WARN_DEPRECATED;
+
+    // Nothing here. Thread synchronization in the runtime is always active.
+}
+
+
+/***********************************************************************
+* _objc_fetch_pthread_data
+* Fetch objc's pthread data for this thread.
+* If the data doesn't exist yet and create is NO, return NULL.
+* If the data doesn't exist yet and create is YES, allocate and return it.
+**********************************************************************/
+_objc_pthread_data *_objc_fetch_pthread_data(bool create)
+{
+    _objc_pthread_data *data;
+
+    data = (_objc_pthread_data *)tls_get(_objc_pthread_key);
+    if (!data  &amp;&amp;  create) {
+        data = (_objc_pthread_data *)
+            calloc(1, sizeof(_objc_pthread_data));
+        tls_set(_objc_pthread_key, data);
+    }
+
+    return data;
+}
+
+
+/***********************************************************************
+* _objc_pthread_destroyspecific
+* Destructor for objc's per-thread data.
+* arg shouldn't be NULL, but we check anyway.
+**********************************************************************/
+extern void _destroyInitializingClassList(struct _objc_initializing_classes *list);
+void _objc_pthread_destroyspecific(void *arg)
+{
+    _objc_pthread_data *data = (_objc_pthread_data *)arg;
+    if (data != NULL) {
+        _destroyInitializingClassList(data-&gt;initializingClasses);
+        _destroySyncCache(data-&gt;syncCache);
+        _destroyAltHandlerList(data-&gt;handlerList);
+        for (int i = 0; i &lt; (int)countof(data-&gt;printableNames); i++) {
+            if (data-&gt;printableNames[i]) {
+                free(data-&gt;printableNames[i]);  
+            }
+        }
+
+        // add further cleanup here...
+
+        free(data);
+    }
+}
+
+
+void tls_init(void)
+{
+#if SUPPORT_DIRECT_THREAD_KEYS
+    _objc_pthread_key = TLS_DIRECT_KEY;
+    pthread_key_init_np(TLS_DIRECT_KEY, &amp;_objc_pthread_destroyspecific);
+#else
+    _objc_pthread_key = tls_create(&amp;_objc_pthread_destroyspecific);
+#endif
+}
+
+
+/***********************************************************************
+* _objcInit
+* Former library initializer. This function is now merely a placeholder 
+* for external callers. All runtime initialization has now been moved 
+* to map_images() and _objc_init.
+**********************************************************************/
+void _objcInit(void)
+{
+    // do nothing
+}
+
+
+/***********************************************************************
+* objc_setForwardHandler
+**********************************************************************/
+
+#if !__OBJC2__
+
+// Default forward handler (nil) goes to forward:: dispatch.
+void *_objc_forward_handler = nil;
+void *_objc_forward_stret_handler = nil;
+
+#else
+
+// Default forward handler halts the process.
+__attribute__((noreturn)) void 
+objc_defaultForwardHandler(id self, SEL sel)
+{
+    _objc_fatal(&quot;%c[%s %s]: unrecognized selector sent to instance %p &quot;
+                &quot;(no message forward handler is installed)&quot;, 
+                class_isMetaClass(object_getClass(self)) ? '+' : '-', 
+                object_getClassName(self), sel_getName(sel), self);
+}
+void *_objc_forward_handler = (void*)objc_defaultForwardHandler;
+
+#if SUPPORT_STRET
+struct stret { int i[100]; };
+__attribute__((noreturn)) struct stret 
+objc_defaultForwardStretHandler(id self, SEL sel)
+{
+    objc_defaultForwardHandler(self, sel);
+}
+void *_objc_forward_stret_handler = (void*)objc_defaultForwardStretHandler;
+#endif
+
+#endif
+
+void objc_setForwardHandler(void *fwd, void *fwd_stret)
+{
+    _objc_forward_handler = fwd;
+#if SUPPORT_STRET
+    _objc_forward_stret_handler = fwd_stret;
+#endif
+}
+
+
+#if !__OBJC2__
+// GrP fixme
+extern &quot;C&quot; Class _objc_getOrigClass(const char *name);
+#endif
+const char *class_getImageName(Class cls)
+{
+#if TARGET_OS_WIN32
+    TCHAR *szFileName;
+    DWORD charactersCopied;
+    Class origCls;
+    HMODULE classModule;
+    bool res;
+#endif
+    if (!cls) return NULL;
+
+#if !__OBJC2__
+    cls = _objc_getOrigClass(cls-&gt;demangledName());
+#endif
+#if TARGET_OS_WIN32
+    charactersCopied = 0;
+    szFileName = malloc(MAX_PATH * sizeof(TCHAR));
+    
+    origCls = objc_getOrigClass(cls-&gt;demangledName());
+    classModule = NULL;
+    res = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCTSTR)origCls, &amp;classModule);
+    if (res &amp;&amp; classModule) {
+        charactersCopied = GetModuleFileName(classModule, szFileName, MAX_PATH * sizeof(TCHAR));
+    }
+    if (classModule) FreeLibrary(classModule);
+    if (charactersCopied) {
+        return (const char *)szFileName;
+    } else {
+        free(szFileName);
+    }
+    return NULL;
+#else
+    return dyld_image_path_containing_address(cls);
+#endif
+}
+
+
+const char **objc_copyImageNames(unsigned int *outCount)
+{
+    header_info *hi;
+    int count = 0;
+    int max = HeaderCount;
+#if TARGET_OS_WIN32
+    const TCHAR **names = (const TCHAR **)calloc(max+1, sizeof(TCHAR *));
+#else
+    const char **names = (const char **)calloc(max+1, sizeof(char *));
+#endif
+    
+    for (hi = FirstHeader; hi != NULL &amp;&amp; count &lt; max; hi = hi-&gt;getNext()) {
+#if TARGET_OS_WIN32
+        if (hi-&gt;moduleName) {
+            names[count++] = hi-&gt;moduleName;
+        }
+#else
+        const char *fname = hi-&gt;fname();
+        if (fname) {
+            names[count++] = fname;
+        }
+#endif
+    }
+    names[count] = NULL;
+    
+    if (count == 0) {
+        // Return NULL instead of empty list if there are no images
+        free((void *)names);
+        names = NULL;
+    }
+
+    if (outCount) *outCount = count;
+    return names;
+}
+
+
+/**********************************************************************
+*
+**********************************************************************/
+const char ** 
+objc_copyClassNamesForImage(const char *image, unsigned int *outCount)
+{
+    header_info *hi;
+
+    if (!image) {
+        if (outCount) *outCount = 0;
+        return NULL;
+    }
+
+    // Find the image.
+    for (hi = FirstHeader; hi != NULL; hi = hi-&gt;getNext()) {
+#if TARGET_OS_WIN32
+        if (0 == wcscmp((TCHAR *)image, hi-&gt;moduleName)) break;
+#else
+        if (0 == strcmp(image, hi-&gt;fname())) break;
+#endif
+    }
+    
+    if (!hi) {
+        if (outCount) *outCount = 0;
+        return NULL;
+    }
+
+    return _objc_copyClassNamesForImage(hi, outCount);
+}
+	
+
+/**********************************************************************
+* Fast Enumeration Support
+**********************************************************************/
+
+static void (*enumerationMutationHandler)(id);
+
+/**********************************************************************
+* objc_enumerationMutation
+* called by compiler when a mutation is detected during foreach iteration
+**********************************************************************/
+void objc_enumerationMutation(id object) {
+    if (enumerationMutationHandler == nil) {
+        _objc_fatal(&quot;mutation detected during 'for(... in ...)'  enumeration of object %p.&quot;, (void*)object);
+    }
+    (*enumerationMutationHandler)(object);
+}
+
+
+/**********************************************************************
+* objc_setEnumerationMutationHandler
+* an entry point to customize mutation error handing
+**********************************************************************/
+void objc_setEnumerationMutationHandler(void (*handler)(id)) {
+    enumerationMutationHandler = handler;
+}
+
+
+/**********************************************************************
+* Associative Reference Support
+**********************************************************************/
+
+id objc_getAssociatedObject(id object, const void *key) {
+    return _object_get_associative_reference(object, (void *)key);
+}
+
+
+void objc_setAssociatedObject(id object, const void *key, id value, objc_AssociationPolicy policy) {
+    _object_set_associative_reference(object, (void *)key, value, policy);
+}
+
+
+void objc_removeAssociatedObjects(id object) 
+{
+    if (object &amp;&amp; object-&gt;hasAssociatedObjects()) {
+        _object_remove_assocations(object);
+    }
+}
+
+
+
+#if SUPPORT_GC_COMPAT
+
+#include &lt;mach-o/fat.h&gt;
+
+// GC preflight for an app executable.
+
+enum GCness {
+    WithGC = 1, 
+    WithoutGC = 0, 
+    Error = -1
+};
+
+// Overloaded template wrappers around clang's overflow-checked arithmetic.
+
+template &lt;typename T&gt; bool uadd_overflow(T x, T y, T* sum);
+template &lt;typename T&gt; bool usub_overflow(T x, T y, T* diff);
+template &lt;typename T&gt; bool umul_overflow(T x, T y, T* prod);
+
+template &lt;typename T&gt; bool sadd_overflow(T x, T y, T* sum);
+template &lt;typename T&gt; bool ssub_overflow(T x, T y, T* diff);
+template &lt;typename T&gt; bool smul_overflow(T x, T y, T* prod);
+
+template &lt;&gt; bool uadd_overflow(unsigned x, unsigned y, unsigned* sum) { return __builtin_uadd_overflow(x, y, sum); }
+template &lt;&gt; bool uadd_overflow(unsigned long x, unsigned long y, unsigned long* sum) { return __builtin_uaddl_overflow(x, y, sum); }
+template &lt;&gt; bool uadd_overflow(unsigned long long x, unsigned long long y, unsigned long long* sum) { return __builtin_uaddll_overflow(x, y, sum); }
+
+template &lt;&gt; bool usub_overflow(unsigned x, unsigned y, unsigned* diff) { return __builtin_usub_overflow(x, y, diff); }
+template &lt;&gt; bool usub_overflow(unsigned long x, unsigned long y, unsigned long* diff) { return __builtin_usubl_overflow(x, y, diff); }
+template &lt;&gt; bool usub_overflow(unsigned long long x, unsigned long long y, unsigned long long* diff) { return __builtin_usubll_overflow(x, y, diff); }
+
+template &lt;&gt; bool umul_overflow(unsigned x, unsigned y, unsigned* prod) { return __builtin_umul_overflow(x, y, prod); }
+template &lt;&gt; bool umul_overflow(unsigned long x, unsigned long y, unsigned long* prod) { return __builtin_umull_overflow(x, y, prod); }
+template &lt;&gt; bool umul_overflow(unsigned long long x, unsigned long long y, unsigned long long* prod) { return __builtin_umulll_overflow(x, y, prod); }
+
+template &lt;&gt; bool sadd_overflow(signed x, signed y, signed* sum) { return __builtin_sadd_overflow(x, y, sum); }
+template &lt;&gt; bool sadd_overflow(signed long x, signed long y, signed long* sum) { return __builtin_saddl_overflow(x, y, sum); }
+template &lt;&gt; bool sadd_overflow(signed long long x, signed long long y, signed long long* sum) { return __builtin_saddll_overflow(x, y, sum); }
+
+template &lt;&gt; bool ssub_overflow(signed x, signed y, signed* diff) { return __builtin_ssub_overflow(x, y, diff); }
+template &lt;&gt; bool ssub_overflow(signed long x, signed long y, signed long* diff) { return __builtin_ssubl_overflow(x, y, diff); }
+template &lt;&gt; bool ssub_overflow(signed long long x, signed long long y, signed long long* diff) { return __builtin_ssubll_overflow(x, y, diff); }
+
+template &lt;&gt; bool smul_overflow(signed x, signed y, signed* prod) { return __builtin_smul_overflow(x, y, prod); }
+template &lt;&gt; bool smul_overflow(signed long x, signed long y, signed long* prod) { return __builtin_smull_overflow(x, y, prod); }
+template &lt;&gt; bool smul_overflow(signed long long x, signed long long y, signed long long* prod) { return __builtin_smulll_overflow(x, y, prod); }
+
+
+// Range-checking subview of a file.
+class FileSlice {
+    int fd;
+    uint64_t sliceOffset;
+    uint64_t sliceSize;
+
+public:
+    FileSlice() : fd(-1), sliceOffset(0), sliceSize(0) { }
+
+    FileSlice(int newfd, uint64_t newOffset, uint64_t newSize) 
+        : fd(newfd) , sliceOffset(newOffset) , sliceSize(newSize) { }
+
+    // Read bytes from this slice. 
+    // Returns YES if all bytes were read successfully.
+    bool pread(void *buf, uint64_t readSize, uint64_t readOffset = 0) {
+        uint64_t readEnd;
+        if (uadd_overflow(readOffset, readSize, &amp;readEnd)) return NO;
+        if (readEnd &gt; sliceSize) return NO;
+
+        uint64_t preadOffset;
+        if (uadd_overflow(sliceOffset, readOffset, &amp;preadOffset)) return NO;
+
+        int64_t readed = ::pread(fd, buf, (size_t)readSize, preadOffset);
+        if (readed &lt; 0  ||  (uint64_t)readed != readSize) return NO;
+        return YES;
+    }
+
+    // Create a new slice that is a subset of this slice.
+    // Returnes YES if successful.
+    bool slice(uint64_t newOffset, uint64_t newSize, FileSlice&amp; result) {
+        // fixme arithmetic overflow
+        uint64_t newEnd;
+        if (uadd_overflow(newOffset, newSize, &amp;newEnd)) return NO;
+        if (newEnd &gt; sliceSize) return NO;
+
+        if (uadd_overflow(sliceOffset, newOffset, &amp;result.sliceOffset)) {
+            return NO;
+        }
+        result.sliceSize = newSize;
+        result.fd = fd;
+        return YES;
+    }
+
+    // Shorten this slice in place by removing a range from the start.
+    bool advance(uint64_t distance) {
+        if (distance &gt; sliceSize) return NO;
+        if (uadd_overflow(sliceOffset, distance, &amp;sliceOffset)) return NO;
+        if (usub_overflow(sliceSize, distance, &amp;sliceSize)) return NO;
+        return YES;
+    }
+};
+
+
+// Arch32 and Arch64 are used to specialize sliceRequiresGC()
+// to interrogate old-ABI i386 and new-ABI x86_64 files.
+
+struct Arch32 {
+    using mh_t = struct mach_header;
+    using segment_command_t = struct segment_command;
+    using section_t = struct section;
+
+    enum : cpu_type_t { cputype = CPU_TYPE_X86 };
+    enum : int { segment_cmd = LC_SEGMENT };
+
+    static bool isObjCSegment(const char *segname) {
+        return segnameEquals(segname, &quot;__OBJC&quot;);
+    }
+
+    static bool isImageInfoSection(const char *sectname) {
+        return sectnameEquals(sectname, &quot;__image_info&quot;);
+    }
+
+    static bool countClasses(FileSlice file, section_t&amp; sect, 
+                             int&amp; classCount, int&amp; classrefCount)
+    {
+        if (sectnameEquals(sect.sectname, &quot;__cls_refs&quot;)) {
+            classrefCount += sect.size / 4;
+        }
+        else if (sectnameEquals(sect.sectname, &quot;__module_info&quot;)) {
+            struct module_t {
+                uint32_t version;
+                uint32_t size;
+                uint32_t name;    // not bound
+                uint32_t symtab;  // not bound
+            };
+            size_t mod_count = sect.size / sizeof(module_t);
+            if (mod_count == 0) {
+                // no classes defined
+            } else if (mod_count &gt; 1) {
+                // AppleScriptObjC apps only have one module.
+                // Disqualify this app by setting classCount to non-zero.
+                // We don't actually need an accurate count.
+                classCount = 1;
+            } else if (mod_count == 1) {
+                FileSlice moduleSlice;
+                if (!file.slice(sect.offset, sect.size, moduleSlice)) return NO;
+                module_t module;
+                if (!moduleSlice.pread(&amp;module, sizeof(module))) return NO;
+                if (module.symtab) {
+                    // AppleScriptObjC apps only have a module with no symtab.
+                    // Disqualify this app by setting classCount to non-zero.
+                    // We don't actually need an accurate count.
+                    classCount = 1;
+                }
+            }
+            
+        }
+        return YES;
+    }
+
+};
+
+struct Arch64 {
+    using mh_t = struct mach_header_64;
+    using segment_command_t = struct segment_command_64;
+    using section_t = struct section_64;
+
+    enum : cpu_type_t { cputype = CPU_TYPE_X86_64 };
+    enum : int { segment_cmd = LC_SEGMENT_64 };
+
+    static bool isObjCSegment(const char *segname) {
+        return 
+            segnameEquals(segname, &quot;__DATA&quot;)  ||  
+            segnameEquals(segname, &quot;__DATA_CONST&quot;)  ||  
+            segnameEquals(segname, &quot;__DATA_DIRTY&quot;);
+    }
+
+    static bool isImageInfoSection(const char *sectname) {
+        return sectnameEquals(sectname, &quot;__objc_imageinfo&quot;);
+    }
+
+    static bool countClasses(FileSlice, section_t&amp; sect, 
+                             int&amp; classCount, int&amp; classrefCount)
+    {
+        if (sectnameEquals(sect.sectname, &quot;__objc_classlist&quot;)) {
+            classCount += sect.size / 8;
+        }
+        else if (sectnameEquals(sect.sectname, &quot;__objc_classrefs&quot;)) {
+            classrefCount += sect.size / 8;
+        }
+        return YES;
+    }
+};
+
+
+#define SANE_HEADER_SIZE (32*1024)
+
+template &lt;typename Arch&gt;
+static int sliceRequiresGC(typename Arch::mh_t mh, FileSlice file)
+{
+    // We assume there is only one arch per pointer size that can support GC.
+    // (i386 and x86_64)
+    if (mh.cputype != Arch::cputype) return 0;
+
+    // We only check the main executable.
+    if (mh.filetype != MH_EXECUTE) return 0;
+
+    // Look for ObjC segment.
+    // Look for AppleScriptObjC linkage.
+    FileSlice cmds;
+    if (!file.slice(sizeof(mh), mh.sizeofcmds, cmds)) return Error;
+
+    // Exception: Some AppleScriptObjC apps built for GC can run without GC.
+    // 1. executable defines no classes
+    // 2. executable references NSBundle only
+    // 3. executable links to AppleScriptObjC.framework
+    // Note that shouldRejectGCApp() also knows about this.
+    bool wantsGC = NO;
+    bool linksToAppleScriptObjC = NO;
+    int classCount = 0;
+    int classrefCount = 0;
+
+    // Disallow abusively-large executables that could hang this checker.
+    // dyld performs similar checks (MAX_MACH_O_HEADER_AND_LOAD_COMMANDS_SIZE)
+    if (mh.sizeofcmds &gt; SANE_HEADER_SIZE) return Error;
+    if (mh.ncmds &gt; mh.sizeofcmds / sizeof(struct load_command)) return Error;
+
+    for (uint32_t cmdindex = 0; cmdindex &lt; mh.ncmds; cmdindex++) {
+        struct load_command lc;
+        if (!cmds.pread(&amp;lc, sizeof(lc))) return Error;
+
+        // Disallow abusively-small load commands that could hang this checker.
+        // dyld performs a similar check.
+        if (lc.cmdsize &lt; sizeof(lc)) return Error;
+
+        if (lc.cmd == LC_LOAD_DYLIB  ||  lc.cmd == LC_LOAD_UPWARD_DYLIB  ||  
+            lc.cmd == LC_LOAD_WEAK_DYLIB  ||  lc.cmd == LC_REEXPORT_DYLIB) 
+        {
+            // Look for AppleScriptObjC linkage.
+            FileSlice dylibSlice;
+            if (!cmds.slice(0, lc.cmdsize, dylibSlice)) return Error;
+            struct dylib_command dylib;
+            if (!dylibSlice.pread(&amp;dylib, sizeof(dylib))) return Error;
+
+            const char *asoFramework = 
+                &quot;/System/Library/Frameworks/AppleScriptObjC.framework&quot;
+                &quot;/Versions/A/AppleScriptObjC&quot;;
+            size_t asoLen = strlen(asoFramework);
+
+            FileSlice nameSlice;
+            if (dylibSlice.slice(dylib.dylib.name.offset, asoLen, nameSlice)) {
+                char name[asoLen];
+                if (!nameSlice.pread(name, asoLen)) return Error;
+                if (0 == memcmp(name, asoFramework, asoLen)) {
+                    linksToAppleScriptObjC = YES;
+                }
+            }
+        }
+        else if (lc.cmd == Arch::segment_cmd) {
+            typename Arch::segment_command_t seg;
+            if (!cmds.pread(&amp;seg, sizeof(seg))) return Error;
+
+            if (Arch::isObjCSegment(seg.segname)) {
+                // ObjC segment. 
+                // Look for image info section.
+                // Look for class implementations and class references.
+                FileSlice sections;
+                if (!cmds.slice(0, seg.cmdsize, sections)) return Error;
+                if (!sections.advance(sizeof(seg))) return Error;
+                
+                for (uint32_t segindex = 0; segindex &lt; seg.nsects; segindex++) {
+                    typename Arch::section_t sect;
+                    if (!sections.pread(&amp;sect, sizeof(sect))) return Error;
+                    if (!Arch::isObjCSegment(sect.segname)) return Error;
+
+                    if (!Arch::countClasses(file, sect, 
+                                            classCount, classrefCount)) 
+                    {
+                        return Error;
+                    }
+
+                    if ((sect.flags &amp; SECTION_TYPE) == S_REGULAR  &amp;&amp;  
+                        Arch::isImageInfoSection(sect.sectname))
+                    {
+                        // ObjC image info section.
+                        // Check its contents.
+                        FileSlice section;
+                        if (!file.slice(sect.offset, sect.size, section)) {
+                            return Error;
+                        }
+                        // The subset of objc_image_info that was in use for GC.
+                        struct {
+                            uint32_t version;
+                            uint32_t flags;
+                        } ii;
+                        if (!section.pread(&amp;ii, sizeof(ii))) return Error;
+                        if (ii.flags &amp; (1&lt;&lt;1)) {
+                            // App wants GC. 
+                            // Don't return yet because we need to 
+                            // check the AppleScriptObjC exception.
+                            wantsGC = YES;
+                        }
+                    }
+
+                    if (!sections.advance(sizeof(sect))) return Error;
+                }
+            }
+        }
+
+        if (!cmds.advance(lc.cmdsize)) return Error;
+    }
+
+    if (!wantsGC) {
+        // No GC bit set.
+        return WithoutGC;
+    }
+    else if (linksToAppleScriptObjC &amp;&amp; classCount == 0 &amp;&amp; classrefCount == 1) {
+        // Has GC bit but falls under the AppleScriptObjC exception.
+        return WithoutGC;
+    }
+    else {
+        // Has GC bit and is not AppleScriptObjC.
+        return WithGC;
+    }
+}
+
+
+static int sliceRequiresGC(FileSlice file)
+{
+    // Read mach-o header.
+    struct mach_header_64 mh;
+    if (!file.pread(&amp;mh, sizeof(mh))) return Error;
+
+    // Check header magic. We assume only host-endian slices can support GC.
+    switch (mh.magic) {
+    case MH_MAGIC:
+        return sliceRequiresGC&lt;Arch32&gt;(*(struct mach_header *)&amp;mh, file);
+    case MH_MAGIC_64:
+        return sliceRequiresGC&lt;Arch64&gt;(mh, file);
+    default:
+        return WithoutGC;
+    }
+}
+
+
+// Returns 1 if any slice requires GC.
+// Returns 0 if no slice requires GC.
+// Returns -1 on any I/O or file format error.
+int objc_appRequiresGC(int fd)
+{
+    struct stat st;
+    if (fstat(fd, &amp;st) &lt; 0) return Error;
+
+    FileSlice file(fd, 0, st.st_size);
+
+    // Read fat header, if any.
+    struct fat_header fh;
+
+    if (! file.pread(&amp;fh, sizeof(fh))) return Error;
+
+    int result;
+
+    if (OSSwapBigToHostInt32(fh.magic) == FAT_MAGIC) {
+        // Fat header.
+
+        size_t nfat_arch = OSSwapBigToHostInt32(fh.nfat_arch);
+        // Disallow abusively-large files that could hang this checker.
+        if (nfat_arch &gt; SANE_HEADER_SIZE/sizeof(struct fat_arch)) return Error;
+
+        size_t fat_size;
+        if (umul_overflow(nfat_arch, sizeof(struct fat_arch), &amp;fat_size)) {
+            return Error;
+        }
+
+        FileSlice archlist;
+        if (!file.slice(sizeof(fh), fat_size, archlist)) return Error;
+
+        result = WithoutGC;
+        for (size_t i = 0; i &lt; nfat_arch; i++) {
+            struct fat_arch fa;
+            if (!archlist.pread(&amp;fa, sizeof(fa))) return Error;
+            if (!archlist.advance(sizeof(fa))) return Error;
+
+            FileSlice thin;
+            if (!file.slice(OSSwapBigToHostInt32(fa.offset), 
+                            OSSwapBigToHostInt32(fa.size), thin)) 
+            {
+                return Error;
+            }
+            switch (sliceRequiresGC(thin)) {
+            case WithoutGC: break; // no change
+            case WithGC: if (result != Error) result = WithGC; break;
+            case Error: result = Error; break;
+            }
+        }
+    }
+    else {
+        // Thin header or not a header.
+        result = sliceRequiresGC(file);
+    }
+    
+    return result;
+}
+
+// SUPPORT_GC_COMPAT
+#endif
+</pre>
+<hr />
+</body></html>

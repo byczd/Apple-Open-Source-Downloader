@@ -1,0 +1,545 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-msg-win32.m</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-msg-win32.m&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-msg-win32.m">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+#include &quot;objc-private.h&quot;
+
+// out-of-band parameter to objc_msgForward
+#define kFwdMsgSend 1
+#define kFwdMsgSendStret 0
+
+// objc_msgSend parameters
+#define SELF 8<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+#define SUPER 8<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+#define SELECTOR 12<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+#define FIRST_ARG 16<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+
+// objc_msgSend_stret parameters
+#define STRUCT_ADDR 8<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+#define SELF_STRET 12<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+#define SUPER_STRET 12<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+#define SELECTOR_STRET 16<span class="enscript-type">[</span>ebp<span class="enscript-type">]</span>
+
+// objc_super parameter to sendSuper
+#define super_receiver 0
+#define super_class 4
+
+// struct objc_class fields
+#define <span class="enscript-type">isa</span> 0
+#define cache 32
+
+// struct objc_method fields
+#define method_name 0
+#define method_imp 8
+
+// struct objc_cache fields
+#define mask 0
+#define occupied 4
+#define buckets 8
+
+void *_objc_forward_handler = NULL;
+void *_objc_forward_stret_handler = NULL;
+
+__declspec(naked) Method _cache_getMethod(Class cls, SEL sel, IMP objc_msgForward_imp)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        mov ecx, SELECTOR
+        mov edx, SELF
+
+// CacheLookup WORD_RETURN, CACHE_GET
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+MISS:
+        <span class="enscript-type">xor</span> eax, eax
+        pop esi
+        pop edi
+        leave
+        ret
+
+HIT:
+        mov ecx, FIRST_ARG
+        cmp ecx, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je MISS
+        pop esi
+        pop edi
+        leave
+        ret
+    }
+}
+
+__declspec(naked) IMP _cache_getImp(Class cls, SEL sel)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        mov ecx, SELECTOR
+        mov edx, SELF
+
+// CacheLookup WORD_RETURN, CACHE_GET
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+MISS:
+        pop esi
+        pop edi
+        <span class="enscript-type">xor</span> eax, eax
+        leave
+        ret
+
+HIT:
+        pop esi
+        pop edi
+        mov eax, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        leave
+        ret
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) id objc_msgSend(id a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        // <span class="enscript-type">load</span> receiver <span class="enscript-type">and</span> selector
+        mov ecx, SELECTOR
+        mov eax, SELF
+
+        // check whether receiver is nil
+        test eax, eax
+        je NIL
+
+        // receiver (in eax) is non-nil: search the cache
+        mov edx, <span class="enscript-type">isa</span><span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // CacheLookup WORD_RETURN, MSG_SEND
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+HIT:
+        mov eax, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        pop esi
+        pop edi
+        mov edx, kFwdMsgSend
+        leave
+        jmp eax
+
+        // cache miss: search method lists
+MISS:
+        pop esi
+        pop edi
+        mov edx, SELF
+        mov eax, <span class="enscript-type">isa</span><span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+
+        // MethodTableLookup WORD_RETURN, MSG_SEND
+        push eax
+        push ecx
+        push edx
+        call _class_lookupMethodAndLoadCache3
+
+        mov edx, kFwdMsgSend
+        leave
+        jmp eax
+
+        // message send to nil: <span class="enscript-keyword">return</span> zero
+NIL:
+        // eax is already zero
+        mov edx, 0
+        leave
+        ret
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) <span class="enscript-type">double</span> objc_msgSend_fpret(id a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        // <span class="enscript-type">load</span> receiver <span class="enscript-type">and</span> selector
+        mov ecx, SELECTOR
+        mov eax, SELF
+
+        // check whether receiver is nil
+        test eax, eax
+        je NIL
+
+        // receiver (in eax) is non-nil: search the cache
+        mov edx, <span class="enscript-type">isa</span><span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // CacheLookup WORD_RETURN, MSG_SEND
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+HIT:
+        mov eax, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        pop esi
+        pop edi
+        mov edx, kFwdMsgSend
+        leave
+        jmp eax
+
+        // cache miss: search method lists
+MISS:
+        pop esi
+        pop edi
+        mov edx, SELF
+        mov eax, <span class="enscript-type">isa</span><span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+
+        // MethodTableLookup WORD_RETURN, MSG_SEND
+        push eax
+        push ecx
+        push edx
+        call _class_lookupMethodAndLoadCache3
+
+        mov edx, kFwdMsgSend
+        leave
+        jmp eax
+
+        // message send to nil: <span class="enscript-keyword">return</span> zero
+NIL:
+        fldz
+        leave
+        ret
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) id objc_msgSendSuper(struct objc_super *a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        // <span class="enscript-type">load</span> <span class="enscript-type">class</span> <span class="enscript-type">and</span> selector
+        mov eax, SUPER
+        mov ecx, SELECTOR
+        mov edx, super_class<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // search the cache (<span class="enscript-type">class</span> in edx)
+        // CacheLookup WORD_RETURN, MSG_SENDSUPER
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+HIT:
+        mov eax, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        pop esi
+        pop edi
+        mov edx, SUPER
+        mov edx, super_receiver<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        mov SUPER, edx
+        mov edx, kFwdMsgSend
+        leave
+        jmp eax
+
+        // cache miss: search method lists
+MISS:
+
+        pop esi
+        pop edi
+        mov eax, SUPER
+        mov edx, super_receiver<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        mov SUPER, edx
+        mov eax, super_class<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // MethodTableLookup WORD_RETURN, MSG_SENDSUPER
+        push eax
+        push ecx
+        push edx
+        call _class_lookupMethodAndLoadCache3
+
+        mov edx, kFwdMsgSend
+        leave
+        jmp eax
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) void objc_msgSend_stret(void)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        // <span class="enscript-type">load</span> receiver <span class="enscript-type">and</span> selector
+        mov ecx, SELECTOR_STRET
+        mov eax, SELF_STRET
+
+        // check whether receiver is nil
+        test eax, eax
+        je NIL
+
+        // receiver (in eax) is non-nil: search the cache
+        mov edx, <span class="enscript-type">isa</span><span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // CacheLookup WORD_RETURN, MSG_SEND
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+HIT:
+        mov eax, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        pop esi
+        pop edi
+        mov edx, kFwdMsgSendStret
+        leave
+        jmp eax
+
+        // cache miss: search method lists
+MISS:
+        pop esi
+        pop edi
+        mov edx, SELF_STRET
+        mov eax, <span class="enscript-type">isa</span><span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+
+        // MethodTableLookup WORD_RETURN, MSG_SEND
+        push eax
+        push ecx
+        push edx
+        call _class_lookupMethodAndLoadCache3
+
+        mov edx, kFwdMsgSendStret
+        leave
+        jmp eax
+
+        // message send to nil: <span class="enscript-keyword">return</span> zero
+NIL:
+        // eax is already zero
+        mov edx, 0
+        leave
+        ret
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) id objc_msgSendSuper_stret(struct objc_super *a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        // <span class="enscript-type">load</span> <span class="enscript-type">class</span> <span class="enscript-type">and</span> selector
+        mov eax, SUPER_STRET
+        mov ecx, SELECTOR_STRET
+        mov edx, super_class<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // search the cache (<span class="enscript-type">class</span> in edx)
+        // CacheLookup WORD_RETURN, MSG_SENDSUPER
+        push edi
+        mov edi, cache<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        push esi
+        mov esi, mask<span class="enscript-type">[</span>edi<span class="enscript-type">]</span>
+        mov edx, ecx
+        shr edx, 2
+SCAN:
+        <span class="enscript-type">and</span> edx, esi
+        mov eax, buckets<span class="enscript-type">[</span>edi<span class="enscript-type">]</span><span class="enscript-type">[</span>edx*4<span class="enscript-type">]</span>
+        test eax, eax
+        je MISS
+        cmp ecx, method_name<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        je HIT
+        add edx, 1
+        jmp SCAN
+
+HIT:
+        mov eax, method_imp<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        pop esi
+        pop edi
+        mov edx, SUPER_STRET
+        mov edx, super_receiver<span class="enscript-type">[</span>edx<span class="enscript-type">]</span>
+        mov SUPER_STRET, edx
+        mov edx, kFwdMsgSendStret
+        leave
+        jmp eax
+
+        // cache miss: search method lists
+MISS:
+
+        pop esi
+        pop edi
+        mov eax, SUPER_STRET
+        mov edx, super_receiver<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+        mov SUPER_STRET, edx
+        mov eax, super_class<span class="enscript-type">[</span>eax<span class="enscript-type">]</span>
+
+        // MethodTableLookup WORD_RETURN, MSG_SENDSUPER
+        push eax
+        push ecx
+        push edx
+        call _class_lookupMethodAndLoadCache3
+
+        mov edx, kFwdMsgSendStret
+        leave
+        jmp eax
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) id _objc_msgForward(id a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        mov ecx, _objc_forward_handler
+        jmp ecx
+    }
+}
+
+OBJC_EXPORT __declspec(naked) id _objc_msgForward_stret(id a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        mov ecx, _objc_forward_stret_handler
+        jmp ecx
+    }
+}
+
+
+__declspec(naked) id _objc_msgForward_cached(id a, SEL b, <span class="enscript-keyword">...</span>)
+{
+    __asm {
+        cmp edx, kFwdMsgSendStret
+        je  STRET
+        jmp _objc_msgForward
+STRET:
+        jmp _objc_msgForward_stret
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) void method_invoke(void)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        mov ecx, SELECTOR
+        mov edx, method_name<span class="enscript-type">[</span>ecx<span class="enscript-type">]</span>
+        mov eax, method_imp<span class="enscript-type">[</span>ecx<span class="enscript-type">]</span>
+        mov SELECTOR, edx
+
+        leave
+        jmp eax
+    }
+}
+
+
+OBJC_EXPORT __declspec(naked) void method_invoke_stret(void)
+{
+    __asm {
+        push ebp
+        mov ebp, esp
+
+        mov ecx, SELECTOR_STRET
+        mov edx, method_name<span class="enscript-type">[</span>ecx<span class="enscript-type">]</span>
+        mov eax, method_imp<span class="enscript-type">[</span>ecx<span class="enscript-type">]</span>
+        mov SELECTOR_STRET, edx
+
+        leave
+        jmp eax
+    }
+}
+</pre>
+<hr />
+</body></html>

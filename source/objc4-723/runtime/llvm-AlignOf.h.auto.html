@@ -1,0 +1,196 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>llvm-AlignOf.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">llvm-AlignOf.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="llvm-AlignOf.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//===--- AlignOf.h - Portable calculation of type alignment -----*- C++ -*-===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//                     The LLVM Compiler Infrastructure
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file is distributed under the University of Illinois Open Source
+</span><span class="enscript-comment">// License. See LICENSE.TXT for details.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file defines the AlignOf function that computes alignments for
+</span><span class="enscript-comment">// arbitrary types.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span>
+<span class="enscript-comment">// Taken from llvmCore-3425.0.31.
+</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">LLVM_SUPPORT_ALIGNOF_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_SUPPORT_ALIGNOF_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;cstddef&gt;</span>
+
+namespace objc {
+
+<span class="enscript-type">template</span> &lt;typename T&gt;
+<span class="enscript-type">struct</span> AlignmentCalcImpl {
+  <span class="enscript-type">char</span> x;
+  T t;
+<span class="enscript-type">private</span>:
+  AlignmentCalcImpl() {} <span class="enscript-comment">// Never instantiate.
+</span>};
+
+<span class="enscript-comment">/// AlignOf - A templated class that contains an enum value representing
+</span><span class="enscript-comment">///  the alignment of the template argument.  For example,
+</span><span class="enscript-comment">///  AlignOf&lt;int&gt;::Alignment represents the alignment of type &quot;int&quot;.  The
+</span><span class="enscript-comment">///  alignment calculated is the minimum alignment, and not necessarily
+</span><span class="enscript-comment">///  the &quot;desired&quot; alignment returned by GCC's __alignof__ (for example).  Note
+</span><span class="enscript-comment">///  that because the alignment is an enum value, it can be used as a
+</span><span class="enscript-comment">///  compile-time constant (e.g., for template instantiation).
+</span><span class="enscript-type">template</span> &lt;typename T&gt;
+<span class="enscript-type">struct</span> AlignOf {
+  <span class="enscript-type">enum</span> { Alignment =
+         static_cast&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span>&gt;(<span class="enscript-keyword">sizeof</span>(AlignmentCalcImpl&lt;T&gt;) - <span class="enscript-keyword">sizeof</span>(T)) };
+
+  <span class="enscript-type">enum</span> { Alignment_GreaterEqual_2Bytes = Alignment &gt;= 2 ? 1 : 0 };
+  <span class="enscript-type">enum</span> { Alignment_GreaterEqual_4Bytes = Alignment &gt;= 4 ? 1 : 0 };
+  <span class="enscript-type">enum</span> { Alignment_GreaterEqual_8Bytes = Alignment &gt;= 8 ? 1 : 0 };
+  <span class="enscript-type">enum</span> { Alignment_GreaterEqual_16Bytes = Alignment &gt;= 16 ? 1 : 0 };
+
+  <span class="enscript-type">enum</span> { Alignment_LessEqual_2Bytes = Alignment &lt;= 2 ? 1 : 0 };
+  <span class="enscript-type">enum</span> { Alignment_LessEqual_4Bytes = Alignment &lt;= 4 ? 1 : 0 };
+  <span class="enscript-type">enum</span> { Alignment_LessEqual_8Bytes = Alignment &lt;= 8 ? 1 : 0 };
+  <span class="enscript-type">enum</span> { Alignment_LessEqual_16Bytes = Alignment &lt;= 16 ? 1 : 0 };
+
+};
+
+<span class="enscript-comment">/// alignOf - A templated function that returns the minimum alignment of
+</span><span class="enscript-comment">///  of a type.  This provides no extra functionality beyond the AlignOf
+</span><span class="enscript-comment">///  class besides some cosmetic cleanliness.  Example usage:
+</span><span class="enscript-comment">///  alignOf&lt;int&gt;() returns the alignment of an int.
+</span><span class="enscript-type">template</span> &lt;typename T&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">alignOf</span>() { <span class="enscript-keyword">return</span> AlignOf&lt;T&gt;::Alignment; }
+
+
+<span class="enscript-comment">/// \brief Helper for building an aligned character array type.
+</span><span class="enscript-comment">///
+</span><span class="enscript-comment">/// This template is used to explicitly build up a collection of aligned
+</span><span class="enscript-comment">/// character types. We have to build these up using a macro and explicit
+</span><span class="enscript-comment">/// specialization to cope with old versions of MSVC and GCC where only an
+</span><span class="enscript-comment">/// integer literal can be used to specify an alignment constraint. Once built
+</span><span class="enscript-comment">/// up here, we can then begin to indirect between these using normal C++
+</span><span class="enscript-comment">/// template parameters.
+</span><span class="enscript-type">template</span> &lt;size_t Alignment&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl;
+
+<span class="enscript-comment">// MSVC requires special handling here.
+</span>#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_MSC_VER</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">cxx_alignas</span>)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(x) \
+  <span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;x&gt; { \
+    <span class="enscript-type">char</span> aligned alignas(x); \
+  }
+#<span class="enscript-reference">elif</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__GNUC__</span>)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(x) \
+  <span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;x&gt; { \
+    <span class="enscript-type">char</span> aligned __attribute__((aligned(x))); \
+  }
+#<span class="enscript-reference">else</span>
+# <span class="enscript-reference">error</span> <span class="enscript-variable-name">No</span> <span class="enscript-variable-name">supported</span> <span class="enscript-variable-name">align</span> <span class="enscript-variable-name">as</span> <span class="enscript-variable-name">directive</span>.
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(1);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(2);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(4);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(8);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(16);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(32);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(64);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(128);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(512);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(1024);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(2048);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(4096);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(8192);
+
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>
+
+#<span class="enscript-reference">else</span> // <span class="enscript-variable-name">_MSC_VER</span>
+
+<span class="enscript-comment">// We provide special variations of this template for the most common
+</span><span class="enscript-comment">// alignments because __declspec(align(...)) doesn't actually work when it is
+</span><span class="enscript-comment">// a member of a by-value function argument in MSVC, even if the alignment
+</span><span class="enscript-comment">// request is something reasonably like 8-byte or 16-byte.
+</span><span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;1&gt; { <span class="enscript-type">char</span> aligned; };
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;2&gt; { <span class="enscript-type">short</span> aligned; };
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;4&gt; { <span class="enscript-type">int</span> aligned; };
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;8&gt; { <span class="enscript-type">double</span> aligned; };
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(x) \
+  <span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> AlignedCharArrayImpl&lt;x&gt; { \
+    __declspec(align(x)) <span class="enscript-type">char</span> aligned; \
+  }
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(16);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(32);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(64);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(128);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(512);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(1024);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(2048);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(4096);
+<span class="enscript-function-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>(8192);
+<span class="enscript-comment">// Any larger and MSVC complains.
+</span>#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">LLVM_ALIGNEDCHARARRAY_TEMPLATE_ALIGNMENT</span>
+
+#<span class="enscript-reference">endif</span> // <span class="enscript-variable-name">_MSC_VER</span>
+
+<span class="enscript-comment">/// \brief This union template exposes a suitably aligned and sized character
+</span><span class="enscript-comment">/// array member which can hold elements of any of up to four types.
+</span><span class="enscript-comment">///
+</span><span class="enscript-comment">/// These types may be arrays, structs, or any other types. The goal is to
+</span><span class="enscript-comment">/// produce a union type containing a character array which, when used, forms
+</span><span class="enscript-comment">/// storage suitable to placement new any of these types over. Support for more
+</span><span class="enscript-comment">/// than four types can be added at the cost of more boiler plate.
+</span><span class="enscript-type">template</span> &lt;typename T1,
+          typename T2 = <span class="enscript-type">char</span>, typename T3 = <span class="enscript-type">char</span>, typename T4 = <span class="enscript-type">char</span>&gt;
+<span class="enscript-type">union</span> AlignedCharArrayUnion {
+<span class="enscript-type">private</span>:
+  <span class="enscript-type">class</span> AlignerImpl {
+    T1 t1; T2 t2; T3 t3; T4 t4;
+
+    AlignerImpl(); <span class="enscript-comment">// Never defined or instantiated.
+</span>  };
+  <span class="enscript-type">union</span> SizerImpl {
+    <span class="enscript-type">char</span> arr1[<span class="enscript-keyword">sizeof</span>(T1)], arr2[<span class="enscript-keyword">sizeof</span>(T2)], arr3[<span class="enscript-keyword">sizeof</span>(T3)], arr4[<span class="enscript-keyword">sizeof</span>(T4)];
+  };
+
+<span class="enscript-type">public</span>:
+  <span class="enscript-comment">/// \brief The character array buffer for use by clients.
+</span>  <span class="enscript-comment">///
+</span>  <span class="enscript-comment">/// No other member of this union should be referenced. The exist purely to
+</span>  <span class="enscript-comment">/// constrain the layout of this character array.
+</span>  <span class="enscript-type">char</span> buffer[<span class="enscript-keyword">sizeof</span>(SizerImpl)];
+
+<span class="enscript-type">private</span>:
+  <span class="enscript-comment">// Tests seem to indicate that both Clang and GCC will properly register the
+</span>  <span class="enscript-comment">// alignment of a struct containing an aligned member, and this alignment
+</span>  <span class="enscript-comment">// should carry over to the character array in the union.
+</span>  AlignedCharArrayImpl&lt;AlignOf&lt;AlignerImpl&gt;::Alignment&gt; nonce_member;
+};
+
+} <span class="enscript-comment">// end namespace objc
+</span>#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

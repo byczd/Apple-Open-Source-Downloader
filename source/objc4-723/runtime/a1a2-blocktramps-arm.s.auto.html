@@ -1,0 +1,173 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>a1a2-blocktramps-arm.s</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">a1a2-blocktramps-arm.s&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="a1a2-blocktramps-arm.s">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+#if __arm__
+	<span class="enscript-keyword">
+</span>#include &lt;arm/arch.h&gt;
+#include &lt;mach/vm_param.h&gt;
+
+.syntax unified
+
+.text
+
+	<span class="enscript-keyword">.private_extern</span> __a1a2_tramphead
+	<span class="enscript-keyword">.private_extern</span> __a1a2_firsttramp
+	<span class="enscript-keyword">.private_extern</span> __a1a2_trampend
+
+// Trampoline machinery assumes the trampolines are Thumb function pointers
+#if !__thumb2__
+#   error sorry
+#endif
+
+.thumb
+.thumb_func __a1a2_tramphead
+.thumb_func __a1a2_firsttramp
+.thumb_func __a1a2_trampend
+
+.align PAGE_MAX_SHIFT
+<span class="enscript-function-name">__a1a2_tramphead:</span>
+	<span class="enscript-keyword">/*
+</span>	 <span class="enscript-keyword">r0</span> == self
+	 <span class="enscript-keyword">r12</span> == pc of trampoline's first instruction + PC bias
+	 <span class="enscript-keyword">lr</span> == original return address
+	 <span class="enscript-keyword">*/
+</span>
+	<span class="enscript-keyword">mov</span>  r1, r0                   // _cmd = self
+
+	<span class="enscript-keyword">//</span> Trampoline's data is one page before the trampoline text.
+	<span class="enscript-keyword">//</span> Also correct PC bias of 4 bytes.
+	<span class="enscript-keyword">sub</span>  r12, #PAGE_MAX_SIZE
+	<span class="enscript-keyword">ldr</span>  r0, [r12, #-4]          // self = block object
+	<span class="enscript-keyword">ldr</span>  pc, [r0, #12]           // tail call block-&gt;invoke
+	<span class="enscript-keyword">//</span> not reached
+
+	<span class="enscript-keyword">//</span> Align trampolines to 8 bytes
+.align 3
+	<span class="enscript-keyword">
+</span>.macro TrampolineEntry
+	<span class="enscript-keyword">mov</span> r12, pc
+	<span class="enscript-keyword">b</span> __a1a2_tramphead
+.align 3
+.endmacro
+
+.macro TrampolineEntryX16
+	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>.endmacro
+
+.macro TrampolineEntryX256
+	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>.endmacro
+
+.private_extern __a1a2_firsttramp
+<span class="enscript-function-name">__a1a2_firsttramp:</span>
+	<span class="enscript-keyword">//</span> 2048-2 trampolines to fill 16K page
+	<span class="enscript-keyword">TrampolineEntryX256
+</span>	<span class="enscript-keyword">TrampolineEntryX256
+</span>	<span class="enscript-keyword">TrampolineEntryX256
+</span>	<span class="enscript-keyword">TrampolineEntryX256
+</span>
+	<span class="enscript-keyword">TrampolineEntryX256
+</span>	<span class="enscript-keyword">TrampolineEntryX256
+</span>	<span class="enscript-keyword">TrampolineEntryX256
+</span>
+	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>
+	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>
+	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>
+	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>	<span class="enscript-keyword">TrampolineEntryX16
+</span>
+	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>
+	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>
+	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>
+	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">TrampolineEntry
+</span>	<span class="enscript-keyword">//</span> TrampolineEntry
+	<span class="enscript-keyword">//</span> TrampolineEntry
+
+.private_extern __a1a2_trampend
+<span class="enscript-function-name">__a1a2_trampend:</span>
+
+#endif
+</pre>
+<hr />
+</body></html>

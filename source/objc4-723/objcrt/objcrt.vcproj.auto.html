@@ -1,0 +1,120 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objcrt.vcproj</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objcrt.vcproj&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objcrt.vcproj">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+&lt;?xml version=&quot;1.0&quot; encoding=&quot;Windows-1252&quot;?&gt;
+&lt;VisualStudioProject
+	ProjectType=&quot;Visual C++&quot;
+	Version=&quot;8.00&quot;
+	Name=&quot;objcrt&quot;
+	ProjectGUID=&quot;{E38C1996-8B3D-4050-A4B2-DC85957B047D}&quot;
+	RootNamespace=&quot;objcrt&quot;
+	&gt;
+	&lt;Platforms&gt;
+		&lt;Platform
+			Name=&quot;Win32&quot;
+		/&gt;
+	&lt;/Platforms&gt;
+	&lt;ToolFiles&gt;
+	&lt;/ToolFiles&gt;
+	&lt;Configurations&gt;
+		&lt;Configuration
+			Name=&quot;Debug|Win32&quot;
+			OutputDirectory=&quot;$(SolutionDir)$(ConfigurationName)&quot;
+			IntermediateDirectory=&quot;$(ConfigurationName)&quot;
+			ConfigurationType=&quot;10&quot;
+			CharacterSet=&quot;2&quot;
+			&gt;
+			&lt;Tool
+				Name=&quot;VCPreBuildEventTool&quot;
+				CommandLine=&quot;cl /nologo /c /MDd /D_DEBUG /Od /Zl /DYNAMICBASE /GS /I&amp;quot;%DSTROOT%\AppleInternal\include&amp;quot; /I&amp;quot;%SRCROOT%\AppleInternal\include&amp;quot; /I&amp;quot;$(ProjectDir)\runtime&amp;quot; /D&amp;quot;_WINDOWS&amp;quot; /Dnil=0 ..\runtime\objcrt.c /Fo&amp;quot;$(OutDir)\objcrt_debug.obj&quot;
+			/&gt;
+			&lt;Tool
+				Name=&quot;VCCustomBuildTool&quot;
+			/&gt;
+			&lt;Tool
+				Name=&quot;VCMIDLTool&quot;
+			/&gt;
+			&lt;Tool
+				Name=&quot;VCPostBuildEventTool&quot;
+				CommandLine=&quot;xcopy /Y &amp;quot;$(OutDir)\objcrt_debug.obj&amp;quot; &amp;quot;%DSTROOT%\AppleInternal\lib&amp;quot;&quot;
+			/&gt;
+		&lt;/Configuration&gt;
+		&lt;Configuration
+			Name=&quot;Release|Win32&quot;
+			OutputDirectory=&quot;$(SolutionDir)$(ConfigurationName)&quot;
+			IntermediateDirectory=&quot;$(ConfigurationName)&quot;
+			ConfigurationType=&quot;10&quot;
+			CharacterSet=&quot;2&quot;
+			WholeProgramOptimization=&quot;1&quot;
+			&gt;
+			&lt;Tool
+				Name=&quot;VCPreBuildEventTool&quot;
+				CommandLine=&quot;cl /nologo /c /MD /O1 /Zi /MP2 /DYNAMICBASE /GS /I&amp;quot;%DSTROOT%\AppleInternal\include&amp;quot; /I&amp;quot;%SRCROOT%\AppleInternal\include&amp;quot; /I&amp;quot;$(ProjectDir)\..\runtime&amp;quot; /D&amp;quot;_WINDOWS&amp;quot; /Dnil=0 ..\runtime\objcrt.c /Fo&amp;quot;$(OutDir)\objcrt.obj&quot;
+			/&gt;
+			&lt;Tool
+				Name=&quot;VCCustomBuildTool&quot;
+			/&gt;
+			&lt;Tool
+				Name=&quot;VCMIDLTool&quot;
+			/&gt;
+			&lt;Tool
+				Name=&quot;VCPostBuildEventTool&quot;
+				CommandLine=&quot;xcopy /Y &amp;quot;$(OutDir)\objcrt.obj&amp;quot; &amp;quot;%DSTROOT%\AppleInternal\lib&amp;quot;&quot;
+			/&gt;
+		&lt;/Configuration&gt;
+	&lt;/Configurations&gt;
+	&lt;References&gt;
+	&lt;/References&gt;
+	&lt;Files&gt;
+		&lt;Filter
+			Name=&quot;Source Files&quot;
+			Filter=&quot;cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx&quot;
+			UniqueIdentifier=&quot;{4FC737F1-C7A5-4376-A066-2A32D752A2FF}&quot;
+			&gt;
+			&lt;File
+				RelativePath=&quot;..\runtime\objcrt.c&quot;
+				&gt;
+			&lt;/File&gt;
+		&lt;/Filter&gt;
+		&lt;Filter
+			Name=&quot;Header Files&quot;
+			Filter=&quot;h;hpp;hxx;hm;inl;inc;xsd&quot;
+			UniqueIdentifier=&quot;{93995380-89BD-4b04-88EB-625FBE52EBFB}&quot;
+			&gt;
+			&lt;File
+				RelativePath=&quot;..\runtime\objcrt.h&quot;
+				&gt;
+			&lt;/File&gt;
+		&lt;/Filter&gt;
+		&lt;Filter
+			Name=&quot;Resource Files&quot;
+			Filter=&quot;rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav&quot;
+			UniqueIdentifier=&quot;{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}&quot;
+			&gt;
+		&lt;/Filter&gt;
+	&lt;/Files&gt;
+	&lt;Globals&gt;
+	&lt;/Globals&gt;
+&lt;/VisualStudioProject&gt;
+</pre>
+<hr />
+</body></html>

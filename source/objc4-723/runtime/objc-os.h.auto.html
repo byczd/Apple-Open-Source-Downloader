@@ -1,0 +1,1300 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-os.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-os.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-os.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+<span class="enscript-comment">/***********************************************************************
+* objc-os.h
+* OS portability layer.
+**********************************************************************/</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_OS_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_OS_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;TargetConditionals.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-config.h&quot;</span>
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__LP64__</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WORD_SHIFT</span> 3UL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WORD_MASK</span> 7UL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WORD_BITS</span> 64
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WORD_SHIFT</span> 2UL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WORD_MASK</span> 3UL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WORD_BITS</span> 32
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-type">static</span> inline uint32_t <span class="enscript-function-name">word_align</span>(uint32_t x) {
+    <span class="enscript-keyword">return</span> (x + WORD_MASK) &amp; ~WORD_MASK;
+}
+<span class="enscript-type">static</span> inline size_t <span class="enscript-function-name">word_align</span>(size_t x) {
+    <span class="enscript-keyword">return</span> (x + WORD_MASK) &amp; ~WORD_MASK;
+}
+
+
+<span class="enscript-comment">// Mix-in for classes that must not be copied.
+</span>class nocopy_t {
+  <span class="enscript-reference">private</span>:
+    nocopy_t(<span class="enscript-type">const</span> nocopy_t&amp;) = delete;
+    <span class="enscript-type">const</span> nocopy_t&amp; operator=(<span class="enscript-type">const</span> nocopy_t&amp;) = delete;
+  <span class="enscript-reference">protected</span>:
+    nocopy_t() { }
+    ~nocopy_t() { }
+};
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_MAC</span>
+
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OS_UNFAIR_LOCK_INLINE</span> 1
+
+#   <span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__STDC_LIMIT_MACROS</span>
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">__STDC_LIMIT_MACROS</span>
+#   <span class="enscript-reference">endif</span>
+
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdint.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdarg.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;ctype.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;errno.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;dlfcn.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;fcntl.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;assert.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;limits.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;syslog.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;unistd.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;pthread.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;crt_externs.h&gt;</span>
+#   <span class="enscript-reference">undef</span> <span class="enscript-variable-name">check</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;Availability.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;TargetConditionals.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/mman.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/time.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/stat.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/param.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/reason.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach/mach.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach/vm_param.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach/mach_time.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach-o/dyld.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach-o/ldsyms.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach-o/loader.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach-o/getsect.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach-o/dyld_priv.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc/malloc.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;os/lock_private.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;libkern/OSAtomic.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;libkern/OSCacheControl.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;System/pthread_machdep.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-probes.h&quot;</span>  // generated dtrace probe definitions.
+
+<span class="enscript-comment">// Some libc functions call objc_msgSend() 
+</span><span class="enscript-comment">// so we can't use them without deadlocks.
+</span><span class="enscript-type">void</span> <span class="enscript-function-name">syslog</span>(<span class="enscript-type">int</span>, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *, ...) UNAVAILABLE_ATTRIBUTE;
+<span class="enscript-type">void</span> <span class="enscript-function-name">vsyslog</span>(<span class="enscript-type">int</span>, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *, va_list) UNAVAILABLE_ATTRIBUTE;
+
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">ALWAYS_INLINE</span> inline __attribute__((always_inline))
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">NEVER_INLINE</span> inline __attribute__((noinline))
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">fastpath</span>(x) (__builtin_expect(bool(x), 1))
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">slowpath</span>(x) (__builtin_expect(bool(x), 0))
+
+
+<span class="enscript-type">static</span> ALWAYS_INLINE uintptr_t 
+<span class="enscript-function-name">addc</span>(uintptr_t lhs, uintptr_t rhs, uintptr_t carryin, uintptr_t *carryout)
+{
+    <span class="enscript-keyword">return</span> __builtin_addcl(lhs, rhs, carryin, carryout);
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE uintptr_t 
+<span class="enscript-function-name">subc</span>(uintptr_t lhs, uintptr_t rhs, uintptr_t carryin, uintptr_t *carryout)
+{
+    <span class="enscript-keyword">return</span> __builtin_subcl(lhs, rhs, carryin, carryout);
+}
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__arm64__</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+uintptr_t 
+<span class="enscript-function-name">LoadExclusive</span>(uintptr_t *src)
+{
+    uintptr_t result;
+    asm(<span class="enscript-string">&quot;ldxr %x0, [%x1]&quot;</span> 
+        : <span class="enscript-string">&quot;=r&quot;</span> (result) 
+        : <span class="enscript-string">&quot;r&quot;</span> (src), <span class="enscript-string">&quot;m&quot;</span> (*src));
+    <span class="enscript-keyword">return</span> result;
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+bool 
+<span class="enscript-function-name">StoreExclusive</span>(uintptr_t *dst, uintptr_t oldvalue __unused, uintptr_t value)
+{
+    uint32_t result;
+    asm(<span class="enscript-string">&quot;stxr %w0, %x2, [%x3]&quot;</span> 
+        : <span class="enscript-string">&quot;=r&quot;</span> (result), <span class="enscript-string">&quot;=m&quot;</span> (*dst) 
+        : <span class="enscript-string">&quot;r&quot;</span> (value), <span class="enscript-string">&quot;r&quot;</span> (dst));
+    <span class="enscript-keyword">return</span> !result;
+}
+
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+bool 
+<span class="enscript-function-name">StoreReleaseExclusive</span>(uintptr_t *dst, uintptr_t oldvalue __unused, uintptr_t value)
+{
+    uint32_t result;
+    asm(<span class="enscript-string">&quot;stlxr %w0, %x2, [%x3]&quot;</span> 
+        : <span class="enscript-string">&quot;=r&quot;</span> (result), <span class="enscript-string">&quot;=m&quot;</span> (*dst) 
+        : <span class="enscript-string">&quot;r&quot;</span> (value), <span class="enscript-string">&quot;r&quot;</span> (dst));
+    <span class="enscript-keyword">return</span> !result;
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+<span class="enscript-type">void</span> 
+<span class="enscript-function-name">ClearExclusive</span>(uintptr_t *dst)
+{
+    <span class="enscript-comment">// pretend it writes to *dst for instruction ordering purposes
+</span>    asm(<span class="enscript-string">&quot;clrex&quot;</span> : <span class="enscript-string">&quot;=m&quot;</span> (*dst));
+}
+
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">__arm__</span>  
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+uintptr_t 
+<span class="enscript-function-name">LoadExclusive</span>(uintptr_t *src)
+{
+    <span class="enscript-keyword">return</span> *src;
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+bool 
+<span class="enscript-function-name">StoreExclusive</span>(uintptr_t *dst, uintptr_t oldvalue, uintptr_t value)
+{
+    <span class="enscript-keyword">return</span> OSAtomicCompareAndSwapPtr((<span class="enscript-type">void</span> *)oldvalue, (<span class="enscript-type">void</span> *)value, 
+                                     (<span class="enscript-type">void</span> **)dst);
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+bool 
+<span class="enscript-function-name">StoreReleaseExclusive</span>(uintptr_t *dst, uintptr_t oldvalue, uintptr_t value)
+{
+    <span class="enscript-keyword">return</span> OSAtomicCompareAndSwapPtrBarrier((<span class="enscript-type">void</span> *)oldvalue, (<span class="enscript-type">void</span> *)value, 
+                                            (<span class="enscript-type">void</span> **)dst);
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+<span class="enscript-type">void</span> 
+<span class="enscript-function-name">ClearExclusive</span>(uintptr_t *dst __unused)
+{
+}
+
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">__x86_64__</span>  ||  <span class="enscript-variable-name">__i386__</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+uintptr_t 
+<span class="enscript-function-name">LoadExclusive</span>(uintptr_t *src)
+{
+    <span class="enscript-keyword">return</span> *src;
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+bool 
+<span class="enscript-function-name">StoreExclusive</span>(uintptr_t *dst, uintptr_t oldvalue, uintptr_t value)
+{
+    
+    <span class="enscript-keyword">return</span> __sync_bool_compare_and_swap((<span class="enscript-type">void</span> **)dst, (<span class="enscript-type">void</span> *)oldvalue, (<span class="enscript-type">void</span> *)value);
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+bool 
+<span class="enscript-function-name">StoreReleaseExclusive</span>(uintptr_t *dst, uintptr_t oldvalue, uintptr_t value)
+{
+    <span class="enscript-keyword">return</span> StoreExclusive(dst, oldvalue, value);
+}
+
+<span class="enscript-type">static</span> ALWAYS_INLINE
+<span class="enscript-type">void</span> 
+<span class="enscript-function-name">ClearExclusive</span>(uintptr_t *dst __unused)
+{
+}
+
+
+#<span class="enscript-reference">else</span> 
+#   <span class="enscript-reference">error</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">architecture</span>
+#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">TARGET_OS_IPHONE</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;CrashReporterClient.h&gt;</span>
+#<span class="enscript-reference">else</span>
+    <span class="enscript-comment">// CrashReporterClient not yet available on iOS
+</span>    __BEGIN_DECLS
+    <span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> *CRSetCrashLogMessage(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *msg);
+    <span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> *CRGetCrashLogMessage(<span class="enscript-type">void</span>);
+    __END_DECLS
+#<span class="enscript-reference">endif</span>
+
+#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">__cplusplus</span>
+#       <span class="enscript-reference">include</span> <span class="enscript-string">&lt;vector&gt;</span>
+#       <span class="enscript-reference">include</span> <span class="enscript-string">&lt;algorithm&gt;</span>
+#       <span class="enscript-reference">include</span> <span class="enscript-string">&lt;functional&gt;</span>
+        using namespace std;
+#   <span class="enscript-reference">endif</span>
+
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">PRIVATE_EXTERN</span> __attribute__((visibility(<span class="enscript-string">&quot;hidden&quot;</span>)))
+#   <span class="enscript-reference">undef</span> <span class="enscript-variable-name">__private_extern__</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">__private_extern__</span> use_PRIVATE_EXTERN_instead
+#   <span class="enscript-reference">undef</span> <span class="enscript-variable-name">private_extern</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">private_extern</span> use_PRIVATE_EXTERN_instead
+
+<span class="enscript-comment">/* Use this for functions that are intended to be breakpoint hooks.
+   If you do not, the compiler may optimize them away.
+   BREAKPOINT_FUNCTION( void stop_on_error(void) ); */</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">BREAKPOINT_FUNCTION</span>(prototype)                             \
+    OBJC_EXTERN __attribute__((noinline, used, visibility(<span class="enscript-string">&quot;hidden&quot;</span>))) \
+    prototype { asm(<span class="enscript-string">&quot;&quot;</span>); }
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">TARGET_OS_WIN32</span>
+
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WINVER</span> 0x0501		// target Windows XP and later
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_WIN32_WINNT</span> 0x0501	// target Windows XP and later
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">WIN32_LEAN_AND_MEAN</span>
+    <span class="enscript-comment">// hack: windef.h typedefs BOOL as int
+</span>#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">BOOL</span> WINBOOL
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;windows.h&gt;</span>
+#   <span class="enscript-reference">undef</span> <span class="enscript-variable-name">BOOL</span>
+
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdio.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdlib.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdint.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdarg.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;assert.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc.h&gt;</span>
+#   <span class="enscript-reference">include</span> <span class="enscript-string">&lt;Availability.h&gt;</span>
+
+#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">__cplusplus</span>
+#       <span class="enscript-reference">include</span> <span class="enscript-string">&lt;vector&gt;</span>
+#       <span class="enscript-reference">include</span> <span class="enscript-string">&lt;algorithm&gt;</span>
+#       <span class="enscript-reference">include</span> <span class="enscript-string">&lt;functional&gt;</span>
+        using namespace std;
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">__BEGIN_DECLS</span> extern <span class="enscript-string">&quot;C&quot;</span> {
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">__END_DECLS</span>   }
+#   <span class="enscript-reference">else</span>
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">__BEGIN_DECLS</span> <span class="enscript-comment">/*empty*/</span>
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">__END_DECLS</span>   <span class="enscript-comment">/*empty*/</span>
+#   <span class="enscript-reference">endif</span>
+
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">PRIVATE_EXTERN</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">__attribute__</span>(x)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">inline</span> __inline
+
+<span class="enscript-comment">/* Use this for functions that are intended to be breakpoint hooks.
+   If you do not, the compiler may optimize them away.
+   BREAKPOINT_FUNCTION( void MyBreakpointFunction(void) ); */</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">BREAKPOINT_FUNCTION</span>(prototype) \
+    __declspec(noinline) prototype { __asm { } }
+
+<span class="enscript-comment">/* stub out dtrace probes */</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">OBJC_RUNTIME_OBJC_EXCEPTION_RETHROW</span>() do {} while(0)  
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">OBJC_RUNTIME_OBJC_EXCEPTION_THROW</span>(arg0) do {} while(0)
+
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">error</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">OS</span>
+#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc-api.h&gt;</span>
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_fatal</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...) 
+    __attribute__((noreturn, format (printf, 1, 2)));
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_fatal_with_reason</span>(uint64_t reason, uint64_t flags, 
+                                    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...) 
+    __attribute__((noreturn, format (printf, 3, 4)));
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">INIT_ONCE_PTR</span>(var, create, delete)                              \
+    <span class="enscript-keyword">do</span> {                                                                \
+        <span class="enscript-keyword">if</span> (var) <span class="enscript-keyword">break</span>;                                                 \
+        typeof(var) v = create;                                         \
+        <span class="enscript-keyword">while</span> (!var) {                                                  \
+            <span class="enscript-keyword">if</span> (OSAtomicCompareAndSwapPtrBarrier(0, (<span class="enscript-type">void</span>*)v, (<span class="enscript-type">void</span>**)&amp;var)){ \
+                <span class="enscript-keyword">goto</span> <span class="enscript-reference">done</span>;                                              \
+            }                                                           \
+        }                                                               \
+        delete;                                                         \
+    <span class="enscript-reference">done</span>:;                                                              \
+    } <span class="enscript-keyword">while</span> (0)
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">INIT_ONCE_32</span>(var, create, delete)                               \
+    <span class="enscript-keyword">do</span> {                                                                \
+        <span class="enscript-keyword">if</span> (var) <span class="enscript-keyword">break</span>;                                                 \
+        typeof(var) v = create;                                         \
+        <span class="enscript-keyword">while</span> (!var) {                                                  \
+            <span class="enscript-keyword">if</span> (OSAtomicCompareAndSwap32Barrier(0, v, (<span class="enscript-type">volatile</span> int32_t *)&amp;var)) { \
+                <span class="enscript-keyword">goto</span> <span class="enscript-reference">done</span>;                                              \
+            }                                                           \
+        }                                                               \
+        delete;                                                         \
+    <span class="enscript-reference">done</span>:;                                                              \
+    } <span class="enscript-keyword">while</span> (0)
+
+
+<span class="enscript-comment">// Thread keys reserved by libc for our use.
+</span>#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__PTK_FRAMEWORK_OBJC_KEY0</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_DIRECT_THREAD_KEYS</span> 1
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">TLS_DIRECT_KEY</span>        ((tls_key_t)__PTK_FRAMEWORK_OBJC_KEY0)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SYNC_DATA_DIRECT_KEY</span>  ((tls_key_t)__PTK_FRAMEWORK_OBJC_KEY1)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SYNC_COUNT_DIRECT_KEY</span> ((tls_key_t)__PTK_FRAMEWORK_OBJC_KEY2)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">AUTORELEASE_POOL_KEY</span>  ((tls_key_t)__PTK_FRAMEWORK_OBJC_KEY3)
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_RETURN_AUTORELEASE</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">RETURN_DISPOSITION_KEY</span> ((tls_key_t)__PTK_FRAMEWORK_OBJC_KEY4)
+# <span class="enscript-reference">endif</span>
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_QOS_HACK</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">QOS_KEY</span>               ((tls_key_t)__PTK_FRAMEWORK_OBJC_KEY5)
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_DIRECT_THREAD_KEYS</span> 0
+#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_WIN32</span>
+
+<span class="enscript-comment">// Compiler compatibility
+</span>
+<span class="enscript-comment">// OS compatibility
+</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">strdup</span> _strdup
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">issetugid</span>() 0
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">MIN</span>(x, y) ((x) &lt; (y) ? (x) : (y))
+
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> <span class="enscript-function-name">bcopy</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *src, <span class="enscript-type">void</span> *dst, size_t size) { memcpy(dst, src, size); }
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> <span class="enscript-function-name">bzero</span>(<span class="enscript-type">void</span> *dst, size_t size) { memset(dst, 0, size); }
+
+<span class="enscript-type">int</span> <span class="enscript-function-name">asprintf</span>(<span class="enscript-type">char</span> **dstp, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *format, ...);
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">void</span> * malloc_zone_t;
+
+<span class="enscript-type">static</span> __inline malloc_zone_t <span class="enscript-function-name">malloc_default_zone</span>(<span class="enscript-type">void</span>) { <span class="enscript-keyword">return</span> (malloc_zone_t)-1; }
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> *<span class="enscript-function-name">malloc_zone_malloc</span>(malloc_zone_t z, size_t size) { <span class="enscript-keyword">return</span> malloc(size); }
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> *<span class="enscript-function-name">malloc_zone_calloc</span>(malloc_zone_t z, size_t size, size_t count) { <span class="enscript-keyword">return</span> calloc(size, count); }
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> *<span class="enscript-function-name">malloc_zone_realloc</span>(malloc_zone_t z, <span class="enscript-type">void</span> *p, size_t size) { <span class="enscript-keyword">return</span> realloc(p, size); }
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> <span class="enscript-function-name">malloc_zone_free</span>(malloc_zone_t z, <span class="enscript-type">void</span> *p) { free(p); }
+<span class="enscript-type">static</span> __inline malloc_zone_t <span class="enscript-function-name">malloc_zone_from_ptr</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *p) { <span class="enscript-keyword">return</span> (malloc_zone_t)-1; }
+<span class="enscript-type">static</span> __inline size_t <span class="enscript-function-name">malloc_size</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *p) { <span class="enscript-keyword">return</span> _msize((<span class="enscript-type">void</span>*)p); <span class="enscript-comment">/* fixme invalid pointer check? */</span> }
+
+
+<span class="enscript-comment">// OSAtomic
+</span>
+<span class="enscript-type">static</span> __inline BOOL <span class="enscript-function-name">OSAtomicCompareAndSwapLong</span>(<span class="enscript-type">long</span> oldl, <span class="enscript-type">long</span> newl, <span class="enscript-type">long</span> <span class="enscript-type">volatile</span> *dst) 
+{ 
+    <span class="enscript-comment">// fixme barrier is overkill
+</span>    <span class="enscript-type">long</span> original = InterlockedCompareExchange(dst, newl, oldl);
+    <span class="enscript-keyword">return</span> (original == oldl);
+}
+
+<span class="enscript-type">static</span> __inline BOOL <span class="enscript-function-name">OSAtomicCompareAndSwapPtrBarrier</span>(<span class="enscript-type">void</span> *oldp, <span class="enscript-type">void</span> *newp, <span class="enscript-type">void</span> * <span class="enscript-type">volatile</span> *dst) 
+{ 
+    <span class="enscript-type">void</span> *original = InterlockedCompareExchangePointer(dst, newp, oldp);
+    <span class="enscript-keyword">return</span> (original == oldp);
+}
+
+<span class="enscript-type">static</span> __inline BOOL <span class="enscript-function-name">OSAtomicCompareAndSwap32Barrier</span>(int32_t oldl, int32_t newl, int32_t <span class="enscript-type">volatile</span> *dst) 
+{ 
+    <span class="enscript-type">long</span> original = InterlockedCompareExchange((<span class="enscript-type">volatile</span> <span class="enscript-type">long</span> *)dst, newl, oldl);
+    <span class="enscript-keyword">return</span> (original == oldl);
+}
+
+<span class="enscript-type">static</span> __inline int32_t <span class="enscript-function-name">OSAtomicDecrement32Barrier</span>(<span class="enscript-type">volatile</span> int32_t *dst)
+{
+    <span class="enscript-keyword">return</span> InterlockedDecrement((<span class="enscript-type">volatile</span> <span class="enscript-type">long</span> *)dst);
+}
+
+<span class="enscript-type">static</span> __inline int32_t <span class="enscript-function-name">OSAtomicIncrement32Barrier</span>(<span class="enscript-type">volatile</span> int32_t *dst)
+{
+    <span class="enscript-keyword">return</span> InterlockedIncrement((<span class="enscript-type">volatile</span> <span class="enscript-type">long</span> *)dst);
+}
+
+
+<span class="enscript-comment">// Internal data types
+</span>
+<span class="enscript-type">typedef</span> DWORD objc_thread_t;  <span class="enscript-comment">// thread ID
+</span><span class="enscript-type">static</span> __inline <span class="enscript-type">int</span> <span class="enscript-function-name">thread_equal</span>(objc_thread_t t1, objc_thread_t t2) { 
+    <span class="enscript-keyword">return</span> t1 == t2; 
+}
+<span class="enscript-type">static</span> __inline objc_thread_t <span class="enscript-function-name">thread_self</span>(<span class="enscript-type">void</span>) { 
+    <span class="enscript-keyword">return</span> GetCurrentThreadId(); 
+}
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    DWORD key;
+    <span class="enscript-type">void</span> (*dtor)(<span class="enscript-type">void</span> *);
+} tls_key_t;
+<span class="enscript-type">static</span> __inline tls_key_t <span class="enscript-function-name">tls_create</span>(<span class="enscript-type">void</span> (*dtor)(<span class="enscript-type">void</span>*)) { 
+    <span class="enscript-comment">// fixme need dtor registry for DllMain to call on thread detach
+</span>    tls_key_t k;
+    k.key = TlsAlloc();
+    k.dtor = dtor;
+    <span class="enscript-keyword">return</span> k;
+}
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> *<span class="enscript-function-name">tls_get</span>(tls_key_t k) { 
+    <span class="enscript-keyword">return</span> TlsGetValue(k.key); 
+}
+<span class="enscript-type">static</span> __inline <span class="enscript-type">void</span> <span class="enscript-function-name">tls_set</span>(tls_key_t k, <span class="enscript-type">void</span> *value) { 
+    TlsSetValue(k.key, value); 
+}
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    CRITICAL_SECTION *lock;
+} mutex_t;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">MUTEX_INITIALIZER</span> {0};
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">mutex_init</span>(mutex_t *m);
+<span class="enscript-type">static</span> __inline <span class="enscript-type">int</span> <span class="enscript-function-name">_mutex_lock_nodebug</span>(mutex_t *m) { 
+    <span class="enscript-comment">// fixme error check
+</span>    <span class="enscript-keyword">if</span> (!m-&gt;lock) {
+        mutex_init(m);
+    }
+    EnterCriticalSection(m-&gt;lock); 
+    <span class="enscript-keyword">return</span> 0;
+}
+<span class="enscript-type">static</span> __inline bool <span class="enscript-function-name">_mutex_try_lock_nodebug</span>(mutex_t *m) { 
+    <span class="enscript-comment">// fixme error check
+</span>    <span class="enscript-keyword">if</span> (!m-&gt;lock) {
+        mutex_init(m);
+    }
+    <span class="enscript-keyword">return</span> TryEnterCriticalSection(m-&gt;lock); 
+}
+<span class="enscript-type">static</span> __inline <span class="enscript-type">int</span> <span class="enscript-function-name">_mutex_unlock_nodebug</span>(mutex_t *m) { 
+    <span class="enscript-comment">// fixme error check
+</span>    LeaveCriticalSection(m-&gt;lock); 
+    <span class="enscript-keyword">return</span> 0;
+}
+
+
+<span class="enscript-type">typedef</span> mutex_t spinlock_t;
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">spinlock_lock</span>(l) mutex_lock(l)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">spinlock_unlock</span>(l) mutex_unlock(l)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">SPINLOCK_INITIALIZER</span> MUTEX_INITIALIZER
+
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    HANDLE mutex;
+} recursive_mutex_t;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RECURSIVE_MUTEX_INITIALIZER</span> {0};
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RECURSIVE_MUTEX_NOT_LOCKED</span> 1
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">recursive_mutex_init</span>(recursive_mutex_t *m);
+<span class="enscript-type">static</span> __inline <span class="enscript-type">int</span> <span class="enscript-function-name">_recursive_mutex_lock_nodebug</span>(recursive_mutex_t *m) { 
+    assert(m-&gt;mutex);
+    <span class="enscript-keyword">return</span> WaitForSingleObject(m-&gt;mutex, INFINITE);
+}
+<span class="enscript-type">static</span> __inline bool <span class="enscript-function-name">_recursive_mutex_try_lock_nodebug</span>(recursive_mutex_t *m) { 
+    assert(m-&gt;mutex);
+    <span class="enscript-keyword">return</span> (WAIT_OBJECT_0 == WaitForSingleObject(m-&gt;mutex, 0));
+}
+<span class="enscript-type">static</span> __inline <span class="enscript-type">int</span> <span class="enscript-function-name">_recursive_mutex_unlock_nodebug</span>(recursive_mutex_t *m) { 
+    assert(m-&gt;mutex);
+    <span class="enscript-keyword">return</span> ReleaseMutex(m-&gt;mutex) ? 0 : RECURSIVE_MUTEX_NOT_LOCKED;
+}
+
+
+<span class="enscript-comment">/*
+typedef HANDLE mutex_t;
+static inline void mutex_init(HANDLE *m) { *m = CreateMutex(NULL, FALSE, NULL); }
+static inline void _mutex_lock(mutex_t *m) { WaitForSingleObject(*m, INFINITE); }
+static inline bool mutex_try_lock(mutex_t *m) { return WaitForSingleObject(*m, 0) == WAIT_OBJECT_0; }
+static inline void _mutex_unlock(mutex_t *m) { ReleaseMutex(*m); }
+*/</span>
+
+<span class="enscript-comment">// based on <a href="http://www.cs.wustl.edu/~schmidt/win32-cv-1.html">http://www.cs.wustl.edu/~schmidt/win32-cv-1.html</a>
+</span><span class="enscript-comment">// Vista-only CONDITION_VARIABLE would be better
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    HANDLE mutex;
+    HANDLE waiters;      <span class="enscript-comment">// semaphore for those in cond_wait()
+</span>    HANDLE waitersDone;  <span class="enscript-comment">// auto-reset event after everyone gets a broadcast
+</span>    CRITICAL_SECTION waitCountLock;  <span class="enscript-comment">// guards waitCount and didBroadcast
+</span>    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> waitCount;
+    <span class="enscript-type">int</span> didBroadcast; 
+} monitor_t;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">MONITOR_INITIALIZER</span> { 0 }
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">MONITOR_NOT_ENTERED</span> 1
+<span class="enscript-type">extern</span> <span class="enscript-type">int</span> <span class="enscript-function-name">monitor_init</span>(monitor_t *c);
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">int</span> <span class="enscript-function-name">_monitor_enter_nodebug</span>(monitor_t *c) {
+    <span class="enscript-keyword">if</span> (!c-&gt;mutex) {
+        <span class="enscript-type">int</span> err = monitor_init(c);
+        <span class="enscript-keyword">if</span> (err) <span class="enscript-keyword">return</span> err;
+    }
+    <span class="enscript-keyword">return</span> WaitForSingleObject(c-&gt;mutex, INFINITE);
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">int</span> <span class="enscript-function-name">_monitor_leave_nodebug</span>(monitor_t *c) {
+    <span class="enscript-keyword">if</span> (!ReleaseMutex(c-&gt;mutex)) <span class="enscript-keyword">return</span> MONITOR_NOT_ENTERED;
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> 0;
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">int</span> <span class="enscript-function-name">_monitor_wait_nodebug</span>(monitor_t *c) { 
+    <span class="enscript-type">int</span> last;
+    EnterCriticalSection(&amp;c-&gt;waitCountLock);
+    c-&gt;waitCount++;
+    LeaveCriticalSection(&amp;c-&gt;waitCountLock);
+
+    SignalObjectAndWait(c-&gt;mutex, c-&gt;waiters, INFINITE, FALSE);
+
+    EnterCriticalSection(&amp;c-&gt;waitCountLock);
+    c-&gt;waitCount--;
+    last = c-&gt;didBroadcast  &amp;&amp;  c-&gt;waitCount == 0;
+    LeaveCriticalSection(&amp;c-&gt;waitCountLock);
+
+    <span class="enscript-keyword">if</span> (last) {
+        <span class="enscript-comment">// tell broadcaster that all waiters have awoken
+</span>        SignalObjectAndWait(c-&gt;waitersDone, c-&gt;mutex, INFINITE, FALSE);
+    } <span class="enscript-keyword">else</span> {
+        WaitForSingleObject(c-&gt;mutex, INFINITE);
+    }
+
+    <span class="enscript-comment">// fixme error checking
+</span>    <span class="enscript-keyword">return</span> 0;
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">int</span> <span class="enscript-function-name">monitor_notify</span>(monitor_t *c) { 
+    <span class="enscript-type">int</span> haveWaiters;
+
+    EnterCriticalSection(&amp;c-&gt;waitCountLock);
+    haveWaiters = c-&gt;waitCount &gt; 0;
+    LeaveCriticalSection(&amp;c-&gt;waitCountLock);
+
+    <span class="enscript-keyword">if</span> (haveWaiters) {
+        ReleaseSemaphore(c-&gt;waiters, 1, 0);
+    }
+
+    <span class="enscript-comment">// fixme error checking
+</span>    <span class="enscript-keyword">return</span> 0;
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">int</span> <span class="enscript-function-name">monitor_notifyAll</span>(monitor_t *c) { 
+    EnterCriticalSection(&amp;c-&gt;waitCountLock);
+    <span class="enscript-keyword">if</span> (c-&gt;waitCount == 0) {
+        LeaveCriticalSection(&amp;c-&gt;waitCountLock);
+        <span class="enscript-keyword">return</span> 0;
+    }
+    c-&gt;didBroadcast = 1;
+    ReleaseSemaphore(c-&gt;waiters, c-&gt;waitCount, 0);
+    LeaveCriticalSection(&amp;c-&gt;waitCountLock);
+
+    <span class="enscript-comment">// fairness: wait for everyone to move from waiters to mutex
+</span>    WaitForSingleObject(c-&gt;waitersDone, INFINITE);
+    <span class="enscript-comment">// not under waitCountLock, but still under mutex
+</span>    c-&gt;didBroadcast = 0;
+
+    <span class="enscript-comment">// fixme error checking
+</span>    <span class="enscript-keyword">return</span> 0;
+}
+
+
+<span class="enscript-comment">// fixme no rwlock yet
+</span>
+
+<span class="enscript-type">typedef</span> IMAGE_DOS_HEADER headerType;
+<span class="enscript-comment">// fixme YES bundle? NO bundle? sometimes?
+</span>#<span class="enscript-reference">define</span> <span class="enscript-function-name">headerIsBundle</span>(hi) YES
+OBJC_EXTERN IMAGE_DOS_HEADER __ImageBase;
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">libobjc_header</span> ((headerType *)&amp;__ImageBase)
+
+<span class="enscript-comment">// Prototypes
+</span>
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">TARGET_OS_MAC</span>
+
+
+<span class="enscript-comment">// OS headers
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;mach-o/loader.h&gt;</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__LP64__</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SEGMENT_CMD</span> LC_SEGMENT
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SEGMENT_CMD</span> LC_SEGMENT_64
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">VM_MEMORY_OBJC_DISPATCHERS</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">VM_MEMORY_OBJC_DISPATCHERS</span> 0
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">// Compiler compatibility
+</span>
+<span class="enscript-comment">// OS compatibility
+</span>
+<span class="enscript-type">static</span> inline uint64_t <span class="enscript-function-name">nanoseconds</span>() {
+    <span class="enscript-keyword">return</span> mach_absolute_time();
+}
+
+<span class="enscript-comment">// Internal data types
+</span>
+<span class="enscript-type">typedef</span> pthread_t objc_thread_t;
+
+<span class="enscript-type">static</span> __inline <span class="enscript-type">int</span> <span class="enscript-function-name">thread_equal</span>(objc_thread_t t1, objc_thread_t t2) { 
+    <span class="enscript-keyword">return</span> pthread_equal(t1, t2); 
+}
+<span class="enscript-type">static</span> __inline objc_thread_t <span class="enscript-function-name">thread_self</span>(<span class="enscript-type">void</span>) { 
+    <span class="enscript-keyword">return</span> pthread_self(); 
+}
+
+
+<span class="enscript-type">typedef</span> pthread_key_t tls_key_t;
+
+<span class="enscript-type">static</span> inline tls_key_t <span class="enscript-function-name">tls_create</span>(<span class="enscript-type">void</span> (*dtor)(<span class="enscript-type">void</span>*)) { 
+    tls_key_t k;
+    pthread_key_create(&amp;k, dtor); 
+    <span class="enscript-keyword">return</span> k;
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> *<span class="enscript-function-name">tls_get</span>(tls_key_t k) { 
+    <span class="enscript-keyword">return</span> pthread_getspecific(k); 
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> <span class="enscript-function-name">tls_set</span>(tls_key_t k, <span class="enscript-type">void</span> *value) { 
+    pthread_setspecific(k, value); 
+}
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_DIRECT_THREAD_KEYS</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">DEBUG</span>
+<span class="enscript-type">static</span> bool <span class="enscript-function-name">is_valid_direct_key</span>(tls_key_t k) {
+    <span class="enscript-keyword">return</span> (   k == SYNC_DATA_DIRECT_KEY
+            || k == SYNC_COUNT_DIRECT_KEY
+            || k == AUTORELEASE_POOL_KEY
+#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_RETURN_AUTORELEASE</span>
+            || k == RETURN_DISPOSITION_KEY
+#   <span class="enscript-reference">endif</span>
+#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_QOS_HACK</span>
+            || k == QOS_KEY
+#   <span class="enscript-reference">endif</span>
+               );
+}
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> *<span class="enscript-function-name">tls_get_direct</span>(tls_key_t k) 
+{ 
+    assert(is_valid_direct_key(k));
+
+    <span class="enscript-keyword">if</span> (_pthread_has_direct_tsd()) {
+        <span class="enscript-keyword">return</span> _pthread_getspecific_direct(k);
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">return</span> pthread_getspecific(k);
+    }
+}
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> <span class="enscript-function-name">tls_set_direct</span>(tls_key_t k, <span class="enscript-type">void</span> *value) 
+{ 
+    assert(is_valid_direct_key(k));
+
+    <span class="enscript-keyword">if</span> (_pthread_has_direct_tsd()) {
+        _pthread_setspecific_direct(k, value);
+    } <span class="enscript-keyword">else</span> {
+        pthread_setspecific(k, value);
+    }
+}
+
+<span class="enscript-comment">// SUPPORT_DIRECT_THREAD_KEYS
+</span>#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">static</span> inline pthread_t <span class="enscript-function-name">pthread_self_direct</span>()
+{
+    <span class="enscript-keyword">return</span> (pthread_t)
+        _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_PTHREAD_SELF);
+}
+
+<span class="enscript-type">static</span> inline mach_port_t <span class="enscript-function-name">mach_thread_self_direct</span>() 
+{
+    <span class="enscript-keyword">return</span> (mach_port_t)(uintptr_t)
+        _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_MACH_THREAD_SELF);
+}
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_QOS_HACK</span>
+<span class="enscript-type">static</span> inline pthread_priority_t <span class="enscript-function-name">pthread_self_priority_direct</span>() 
+{
+    pthread_priority_t pri = (pthread_priority_t)
+        _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_PTHREAD_QOS_CLASS);
+    <span class="enscript-keyword">return</span> pri &amp; ~_PTHREAD_PRIORITY_FLAGS_MASK;
+}
+#<span class="enscript-reference">endif</span>
+
+
+template &lt;bool Debug&gt; class mutex_tt;
+template &lt;bool Debug&gt; class monitor_tt;
+template &lt;bool Debug&gt; class rwlock_tt;
+template &lt;bool Debug&gt; class recursive_mutex_tt;
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">DEBUG</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">LOCKDEBUG</span> 1
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">LOCKDEBUG</span> 0
+#<span class="enscript-reference">endif</span>
+
+using spinlock_t = mutex_tt&lt;LOCKDEBUG&gt;;
+using mutex_t = mutex_tt&lt;LOCKDEBUG&gt;;
+using monitor_t = monitor_tt&lt;LOCKDEBUG&gt;;
+using rwlock_t = rwlock_tt&lt;LOCKDEBUG&gt;;
+using recursive_mutex_t = recursive_mutex_tt&lt;LOCKDEBUG&gt;;
+
+<span class="enscript-comment">// Use fork_unsafe_lock to get a lock that isn't 
+</span><span class="enscript-comment">// acquired and released around fork().
+</span><span class="enscript-comment">// All fork-safe locks are checked in debug builds.
+</span><span class="enscript-type">struct</span> fork_unsafe_lock_t { };
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> fork_unsafe_lock_t fork_unsafe_lock;
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-lockdebug.h&quot;</span>
+
+template &lt;bool Debug&gt;
+class mutex_tt : nocopy_t {
+    os_unfair_lock mLock;
+ <span class="enscript-reference">public</span>:
+    mutex_tt() : mLock(OS_UNFAIR_LOCK_INIT) {
+        lockdebug_remember_mutex(this);
+    }
+
+    mutex_tt(<span class="enscript-type">const</span> fork_unsafe_lock_t unsafe) : mLock(OS_UNFAIR_LOCK_INIT) { }
+
+    <span class="enscript-type">void</span> lock() {
+        lockdebug_mutex_lock(this);
+
+        os_unfair_lock_lock_with_options_inline
+            (&amp;mLock, OS_UNFAIR_LOCK_DATA_SYNCHRONIZATION);
+    }
+
+    <span class="enscript-type">void</span> unlock() {
+        lockdebug_mutex_unlock(this);
+
+        os_unfair_lock_unlock_inline(&amp;mLock);
+    }
+
+    <span class="enscript-type">void</span> forceReset() {
+        lockdebug_mutex_unlock(this);
+
+        bzero(&amp;mLock, <span class="enscript-keyword">sizeof</span>(mLock));
+        mLock = os_unfair_lock OS_UNFAIR_LOCK_INIT;
+    }
+
+    <span class="enscript-type">void</span> assertLocked() {
+        lockdebug_mutex_assert_locked(this);
+    }
+
+    <span class="enscript-type">void</span> assertUnlocked() {
+        lockdebug_mutex_assert_unlocked(this);
+    }
+
+
+    <span class="enscript-comment">// Address-ordered lock discipline for a pair of locks.
+</span>
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> lockTwo(mutex_tt *lock1, mutex_tt *lock2) {
+        <span class="enscript-keyword">if</span> (lock1 &lt; lock2) {
+            lock1-&gt;lock();
+            lock2-&gt;lock();
+        } <span class="enscript-keyword">else</span> {
+            lock2-&gt;lock();
+            <span class="enscript-keyword">if</span> (lock2 != lock1) lock1-&gt;lock(); 
+        }
+    }
+
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> unlockTwo(mutex_tt *lock1, mutex_tt *lock2) {
+        lock1-&gt;unlock();
+        <span class="enscript-keyword">if</span> (lock2 != lock1) lock2-&gt;unlock();
+    }
+
+    <span class="enscript-comment">// Scoped lock and unlock
+</span>    class locker : nocopy_t {
+        mutex_tt&amp; lock;
+    <span class="enscript-reference">public</span>:
+        locker(mutex_tt&amp; newLock) 
+            : lock(newLock) { lock.lock(); }
+        ~locker() { lock.unlock(); }
+    };
+};
+
+using mutex_locker_t = mutex_tt&lt;LOCKDEBUG&gt;::locker;
+
+
+template &lt;bool Debug&gt;
+class recursive_mutex_tt : nocopy_t {
+    pthread_mutex_t mLock;
+
+  <span class="enscript-reference">public</span>:
+    recursive_mutex_tt() : mLock(PTHREAD_RECURSIVE_MUTEX_INITIALIZER) {
+        lockdebug_remember_recursive_mutex(this);
+    }
+
+    recursive_mutex_tt(<span class="enscript-type">const</span> fork_unsafe_lock_t unsafe)
+        : mLock(PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
+    { }
+
+    <span class="enscript-type">void</span> lock()
+    {
+        lockdebug_recursive_mutex_lock(this);
+
+        <span class="enscript-type">int</span> err = pthread_mutex_lock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_mutex_lock failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> unlock()
+    {
+        lockdebug_recursive_mutex_unlock(this);
+
+        <span class="enscript-type">int</span> err = pthread_mutex_unlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_mutex_unlock failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> forceReset()
+    {
+        lockdebug_recursive_mutex_unlock(this);
+
+        bzero(&amp;mLock, <span class="enscript-keyword">sizeof</span>(mLock));
+        mLock = pthread_mutex_t PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+    }
+
+    bool tryUnlock()
+    {
+        <span class="enscript-type">int</span> err = pthread_mutex_unlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err == 0) {
+            lockdebug_recursive_mutex_unlock(this);
+            <span class="enscript-keyword">return</span> true;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (err == EPERM) {
+            <span class="enscript-keyword">return</span> false;
+        } <span class="enscript-keyword">else</span> {
+            _objc_fatal(<span class="enscript-string">&quot;pthread_mutex_unlock failed (%d)&quot;</span>, err);
+        }
+    }
+
+
+    <span class="enscript-type">void</span> assertLocked() {
+        lockdebug_recursive_mutex_assert_locked(this);
+    }
+
+    <span class="enscript-type">void</span> assertUnlocked() {
+        lockdebug_recursive_mutex_assert_unlocked(this);
+    }
+};
+
+
+template &lt;bool Debug&gt;
+class monitor_tt {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+
+  <span class="enscript-reference">public</span>:
+    monitor_tt() 
+        : mutex(PTHREAD_MUTEX_INITIALIZER), cond(PTHREAD_COND_INITIALIZER)
+    {
+        lockdebug_remember_monitor(this);
+    }
+
+    monitor_tt(<span class="enscript-type">const</span> fork_unsafe_lock_t unsafe) 
+        : mutex(PTHREAD_MUTEX_INITIALIZER), cond(PTHREAD_COND_INITIALIZER)
+    { }
+
+    <span class="enscript-type">void</span> enter() 
+    {
+        lockdebug_monitor_enter(this);
+
+        <span class="enscript-type">int</span> err = pthread_mutex_lock(&amp;mutex);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_mutex_lock failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> leave() 
+    {
+        lockdebug_monitor_leave(this);
+
+        <span class="enscript-type">int</span> err = pthread_mutex_unlock(&amp;mutex);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_mutex_unlock failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> wait() 
+    {
+        lockdebug_monitor_wait(this);
+
+        <span class="enscript-type">int</span> err = pthread_cond_wait(&amp;cond, &amp;mutex);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_cond_wait failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> notify() 
+    {
+        <span class="enscript-type">int</span> err = pthread_cond_signal(&amp;cond);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_cond_signal failed (%d)&quot;</span>, err);        
+    }
+
+    <span class="enscript-type">void</span> notifyAll() 
+    {
+        <span class="enscript-type">int</span> err = pthread_cond_broadcast(&amp;cond);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_cond_broadcast failed (%d)&quot;</span>, err);        
+    }
+
+    <span class="enscript-type">void</span> forceReset()
+    {
+        lockdebug_monitor_leave(this);
+        
+        bzero(&amp;mutex, <span class="enscript-keyword">sizeof</span>(mutex));
+        bzero(&amp;cond, <span class="enscript-keyword">sizeof</span>(cond));
+        mutex = pthread_mutex_t PTHREAD_MUTEX_INITIALIZER;
+        cond = pthread_cond_t PTHREAD_COND_INITIALIZER;
+    }
+
+    <span class="enscript-type">void</span> assertLocked()
+    {
+        lockdebug_monitor_assert_locked(this);
+    }
+
+    <span class="enscript-type">void</span> assertUnlocked()
+    {
+        lockdebug_monitor_assert_unlocked(this);
+    }
+};
+
+
+<span class="enscript-comment">// semaphore_create formatted for INIT_ONCE use
+</span><span class="enscript-type">static</span> inline semaphore_t <span class="enscript-function-name">create_semaphore</span>(<span class="enscript-type">void</span>)
+{
+    semaphore_t sem;
+    kern_return_t k;
+    k = semaphore_create(mach_task_self(), &amp;sem, SYNC_POLICY_FIFO, 0);
+    <span class="enscript-keyword">if</span> (k) _objc_fatal(<span class="enscript-string">&quot;semaphore_create failed (0x%x)&quot;</span>, k);
+    <span class="enscript-keyword">return</span> sem;
+}
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_QOS_HACK</span>
+<span class="enscript-comment">// Override QOS class to avoid priority inversion in rwlocks
+</span><span class="enscript-comment">// &lt;rdar://17697862&gt; do a qos override before taking rw lock in objc
+</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;pthread/workqueue_private.h&gt;</span>
+<span class="enscript-type">extern</span> pthread_priority_t BackgroundPriority;
+<span class="enscript-type">extern</span> pthread_priority_t MainPriority;
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> <span class="enscript-function-name">qosStartOverride</span>()
+{
+    uintptr_t overrideRefCount = (uintptr_t)tls_get_direct(QOS_KEY);
+    <span class="enscript-keyword">if</span> (overrideRefCount &gt; 0) {
+        <span class="enscript-comment">// If there is a qos override, increment the refcount and continue
+</span>        tls_set_direct(QOS_KEY, (<span class="enscript-type">void</span> *)(overrideRefCount + 1));
+    }
+    <span class="enscript-keyword">else</span> {
+        pthread_priority_t currentPriority = pthread_self_priority_direct();
+        <span class="enscript-comment">// Check if override is needed. Only override if we are background qos
+</span>        <span class="enscript-keyword">if</span> (currentPriority != 0  &amp;&amp;  currentPriority &lt;= BackgroundPriority) {
+            <span class="enscript-type">int</span> res __unused = _pthread_override_qos_class_start_direct(mach_thread_self_direct(), MainPriority);
+            assert(res == 0);
+            <span class="enscript-comment">// Once we override, we set the reference count in the tsd 
+</span>            <span class="enscript-comment">// to know when to end the override
+</span>            tls_set_direct(QOS_KEY, (<span class="enscript-type">void</span> *)1);
+        }
+    }
+}
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> <span class="enscript-function-name">qosEndOverride</span>()
+{
+    uintptr_t overrideRefCount = (uintptr_t)tls_get_direct(QOS_KEY);
+    <span class="enscript-keyword">if</span> (overrideRefCount == 0) <span class="enscript-keyword">return</span>;
+
+    <span class="enscript-keyword">if</span> (overrideRefCount == 1) {
+        <span class="enscript-comment">// end the override
+</span>        <span class="enscript-type">int</span> res __unused = _pthread_override_qos_class_end_direct(mach_thread_self_direct());
+        assert(res == 0);
+    }
+
+    <span class="enscript-comment">// decrement refcount
+</span>    tls_set_direct(QOS_KEY, (<span class="enscript-type">void</span> *)(overrideRefCount - 1));
+}
+
+<span class="enscript-comment">// SUPPORT_QOS_HACK
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// not SUPPORT_QOS_HACK
+</span>
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> <span class="enscript-function-name">qosStartOverride</span>() { }
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> <span class="enscript-function-name">qosEndOverride</span>() { }
+
+<span class="enscript-comment">// not SUPPORT_QOS_HACK
+</span>#<span class="enscript-reference">endif</span>
+
+
+template &lt;bool Debug&gt;
+class rwlock_tt : nocopy_t {
+    pthread_rwlock_t mLock;
+
+  <span class="enscript-reference">public</span>:
+    rwlock_tt() : mLock(PTHREAD_RWLOCK_INITIALIZER) {
+        lockdebug_remember_rwlock(this);
+    }
+
+    rwlock_tt(<span class="enscript-type">const</span> fork_unsafe_lock_t unsafe)
+        : mLock(PTHREAD_RWLOCK_INITIALIZER)
+    { }
+    
+    <span class="enscript-type">void</span> read() 
+    {
+        lockdebug_rwlock_read(this);
+
+        qosStartOverride();
+        <span class="enscript-type">int</span> err = pthread_rwlock_rdlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_rwlock_rdlock failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> unlockRead()
+    {
+        lockdebug_rwlock_unlock_read(this);
+
+        <span class="enscript-type">int</span> err = pthread_rwlock_unlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_rwlock_unlock failed (%d)&quot;</span>, err);
+        qosEndOverride();
+    }
+
+    bool tryRead()
+    {
+        qosStartOverride();
+        <span class="enscript-type">int</span> err = pthread_rwlock_tryrdlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err == 0) {
+            lockdebug_rwlock_try_read_success(this);
+            <span class="enscript-keyword">return</span> true;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (err == EBUSY) {
+            qosEndOverride();
+            <span class="enscript-keyword">return</span> false;
+        } <span class="enscript-keyword">else</span> {
+            _objc_fatal(<span class="enscript-string">&quot;pthread_rwlock_tryrdlock failed (%d)&quot;</span>, err);
+        }
+    }
+
+    <span class="enscript-type">void</span> write()
+    {
+        lockdebug_rwlock_write(this);
+
+        qosStartOverride();
+        <span class="enscript-type">int</span> err = pthread_rwlock_wrlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_rwlock_wrlock failed (%d)&quot;</span>, err);
+    }
+
+    <span class="enscript-type">void</span> unlockWrite()
+    {
+        lockdebug_rwlock_unlock_write(this);
+
+        <span class="enscript-type">int</span> err = pthread_rwlock_unlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err) _objc_fatal(<span class="enscript-string">&quot;pthread_rwlock_unlock failed (%d)&quot;</span>, err);
+        qosEndOverride();
+    }
+
+    bool tryWrite()
+    {
+        qosStartOverride();
+        <span class="enscript-type">int</span> err = pthread_rwlock_trywrlock(&amp;mLock);
+        <span class="enscript-keyword">if</span> (err == 0) {
+            lockdebug_rwlock_try_write_success(this);
+            <span class="enscript-keyword">return</span> true;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (err == EBUSY) {
+            qosEndOverride();
+            <span class="enscript-keyword">return</span> false;
+        } <span class="enscript-keyword">else</span> {
+            _objc_fatal(<span class="enscript-string">&quot;pthread_rwlock_trywrlock failed (%d)&quot;</span>, err);
+        }
+    }
+
+    <span class="enscript-type">void</span> forceReset()
+    {
+        lockdebug_rwlock_unlock_write(this);
+
+        bzero(&amp;mLock, <span class="enscript-keyword">sizeof</span>(mLock));
+        mLock = pthread_rwlock_t PTHREAD_RWLOCK_INITIALIZER;
+    }
+
+
+    <span class="enscript-type">void</span> assertReading() {
+        lockdebug_rwlock_assert_reading(this);
+    }
+
+    <span class="enscript-type">void</span> assertWriting() {
+        lockdebug_rwlock_assert_writing(this);
+    }
+
+    <span class="enscript-type">void</span> assertLocked() {
+        lockdebug_rwlock_assert_locked(this);
+    }
+
+    <span class="enscript-type">void</span> assertUnlocked() {
+        lockdebug_rwlock_assert_unlocked(this);
+    }
+};
+
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__LP64__</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> mach_header headerType;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> segment_command segmentType;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> section sectionType;
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> mach_header_64 headerType;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> segment_command_64 segmentType;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> section_64 sectionType;
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">headerIsBundle</span>(hi) (hi-&gt;mhdr()-&gt;filetype == MH_BUNDLE)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">libobjc_header</span> ((headerType *)&amp;_mh_dylib_header)
+
+<span class="enscript-comment">// Prototypes
+</span>
+<span class="enscript-comment">/* Secure /tmp usage */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">int</span> <span class="enscript-function-name">secure_open</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *filename, <span class="enscript-type">int</span> flags, uid_t euid);
+
+
+#<span class="enscript-reference">else</span>
+
+
+#<span class="enscript-reference">error</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">OS</span>
+
+
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> *
+<span class="enscript-function-name">memdup</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *mem, size_t len)
+{
+    <span class="enscript-type">void</span> *dup = malloc(len);
+    memcpy(dup, mem, len);
+    <span class="enscript-keyword">return</span> dup;
+}
+
+<span class="enscript-comment">// strdup that doesn't copy read-only memory
+</span><span class="enscript-type">static</span> inline <span class="enscript-type">char</span> *
+<span class="enscript-function-name">strdupIfMutable</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *str)
+{
+    size_t size = strlen(str) + 1;
+    <span class="enscript-keyword">if</span> (_dyld_is_memory_immutable(str, size)) {
+        <span class="enscript-keyword">return</span> (<span class="enscript-type">char</span> *)str;
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">return</span> (<span class="enscript-type">char</span> *)memdup(str, size);
+    }
+}
+
+<span class="enscript-comment">// free strdupIfMutable() result
+</span><span class="enscript-type">static</span> inline <span class="enscript-type">void</span>
+<span class="enscript-function-name">freeIfMutable</span>(<span class="enscript-type">char</span> *str)
+{
+    size_t size = strlen(str) + 1;
+    <span class="enscript-keyword">if</span> (_dyld_is_memory_immutable(str, size)) {
+        <span class="enscript-comment">// nothing
+</span>    } <span class="enscript-keyword">else</span> {
+        free(str);
+    }
+}
+
+<span class="enscript-comment">// nil-checking unsigned strdup
+</span><span class="enscript-type">static</span> inline uint8_t *
+<span class="enscript-function-name">ustrdupMaybeNil</span>(<span class="enscript-type">const</span> uint8_t *str)
+{
+    <span class="enscript-keyword">if</span> (!str) <span class="enscript-keyword">return</span> nil;
+    <span class="enscript-keyword">return</span> (uint8_t *)strdupIfMutable((<span class="enscript-type">char</span> *)str);
+}
+
+<span class="enscript-comment">// OS version checking:
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// sdkVersion()
+</span><span class="enscript-comment">// DYLD_OS_VERSION(mac, ios, tv, watch, bridge)
+</span><span class="enscript-comment">// sdkIsOlderThan(mac, ios, tv, watch, bridge)
+</span><span class="enscript-comment">// sdkIsAtLeast(mac, ios, tv, watch, bridge)
+</span><span class="enscript-comment">// 
+</span><span class="enscript-comment">// This version order matches OBJC_AVAILABLE.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_OSX</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">DYLD_OS_VERSION</span>(x, i, t, w, b) DYLD_MACOSX_VERSION_##x
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">sdkVersion</span>() dyld_get_program_sdk_version()
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">TARGET_OS_IOS</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">DYLD_OS_VERSION</span>(x, i, t, w, b) DYLD_IOS_VERSION_##i
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">sdkVersion</span>() dyld_get_program_sdk_version()
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">TARGET_OS_TV</span>
+    <span class="enscript-comment">// dyld does not currently have distinct constants for tvOS
+</span>#   <span class="enscript-reference">define</span> <span class="enscript-function-name">DYLD_OS_VERSION</span>(x, i, t, w, b) DYLD_IOS_VERSION_##t
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">sdkVersion</span>() dyld_get_program_sdk_version()
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">TARGET_OS_BRIDGE</span>
+#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_WATCH</span>
+#       <span class="enscript-reference">error</span> <span class="enscript-variable-name">bridgeOS</span> 1.0 <span class="enscript-variable-name">not</span> <span class="enscript-variable-name">supported</span>
+#   <span class="enscript-reference">endif</span>
+    <span class="enscript-comment">// fixme don't need bridgeOS versioning yet
+</span>#   <span class="enscript-reference">define</span> <span class="enscript-function-name">DYLD_OS_VERSION</span>(x, i, t, w, b) DYLD_IOS_VERSION_##t
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">sdkVersion</span>() dyld_get_program_sdk_bridge_os_version()
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">TARGET_OS_WATCH</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">DYLD_OS_VERSION</span>(x, i, t, w, b) DYLD_WATCHOS_VERSION_##w
+    <span class="enscript-comment">// watchOS has its own API for compatibility reasons
+</span>#   <span class="enscript-reference">define</span> <span class="enscript-function-name">sdkVersion</span>() dyld_get_program_sdk_watch_os_version()
+
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">error</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">OS</span>
+#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">sdkIsOlderThan</span>(x, i, t, w, b)                           \
+            (sdkVersion() &lt; DYLD_OS_VERSION(x, i, t, w, b))
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">sdkIsAtLeast</span>(x, i, t, w, b)                             \
+            (sdkVersion() &gt;= DYLD_OS_VERSION(x, i, t, w, b))
+
+<span class="enscript-comment">// Allow bare 0 to be used in DYLD_OS_VERSION() and sdkIsOlderThan()
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">DYLD_MACOSX_VERSION_0</span> 0
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">DYLD_IOS_VERSION_0</span> 0
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">DYLD_TVOS_VERSION_0</span> 0
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">DYLD_WATCHOS_VERSION_0</span> 0
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">DYLD_BRIDGEOS_VERSION_0</span> 0
+
+<span class="enscript-comment">// Pretty-print a DYLD_*_VERSION_* constant.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">SDK_FORMAT</span> <span class="enscript-string">&quot;%hu.%hhu.%hhu&quot;</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">FORMAT_SDK</span>(v) \
+    (<span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>)(((uint32_t)(v))&gt;&gt;16),  \
+    (<span class="enscript-type">unsigned</span>  <span class="enscript-type">char</span>)(((uint32_t)(v))&gt;&gt;8),   \
+    (<span class="enscript-type">unsigned</span>  <span class="enscript-type">char</span>)(((uint32_t)(v))&gt;&gt;0)
+
+<span class="enscript-comment">// fork() safety requires careful tracking of all locks.
+</span><span class="enscript-comment">// Our custom lock types check this in debug builds.
+</span><span class="enscript-comment">// Disallow direct use of all other lock types.
+</span><span class="enscript-type">typedef</span> __darwin_pthread_mutex_t pthread_mutex_t UNAVAILABLE_ATTRIBUTE;
+<span class="enscript-type">typedef</span> __darwin_pthread_rwlock_t pthread_rwlock_t UNAVAILABLE_ATTRIBUTE;
+<span class="enscript-type">typedef</span> int32_t OSSpinLock UNAVAILABLE_ATTRIBUTE;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> os_unfair_lock_s os_unfair_lock UNAVAILABLE_ATTRIBUTE;
+
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

@@ -1,0 +1,401 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-opt.mm</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-opt.mm&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-opt.mm">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ * Copyright (c) 2012 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */
+
+/*
+  objc-opt.mm
+  Management of optimizations in the dyld shared cache 
+*/
+
+#include &quot;objc-private.h&quot;
+
+
+#if !SUPPORT_PREOPT
+// Preoptimization not supported on this platform.
+
+struct objc_selopt_t;
+
+bool isPreoptimized(void) 
+{
+    return false;
+}
+
+bool noMissingWeakSuperclasses(void) 
+{
+    return false;
+}
+
+bool header_info::isPreoptimized() const
+{
+    return false;
+}
+
+objc_selopt_t *preoptimizedSelectors(void) 
+{
+    return nil;
+}
+
+Protocol *getPreoptimizedProtocol(const char *name)
+{
+    return nil;
+}
+
+unsigned int getPreoptimizedClassUnreasonableCount()
+{
+    return 0;
+}
+
+Class getPreoptimizedClass(const char *name)
+{
+    return nil;
+}
+
+Class* copyPreoptimizedClasses(const char *name, int *outCount)
+{
+    *outCount = 0;
+    return nil;
+}
+
+header_info *preoptimizedHinfoForHeader(const headerType *mhdr)
+{
+    return nil;
+}
+
+header_info_rw *getPreoptimizedHeaderRW(const struct header_info *const hdr)
+{
+    return nil;
+}
+
+void preopt_init(void)
+{
+    disableSharedCacheOptimizations();
+    
+    if (PrintPreopt) {
+        _objc_inform(&quot;PREOPTIMIZATION: is DISABLED &quot;
+                     &quot;(not supported on ths platform)&quot;);
+    }
+}
+
+
+// !SUPPORT_PREOPT
+#else
+// SUPPORT_PREOPT
+
+#include &lt;objc-shared-cache.h&gt;
+
+using objc_opt::objc_stringhash_offset_t;
+using objc_opt::objc_protocolopt_t;
+using objc_opt::objc_clsopt_t;
+using objc_opt::objc_headeropt_ro_t;
+using objc_opt::objc_headeropt_rw_t;
+using objc_opt::objc_opt_t;
+
+__BEGIN_DECLS
+
+// preopt: the actual opt used at runtime (nil or &amp;_objc_opt_data)
+// _objc_opt_data: opt data possibly written by dyld
+// opt is initialized to ~0 to detect incorrect use before preopt_init()
+
+static const objc_opt_t *opt = (objc_opt_t *)~0;
+static bool preoptimized;
+
+extern const objc_opt_t _objc_opt_data;  // in __TEXT, __objc_opt_ro
+
+/***********************************************************************
+* Return YES if we have a valid optimized shared cache.
+**********************************************************************/
+bool isPreoptimized(void) 
+{
+    return preoptimized;
+}
+
+
+/***********************************************************************
+* Return YES if the shared cache does not have any classes with 
+* missing weak superclasses.
+**********************************************************************/
+bool noMissingWeakSuperclasses(void) 
+{
+    if (!preoptimized) return NO;  // might have missing weak superclasses
+    return opt-&gt;flags &amp; objc_opt::NoMissingWeakSuperclasses;
+}
+
+
+/***********************************************************************
+* Return YES if this image's dyld shared cache optimizations are valid.
+**********************************************************************/
+bool header_info::isPreoptimized() const
+{
+    // preoptimization disabled for some reason
+    if (!preoptimized) return NO;
+
+    // image not from shared cache, or not fixed inside shared cache
+    if (!info()-&gt;optimizedByDyld()) return NO;
+
+    return YES;
+}
+
+
+objc_selopt_t *preoptimizedSelectors(void) 
+{
+    return opt ? opt-&gt;selopt() : nil;
+}
+
+
+Protocol *getPreoptimizedProtocol(const char *name)
+{
+    objc_protocolopt_t *protocols = opt ? opt-&gt;protocolopt() : nil;
+    if (!protocols) return nil;
+
+    return (Protocol *)protocols-&gt;getProtocol(name);
+}
+
+
+unsigned int getPreoptimizedClassUnreasonableCount()
+{
+    objc_clsopt_t *classes = opt ? opt-&gt;clsopt() : nil;
+    if (!classes) return 0;
+    
+    // This is an overestimate: each set of duplicates 
+    // gets double-counted in `capacity` as well.
+    return classes-&gt;capacity + classes-&gt;duplicateCount();
+}
+
+
+Class getPreoptimizedClass(const char *name)
+{
+    objc_clsopt_t *classes = opt ? opt-&gt;clsopt() : nil;
+    if (!classes) return nil;
+
+    void *cls;
+    void *hi;
+    uint32_t count = classes-&gt;getClassAndHeader(name, cls, hi);
+    if (count == 1  &amp;&amp;  ((header_info *)hi)-&gt;isLoaded()) {
+        // exactly one matching class, and its image is loaded
+        return (Class)cls;
+    } 
+    else if (count &gt; 1) {
+        // more than one matching class - find one that is loaded
+        void *clslist[count];
+        void *hilist[count];
+        classes-&gt;getClassesAndHeaders(name, clslist, hilist);
+        for (uint32_t i = 0; i &lt; count; i++) {
+            if (((header_info *)hilist[i])-&gt;isLoaded()) {
+                return (Class)clslist[i];
+            }
+        }
+    }
+
+    // no match that is loaded
+    return nil;
+}
+
+
+Class* copyPreoptimizedClasses(const char *name, int *outCount)
+{
+    *outCount = 0;
+
+    objc_clsopt_t *classes = opt ? opt-&gt;clsopt() : nil;
+    if (!classes) return nil;
+
+    void *cls;
+    void *hi;
+    uint32_t count = classes-&gt;getClassAndHeader(name, cls, hi);
+    if (count == 0) return nil;
+
+    Class *result = (Class *)calloc(count, sizeof(Class));
+    if (count == 1  &amp;&amp;  ((header_info *)hi)-&gt;isLoaded()) {
+        // exactly one matching class, and its image is loaded
+        result[(*outCount)++] = (Class)cls;
+        return result;
+    } 
+    else if (count &gt; 1) {
+        // more than one matching class - find those that are loaded
+        void *clslist[count];
+        void *hilist[count];
+        classes-&gt;getClassesAndHeaders(name, clslist, hilist);
+        for (uint32_t i = 0; i &lt; count; i++) {
+            if (((header_info *)hilist[i])-&gt;isLoaded()) {
+                result[(*outCount)++] = (Class)clslist[i];
+            }
+        }
+
+        if (*outCount == 0) {
+            // found multiple classes with that name, but none are loaded
+            free(result);
+            result = nil;
+        }
+        return result;
+    }
+
+    // no match that is loaded
+    return nil;
+}
+
+namespace objc_opt {
+struct objc_headeropt_ro_t {
+    uint32_t count;
+    uint32_t entsize;
+    header_info headers[0];  // sorted by mhdr address
+
+    header_info *get(const headerType *mhdr) 
+    {
+        assert(entsize == sizeof(header_info));
+
+        int32_t start = 0;
+        int32_t end = count;
+        while (start &lt;= end) {
+            int32_t i = (start+end)/2;
+            header_info *hi = headers+i;
+            if (mhdr == hi-&gt;mhdr()) return hi;
+            else if (mhdr &lt; hi-&gt;mhdr()) end = i-1;
+            else start = i+1;
+        }
+
+#if DEBUG
+        for (uint32_t i = 0; i &lt; count; i++) {
+            header_info *hi = headers+i;
+            if (mhdr == hi-&gt;mhdr()) {
+                _objc_fatal(&quot;failed to find header %p (%d/%d)&quot;, 
+                            mhdr, i, count);
+            }
+        }
+#endif
+
+        return nil;
+    }
+};
+
+struct objc_headeropt_rw_t {
+    uint32_t count;
+    uint32_t entsize;
+    header_info_rw headers[0];  // sorted by mhdr address
+};
+};
+
+
+header_info *preoptimizedHinfoForHeader(const headerType *mhdr)
+{
+#if !__OBJC2__
+    // fixme old ABI shared cache doesn't prepare these properly
+    return nil;
+#endif
+
+    objc_headeropt_ro_t *hinfos = opt ? opt-&gt;headeropt_ro() : nil;
+    if (hinfos) return hinfos-&gt;get(mhdr);
+    else return nil;
+}
+
+
+header_info_rw *getPreoptimizedHeaderRW(const struct header_info *const hdr)
+{
+#if !__OBJC2__
+    // fixme old ABI shared cache doesn't prepare these properly
+    return nil;
+#endif
+    
+    objc_headeropt_ro_t *hinfoRO = opt ? opt-&gt;headeropt_ro() : nil;
+    objc_headeropt_rw_t *hinfoRW = opt ? opt-&gt;headeropt_rw() : nil;
+    if (!hinfoRO || !hinfoRW) {
+        _objc_fatal(&quot;preoptimized header_info missing for %s (%p %p %p)&quot;,
+                    hdr-&gt;fname(), hdr, hinfoRO, hinfoRW);
+    }
+    int32_t index = (int32_t)(hdr - hinfoRO-&gt;headers);
+    assert(hinfoRW-&gt;entsize == sizeof(header_info_rw));
+    return &amp;hinfoRW-&gt;headers[index];
+}
+
+
+void preopt_init(void)
+{
+    // `opt` not set at compile time in order to detect too-early usage
+    const char *failure = nil;
+    opt = &amp;_objc_opt_data;
+
+    if (DisablePreopt) {
+        // OBJC_DISABLE_PREOPTIMIZATION is set
+        // If opt-&gt;version != VERSION then you continue at your own risk.
+        failure = &quot;(by OBJC_DISABLE_PREOPTIMIZATION)&quot;;
+    } 
+    else if (opt-&gt;version != objc_opt::VERSION) {
+        // This shouldn't happen. You probably forgot to edit objc-sel-table.s.
+        // If dyld really did write the wrong optimization version, 
+        // then we must halt because we don't know what bits dyld twiddled.
+        _objc_fatal(&quot;bad objc preopt version (want %d, got %d)&quot;, 
+                    objc_opt::VERSION, opt-&gt;version);
+    }
+    else if (!opt-&gt;selopt()  ||  !opt-&gt;headeropt_ro()) {
+        // One of the tables is missing. 
+        failure = &quot;(dyld shared cache is absent or out of date)&quot;;
+    }
+
+    if (failure) {
+        // All preoptimized selector references are invalid.
+        preoptimized = NO;
+        opt = nil;
+        disableSharedCacheOptimizations();
+
+        if (PrintPreopt) {
+            _objc_inform(&quot;PREOPTIMIZATION: is DISABLED %s&quot;, failure);
+        }
+    }
+    else {
+        // Valid optimization data written by dyld shared cache
+        preoptimized = YES;
+
+        if (PrintPreopt) {
+            _objc_inform(&quot;PREOPTIMIZATION: is ENABLED &quot;
+                         &quot;(version %d)&quot;, opt-&gt;version);
+        }
+    }
+}
+
+
+__END_DECLS
+
+// SUPPORT_PREOPT
+#endif
+</pre>
+<hr />
+</body></html>

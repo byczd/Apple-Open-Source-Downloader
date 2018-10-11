@@ -1,0 +1,292 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50Queue.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50Queue.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50Queue.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2002 Apple Computer, Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * 1995-06-28	dreece	Created
+ * 2002-03-05	dreece	I/O Kit port, based on drvISASerialPort:queue_primatives.m.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50Queue.h&quot;</span>
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">IOASSERT</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">QCHECK</span>() 						\
+    <span class="enscript-keyword">if</span> (Size) {							\
+        assert(Count &lt;= Size);					\
+        assert(EnqueueIndex &lt; Size);				\
+        assert(DequeueIndex &lt; Size);				\
+        assert(EnqueueThreshold &lt; Size);			\
+        assert(DequeueThreshold &lt; Size);			\
+        assert(HighWater &lt; Size);				\
+        assert(LowWater &lt; HighWater);				\
+        assert(((DequeueIndex+Count)==EnqueueIndex)||		\
+               ((DequeueIndex+Count)==(EnqueueIndex+Size)));	\
+    }
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">QCHECK</span>()
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// pushWord(data)
+</span><span class="enscript-comment">// Adds a word to the queue.  Wrapping is handled, but overflow is not;
+</span><span class="enscript-comment">// Do not call this function unless there is space on the queue
+</span><span class="enscript-type">inline</span> <span class="enscript-type">void</span> Apple16X50Queue::
+<span class="enscript-function-name">pushWord</span>(UInt16 data)
+{
+    Queue[EnqueueIndex++] = data;
+    <span class="enscript-keyword">if</span> (EnqueueIndex &gt;= Size)
+        EnqueueIndex = 0;
+    Count++;
+}
+
+<span class="enscript-comment">// pullWord(data)
+</span><span class="enscript-comment">// Takes a word to the queue.  Wrapping is handled, but overflow is not;
+</span><span class="enscript-comment">// Do not call this function unless there is data on the queue
+</span><span class="enscript-type">inline</span> UInt16 Apple16X50Queue::
+<span class="enscript-function-name">pullWord</span>()
+{
+    <span class="enscript-type">register</span> UInt16 data;
+
+    data = Queue[DequeueIndex++];
+    <span class="enscript-keyword">if</span> (DequeueIndex &gt;= Size)
+        DequeueIndex = 0;
+    Count--;
+
+    <span class="enscript-keyword">return</span> data;
+}
+
+<span class="enscript-comment">// enqueueEvent(event,[data])
+</span><span class="enscript-comment">// General purpose enqueue routine.  If no space is available,
+</span><span class="enscript-comment">// the event is dropped and an OverRun condition is established.
+</span><span class="enscript-type">void</span> Apple16X50Queue::
+<span class="enscript-function-name">enqueueEvent</span>(UInt8 event, UInt32 data)
+{
+    OverRun = !enqueueEventTry(event, data);
+}
+
+<span class="enscript-comment">// enqueueEventTry(event,[data])
+</span><span class="enscript-comment">// General purpose enqueue routine.  If no space is available,
+</span><span class="enscript-comment">// false is returned, but no OverRun condition is established.
+</span><span class="enscript-comment">// A return value of true indicates the event was queued.
+</span><span class="enscript-type">bool</span> Apple16X50Queue::
+<span class="enscript-function-name">enqueueEventTry</span>(UInt8 event, UInt32 data)
+{
+    <span class="enscript-type">register</span> UInt32 words = (event &amp; PD_DATA_MASK);
+
+    <span class="enscript-keyword">if</span> (OverRun || ((Size-Count) &lt; (words?words:1)))
+        <span class="enscript-keyword">return</span> false;
+    pushWord((UInt16)(event|(data&lt;&lt;8)));
+    <span class="enscript-keyword">if</span> (words&gt;1) {
+        pushWord((UInt16)(data&amp;0xffff));
+        <span class="enscript-keyword">if</span> (words&gt;2)
+            pushWord((UInt16)(data&gt;&gt;16));
+    }
+    QCHECK();
+    <span class="enscript-keyword">return</span> true;
+}
+
+<span class="enscript-comment">// dequeueEvent([datap])
+</span><span class="enscript-comment">// returns the next element in the queue, or PD_E_EOQ if the queue is
+</span><span class="enscript-comment">// empty.  
+</span>UInt8 Apple16X50Queue::
+<span class="enscript-function-name">dequeueEvent</span>(UInt32 *datap)
+{
+    <span class="enscript-keyword">if</span> (Count &gt; 0) {
+        <span class="enscript-type">register</span> UInt16 event = pullWord();
+        <span class="enscript-type">register</span> UInt32 data = event&gt;&gt;8;
+        <span class="enscript-type">register</span> <span class="enscript-type">int</span> words = (event &amp; PD_DATA_MASK);
+        <span class="enscript-keyword">if</span> (words&gt;1) { <span class="enscript-comment">// word or long event
+</span>            data = pullWord();
+            <span class="enscript-keyword">if</span> (words&gt;2) <span class="enscript-comment">// long event
+</span>                data |= (pullWord() &lt;&lt; 16);
+        }
+        <span class="enscript-comment">// we just made space, so check for overrun
+</span>        <span class="enscript-keyword">if</span> (OverRun) {
+            <span class="enscript-comment">// XXX We should coalesce OverRun events, since two in a row
+</span>            <span class="enscript-comment">// contains no more info than a single one.  Worse, if the
+</span>            <span class="enscript-comment">// queue is running with only one element open, we can get
+</span>            <span class="enscript-comment">// into an unfortunate rythm that results in a steady stream
+</span>            <span class="enscript-comment">// of OverRuns.  Coalescing would prevent that...
+</span>            pushWord(PD_E_SW_OVERRUN_ERROR);
+            OverRun = false;
+        }
+        QCHECK();
+        <span class="enscript-keyword">if</span> (words &amp;&amp; datap) *datap = data;
+        <span class="enscript-keyword">return</span> (event &amp; 0xff);
+    }
+    <span class="enscript-keyword">return</span> PD_E_EOQ;
+}
+
+<span class="enscript-comment">// peekEvent([depth])
+</span><span class="enscript-comment">// looks ahead in the queue without removing any data.  Depth indicates how
+</span><span class="enscript-comment">// many elements to skip; 0 causes the next element to be returned.
+</span><span class="enscript-comment">// If the specified depth exceeds the available data, PD_E_EOQ is returned
+</span>UInt8 Apple16X50Queue::
+<span class="enscript-function-name">peekEvent</span>(UInt32 depth)
+{
+    <span class="enscript-type">register</span> UInt16 event;
+    <span class="enscript-type">register</span> UInt32 tmp=DequeueIndex;
+
+    <span class="enscript-keyword">if</span> (depth &gt;= Count) <span class="enscript-keyword">return</span> PD_E_EOQ;
+
+    <span class="enscript-keyword">while</span> (true) {
+        <span class="enscript-type">register</span> UInt32 words;
+        event = Queue[tmp];
+        <span class="enscript-keyword">if</span> (depth-- == 0) <span class="enscript-keyword">break</span>;
+        words = (event &amp; PD_DATA_MASK);
+        tmp += words?words:1;
+        <span class="enscript-keyword">if</span> (tmp &gt;= Size)
+            tmp -= Size;
+        <span class="enscript-keyword">if</span> (tmp == DequeueIndex) {
+            event = PD_E_EOQ;
+            <span class="enscript-keyword">break</span>;
+        }
+    }
+    <span class="enscript-keyword">return</span> (event &amp; 0xff);
+}
+
+tQueueState Apple16X50Queue::
+<span class="enscript-function-name">getState</span>()
+{
+    <span class="enscript-type">register</span> tQueueState status;
+    <span class="enscript-keyword">if</span> (Count &lt; LowWater) {
+        DequeueThreshold = 1;
+        <span class="enscript-keyword">if</span> (!Count) {
+            status = kQueueEmpty; <span class="enscript-comment">// 0 events in queue
+</span>            EnqueueThreshold = 0;
+        } <span class="enscript-keyword">else</span> {
+            status = kQueueLow; <span class="enscript-comment">// 1..(LowWater-1) events in queue
+</span>            EnqueueThreshold = LowWater-1;
+        }
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (Count &gt; HighWater) {
+        EnqueueThreshold = Size-BIGGEST_EVENT;
+        <span class="enscript-keyword">if</span> ((!OverRun) &amp;&amp; (Count &lt; Size)) {
+            status = kQueueHigh; <span class="enscript-comment">// HighWater..(Size-1) events in queue
+</span>            DequeueThreshold = HighWater;
+        } <span class="enscript-keyword">else</span> {
+            status = kQueueFull; <span class="enscript-comment">// (Size) events in queue
+</span>            DequeueThreshold = Count;
+        }
+    } <span class="enscript-keyword">else</span> {
+        status = kQueueMedium; <span class="enscript-comment">// LowWater..(HighWater-1) events in queue
+</span>        EnqueueThreshold = HighWater-1;
+        DequeueThreshold = LowWater;
+    }
+    QCHECK();
+<span class="enscript-comment">//  DEBUG_IOLog(&quot;%s::getState()=%p: Size=%d Count=%d HiWat=%d LoWat=%d DqT=%d EqT=%d, DqI=%d, EqI=%d\n&quot;,
+</span><span class="enscript-comment">//	Name, (void*)status, (int)Size, (int)Count, (int)HighWater, (int)LowWater,
+</span><span class="enscript-comment">//	(int)DequeueThreshold, (int)EnqueueThreshold, (int)DequeueIndex, (int)EnqueueIndex);
+</span>    <span class="enscript-keyword">return</span> status;
+}
+
+<span class="enscript-type">void</span> Apple16X50Queue::
+<span class="enscript-function-name">flush</span>()
+{
+    EnqueueIndex = DequeueIndex = Count = EnqueueThreshold = 0;
+    DequeueThreshold = min(Size,1);
+    OverRun = false;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">DEBUG</span>
+    <span class="enscript-keyword">if</span> (Queue &amp;&amp; Size) bzero((<span class="enscript-type">void</span> *)Queue, (size_t)(Size*<span class="enscript-keyword">sizeof</span>(UInt16)));
+#<span class="enscript-reference">endif</span>
+}
+
+<span class="enscript-type">void</span> Apple16X50Queue::
+<span class="enscript-function-name">setSize</span>(UInt32 size)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::setSize(%d)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)size);
+    <span class="enscript-keyword">if</span> (size) {
+        <span class="enscript-keyword">if</span> (size != Size) {
+            <span class="enscript-keyword">if</span> (Queue) <span class="enscript-keyword">delete</span> [] Queue;
+            Size = CONSTRAIN(QUEUE_SIZE_MINIMUM, size, QUEUE_SIZE_MAXIMUM);
+            Queue = <span class="enscript-keyword">new</span> UInt16[Size];
+            DEBUG_IOLog(<span class="enscript-string">&quot;%s: allocated Queue[%d]\n&quot;</span>, Name, (<span class="enscript-type">int</span>)Size);
+        }
+        flush();
+        setLowWater();
+        setHighWater();
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">if</span> (Queue) { 
+	    <span class="enscript-keyword">delete</span> [] Queue;
+	    Queue = NULL;
+	}
+        HighWater = LowWater = Size = 0;
+        flush();
+    }
+}
+
+<span class="enscript-type">void</span> Apple16X50Queue::
+<span class="enscript-function-name">setLowWater</span>(UInt32 low)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::setLowWater(%d)&quot;</span>, Name, (<span class="enscript-type">int</span>)low);
+    <span class="enscript-keyword">if</span> (low==0) low = Size/3;
+    LowWater = CONSTRAIN(BIGGEST_EVENT, low, Size-(BIGGEST_EVENT*2));
+    HighWater = max (LowWater+BIGGEST_EVENT, HighWater);
+    DEBUG_IOLog(<span class="enscript-string">&quot;=(0..%d..%d..%d)\n&quot;</span>, (<span class="enscript-type">int</span>)LowWater, (<span class="enscript-type">int</span>)HighWater, (<span class="enscript-type">int</span>)Size);
+    getState(); <span class="enscript-comment">// reestablish thresholds
+</span>}
+
+<span class="enscript-type">void</span> Apple16X50Queue::
+<span class="enscript-function-name">setHighWater</span>(UInt32 high)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::setHighWater(%d)&quot;</span>, Name, (<span class="enscript-type">int</span>)high);
+    <span class="enscript-keyword">if</span> (high==0) high = (Size*2)/3;
+    HighWater = CONSTRAIN(BIGGEST_EVENT*2, high, Size-BIGGEST_EVENT);
+    LowWater = min (LowWater, HighWater-BIGGEST_EVENT);
+    DEBUG_IOLog(<span class="enscript-string">&quot;=(0..%d..%d..%d)\n&quot;</span>, (<span class="enscript-type">int</span>)LowWater, (<span class="enscript-type">int</span>)HighWater, (<span class="enscript-type">int</span>)Size);
+    getState(); <span class="enscript-comment">// reestablish thresholds
+</span>}
+
+Apple16X50Queue::
+<span class="enscript-function-name">Apple16X50Queue</span>(tDirection dir)
+{
+
+    Queue=NULL;
+    <span class="enscript-keyword">switch</span> (dir) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kRxQ</span> : (<span class="enscript-type">void</span>)strlcpy(Name,<span class="enscript-string">&quot;Apple16X50RxQ&quot;</span>,<span class="enscript-keyword">sizeof</span>(Name)); <span class="enscript-keyword">break</span>;
+			
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kTxQ</span> : (<span class="enscript-type">void</span>)strlcpy(Name,<span class="enscript-string">&quot;Apple16X50TxQ&quot;</span>,<span class="enscript-keyword">sizeof</span>(Name)); <span class="enscript-keyword">break</span>;
+    }
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::Apple16X50Queue() constructed\n&quot;</span>, Name);
+    setSize(0);
+}
+
+Apple16X50Queue::
+~Apple16X50Queue()
+{
+    setSize(0);
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::Apple16X50Queue() destroyed\n&quot;</span>, Name);
+}
+
+</pre>
+<hr />
+</body></html>

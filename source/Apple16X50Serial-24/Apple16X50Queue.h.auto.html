@@ -1,0 +1,101 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50Queue.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50Queue.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50Queue.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2002 Apple Computer, Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * 1995-06-28	dreece	Created
+ * 2002-03-05	dreece	I/O Kit port, based on drvISASerialPort:queue_primatives.m.
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_APPLEPCI16X50QUEUE_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_APPLEPCI16X50QUEUE_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50Serial.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/serial/IOSerialStreamSync.h&gt;</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">BIGGEST_EVENT</span>		((UInt32)3)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">QUEUE_SIZE_MINIMUM</span>	((UInt32)64)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">QUEUE_SIZE_DEFAULT</span>	((UInt32)2048)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">QUEUE_SIZE_MAXIMUM</span>	((UInt32)32768)
+
+<span class="enscript-type">enum</span> tQueueState {
+    kQueueEmpty = (PD_S_TXQ_EMPTY | PD_S_TXQ_LOW_WATER), <span class="enscript-comment">// 0 events in queue
+</span>    kQueueLow = PD_S_TXQ_LOW_WATER,	<span class="enscript-comment">// 1..(LowWater-1) events in queue
+</span>    kQueueMedium = 0,			<span class="enscript-comment">// LowWater..(HighWater-1) events in queue
+</span>    kQueueHigh = PD_S_TXQ_HIGH_WATER,	<span class="enscript-comment">// HighWater..(Size-1) events in queue
+</span>    kQueueFull = (PD_S_TXQ_HIGH_WATER | PD_S_TXQ_FULL)	<span class="enscript-comment">// Size events in queue
+</span>};
+
+<span class="enscript-type">enum</span> tDirection { kRxQ, kTxQ };
+
+class Apple16X50Queue
+{
+<span class="enscript-reference">public</span>:
+    Apple16X50Queue(tDirection dir); <span class="enscript-comment">// constructor
+</span>    ~Apple16X50Queue();		     <span class="enscript-comment">// destructor
+</span>    
+    UInt32	HighWater;	<span class="enscript-comment">// high water mark in chars
+</span>    UInt32	LowWater;	<span class="enscript-comment">// low water mark in chars
+</span>    UInt32	Size;		<span class="enscript-comment">// maximum number of chars in queue
+</span>    UInt32	Count;		<span class="enscript-comment">// current number of chars in queue
+</span>
+    <span class="enscript-type">void</span>	setSize(UInt32 size=QUEUE_SIZE_DEFAULT);
+    <span class="enscript-type">void</span>	setLowWater(UInt32 low=0);
+    <span class="enscript-type">void</span>	setHighWater(UInt32 high=0);
+    inline bool	enqueueThresholdExceeded() { <span class="enscript-keyword">return</span> (Count &gt; EnqueueThreshold); };
+    inline bool	dequeueThresholdExceeded() { <span class="enscript-keyword">return</span> (Count &lt; DequeueThreshold); };
+    <span class="enscript-type">void</span>	flush();
+    tQueueState getState();
+
+    <span class="enscript-type">void</span>	enqueueEvent(UInt8 event, UInt32 data=0);
+    bool	enqueueEventTry(UInt8 event, UInt32 data=0);
+    UInt8	dequeueEvent(UInt32 *datap=NULL);
+    UInt8	peekEvent(UInt32 depth=0);
+    
+<span class="enscript-reference">private</span>:
+    UInt32	EnqueueIndex;		<span class="enscript-comment">// ptr to next enqueue element
+</span>    UInt32	DequeueIndex;		<span class="enscript-comment">// ptr to next dequeue element
+</span>    UInt32	EnqueueThreshold;	<span class="enscript-comment">// enqueue threshold
+</span>    UInt32	DequeueThreshold;	<span class="enscript-comment">// dequeue threshold
+</span>    UInt16	*Queue;			<span class="enscript-comment">// actual array of events;
+</span>    <span class="enscript-type">char</span>	Name[14];
+    bool	OverRun;		<span class="enscript-comment">// if true then enqueues have failed
+</span>    
+    inline <span class="enscript-type">void</span> pushWord(UInt16 data);	
+    inline UInt16 pullWord();
+};
+#<span class="enscript-reference">endif</span> // <span class="enscript-variable-name">_APPLEPCI16X50QUEUE_H</span>
+</pre>
+<hr />
+</body></html>

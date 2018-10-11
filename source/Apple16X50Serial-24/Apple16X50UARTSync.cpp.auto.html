@@ -1,0 +1,1999 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50UARTSync.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50UARTSync.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50UARTSync.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2008 Apple Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * Apple16X50UARTSync.cpp
+ * This file contains the implementation of a generic 16550 (and later) serial
+ * driver.  It is intended to support a variety of chips in this family,
+ * connected via a variety of busses.  One instance of this class controls
+ * a single UART.  One or more of these objects may be attached to a provider
+ * of class com_apple_driver_16X50BusInterface, which provides register access
+ * and interrupt dispatch.
+ * 
+ * 1995-06-23	dreece	Created
+ * 2002-02-15	dreece	I/O Kit port, based on NeXT drvISASerialPort DriverKit driver.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50UARTSync.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOLib.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/serial/IOSerialKeys.h&gt;</span>
+
+#<span class="enscript-reference">define</span>	<span class="enscript-variable-name">bits</span>		&lt;&lt;1
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kMinBaud</span>	((UInt32)(50 bits))
+
+#<span class="enscript-reference">define</span>	<span class="enscript-variable-name">kOneMS</span>	(1000)		// 1 ms expressed in microseconds
+#<span class="enscript-reference">define</span>	<span class="enscript-variable-name">kTwoMS</span>	(2*kOneMS)	// 2 ms expressed in microseconds
+#<span class="enscript-reference">define</span>	<span class="enscript-variable-name">kTenMS</span>	(10*kOneMS)	// 10 ms expressed in microseconds
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kXOnChar</span>  '\x11'
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kXOffChar</span> '\x13'
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">k1xMasterClock</span> (1843200)
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kRxAutoFlow</span>	((UInt32)( PD_RS232_A_RFR | PD_RS232_A_DTR | PD_RS232_A_RXO ))
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kTxAutoFlow</span>	((UInt32)( PD_RS232_A_CTS | PD_RS232_A_DSR | PD_RS232_A_TXO | PD_RS232_A_DCD ))
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kMSR_StateMask</span>	((UInt32)( PD_RS232_S_CTS | PD_RS232_S_DSR | PD_RS232_S_CAR | PD_RS232_S_RI  ))
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">super</span> IORS232SerialStreamSync
+<span class="enscript-function-name">OSDefineMetaClassAndStructors</span>(com_apple_driver_16X50UARTSync, IORS232SerialStreamSync);
+
+<span class="enscript-type">inline</span> UInt32 <span class="enscript-function-name">Apple16X50UARTSync::msrState</span>()
+{
+    <span class="enscript-type">register</span> UInt32 stat=0;
+    <span class="enscript-type">register</span> UInt8 msr=(OffLine)?0:inb(kREG_ModemStatus);
+    <span class="enscript-keyword">if</span> (msr &amp; kMSR_CTS) stat |= PD_RS232_S_CTS;
+    <span class="enscript-keyword">if</span> (msr &amp; kMSR_DSR) stat |= PD_RS232_S_DSR;
+    <span class="enscript-keyword">if</span> (msr &amp; kMSR_RI)  stat |= PD_RS232_S_RI;
+    <span class="enscript-keyword">if</span> (msr &amp; kMSR_DCD) stat |= PD_RS232_S_CAR;
+    <span class="enscript-keyword">return</span> stat;
+}
+
+<span class="enscript-comment">/* acquirePort tests and sets the state of the port object.  If the port is
+ * available, then the state is set to acquired, and kIOReturnSuccess is returned.
+ * If the port was already busy and sleep is true, then the calling thread will block
+ * until the port is freed, then re-attempts the acquire.  If the port was
+ * already busy and sleep is false, then kIOReturnExclusiveAccess is returned.
+ */</span>
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::acquirePort</span>(<span class="enscript-type">bool</span> sleep)
+{
+    IOReturn ret;
+    retain();
+    ret=CommandGate-&gt;runAction(acquirePortAction, (<span class="enscript-type">void</span>*)sleep);
+    release();
+    <span class="enscript-keyword">return</span> ret;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">acquirePortAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;acquirePortGated((<span class="enscript-type">bool</span>)arg0); }
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::acquirePortGated</span>(<span class="enscript-type">bool</span> sleep)
+{
+    IOReturn rtn = kIOReturnExclusiveAccess;
+    
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::acquirePortGated(%s)\n&quot;</span>, Name, BOOLSTR(sleep));
+    assert((Stage==kReleased) || (Stage==kStarted));
+    <span class="enscript-keyword">if</span> (OffLine || (Stage&lt;kStarted) || (Stage&gt;=kFinalized)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    
+    retain(); <span class="enscript-comment">// hold reference till releasePort(), unless we fail to acquire
+</span>    <span class="enscript-keyword">while</span> (Acquired) {
+        <span class="enscript-keyword">if</span> (sleep) {
+            retain();
+            CommandGate-&gt;retain();
+            rtn = CommandGate-&gt;commandSleep((<span class="enscript-type">void</span>*)&amp;Acquired);
+            CommandGate-&gt;release();
+            release();
+            <span class="enscript-keyword">if</span> (OffLine || (Stage&lt;kStarted)||(Stage&gt;=kTerminated))
+                rtn = kIOReturnOffline;
+        }
+        <span class="enscript-keyword">if</span> (rtn != THREAD_AWAKENED) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    }
+    <span class="enscript-keyword">if</span> (!(Provider-&gt;open(<span class="enscript-keyword">this</span>))) {
+        rtn = kIOReturnExclusiveAccess;
+        <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    }
+    
+    Stage = kAcquired;
+    Acquired = true;
+
+    <span class="enscript-comment">// default everything
+</span>    setStateGated(PD_S_ACQUIRED | PD_S_TX_ENABLE | PD_S_RX_ENABLE | PD_RS232_A_TXO | PD_RS232_A_RXO , PD_RS232_S_MASK | PD_S_MASK);
+    <span class="enscript-keyword">if</span> (!OffLine) {
+        resetUART();
+        outb(kREG_IRQ_Enable, IER_Mask &amp; kIRQEN_ModemStatus);
+        flowMachine();
+        setStateGated(msrState(), kMSR_StateMask);
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+        <span class="enscript-keyword">if</span> (HeartBeatInterval &gt; 0) {
+            HeartBeatNeeded = true;
+            HeartBeatTimer-&gt;setTimeoutUS(HeartBeatInterval);
+        }
+#<span class="enscript-reference">endif</span>
+        startTxEngine();
+    }
+
+	portOpened = true;
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+
+<span class="enscript-reference">fail</span>:
+    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;Acquired, !OffLine);
+    release();
+    <span class="enscript-keyword">return</span> rtn;
+}
+
+<span class="enscript-comment">/* release sets the state of the port object to available and wakes up and
+ * threads sleeping for access to this port.  It will return kIOReturnSuccess
+ * if the port was in a busy state, and kIOReturnNotOpen if it was available.
+ */</span>
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::releasePort</span>()
+{
+    <span class="enscript-keyword">switch</span> (Stage) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kReleased</span> :	<span class="enscript-keyword">return</span> kIOReturnSuccess;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kTerminated</span> :	assert(CommandGate);
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kAcquired</span> :	IOReturn ret;
+                                retain();
+                                ret=CommandGate-&gt;runAction(releasePortAction);
+                                release();
+                                <span class="enscript-keyword">return</span> ret;
+        <span class="enscript-keyword">default</span> :		<span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">return</span> kIOReturnOffline;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">releasePortAction</span>(OSObject *owner, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;releasePortGated(); }
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::releasePortGated</span>()
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::releasePortGated()\n&quot;</span>, Name);
+    <span class="enscript-keyword">if</span> (!Acquired) <span class="enscript-keyword">return</span> kIOReturnSuccess;
+    
+    deactivatePort();
+    resetUART();
+    setStateGated(0, PD_RS232_S_MASK | PD_S_MASK);	<span class="enscript-comment">// Clear the entire state word
+</span>    <span class="enscript-keyword">if</span> (!OffLine) outb(kREG_ModemControl, 0x00);
+    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;Acquired, !OffLine);
+    Provider-&gt;close(<span class="enscript-keyword">this</span>);
+    <span class="enscript-keyword">if</span> (Stage&lt;kReleased) Stage = kReleased;
+    Acquired=false;
+    release(); <span class="enscript-comment">// dispose of the self-reference we took in acquirePort()
+</span>    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-comment">// setState() accepts a new state value as input, and takes all steps necessary
+</span><span class="enscript-comment">// to make the current state equal to this new state.  This includes waking up any
+</span><span class="enscript-comment">// threads asleep on WatchStateMask, as well as dealing with Flow Control notification.
+</span>IOReturn <span class="enscript-function-name">Apple16X50UARTSync::setState</span>(UInt32 state, UInt32 mask)
+{
+<span class="enscript-comment">//  DEBUG_IOLog(&quot;%s::setState(0x%08x,0x%08x)\n&quot;, Name, (int)state, (int)mask);
+</span>    <span class="enscript-keyword">if</span> (Stage != kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    assert(CommandGate);
+
+    <span class="enscript-keyword">if</span> (mask &amp; (PD_S_ACQUIRED | PD_S_ACTIVE)) <span class="enscript-comment">// may not acquire or activate via setState
+</span>        <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    <span class="enscript-comment">// ignore any bits that are read-only
+</span>    mask &amp;= ~(FlowControl &amp; PD_RS232_A_MASK);
+    <span class="enscript-keyword">if</span> (mask) {
+        retain();
+        CommandGate-&gt;runAction(setStateAction, (<span class="enscript-type">void</span>*)state, (<span class="enscript-type">void</span>*)mask);
+        release();
+    }
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">setStateAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{
+    ((Apple16X50UARTSync *)owner)-&gt;setStateGated((UInt32)(uintptr_t)arg0, (UInt32)(uintptr_t)arg1);
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::setStateGated</span>(UInt32 state, UInt32 mask)
+{
+    UInt32	delta;
+    <span class="enscript-comment">//    DEBUG_IOLog(&quot;%s::setStateGated(0x%08x,0x%08x)\n&quot;, Name, (int)state, (int)mask);
+</span>    state = maskMux(State, state, mask);	<span class="enscript-comment">// compute the new state
+</span>    delta = (state ^ State);			<span class="enscript-comment">// keep a copy of the diffs
+</span>    State = state;
+    <span class="enscript-comment">// Wake up all threads asleep on WatchStateMask
+</span>    <span class="enscript-keyword">if</span> (delta &amp; WatchStateMask) {
+        CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;State);
+    }
+    <span class="enscript-comment">// if any modem control signals changed, we need to do an outb()
+</span>    <span class="enscript-keyword">if</span> (delta &amp; ( PD_RS232_S_DTR | PD_RS232_S_RFR ))
+        programMCR(state);
+    <span class="enscript-comment">// if an Xon or Xoff is needed, make sure the TX engine is running
+</span>    startTxEngine();
+    <span class="enscript-comment">// do we need to enqueue a flow control notification event?
+</span>    delta &lt;&lt;= PD_RS232_N_SHIFT;
+    <span class="enscript-keyword">if</span> (delta &amp; FlowControl)
+        RxQ-&gt;enqueueEvent(PD_E_FLOW_CONTROL, delta | (state &amp; PD_RS232_S_MASK));
+}
+
+<span class="enscript-comment">// Get the state for the port device.
+</span>UInt32 <span class="enscript-function-name">Apple16X50UARTSync::getState</span>()
+{
+<span class="enscript-comment">//  DEBUG_IOLog(&quot;%s::getState()=0x%08x\n&quot;, Name, (int)State);
+</span>    <span class="enscript-keyword">return</span> State;
+}
+
+<span class="enscript-comment">/* watchState()
+ * Wait for the at least one of the state bits defined in mask to be equal
+ * to the value defined in state. Check upon entry, then sleep until necessary.
+ * A return value of kIOReturnSuccess means that at least one of the port state
+ * bits specified by mask is equal to the value passed in by state.  A return
+ * value of kIOReturnIOError indicates that the port went inactive.  A return
+ * value of kIOReturnAborted indicates sleep was interrupted by a signal.
+ */</span>
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::watchState</span>(UInt32 *state, UInt32 mask)
+{
+    IOReturn ret;
+    <span class="enscript-comment">//DEBUG_IOLog(&quot;%s::watchState(*0x%08x,0x%08x)\n&quot;, Name, (int)(*state), (int)mask);
+</span>    
+    <span class="enscript-keyword">if</span> (!state) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    <span class="enscript-keyword">if</span> (!mask) <span class="enscript-keyword">return</span> kIOReturnSuccess;
+    <span class="enscript-keyword">if</span> ((Stage&lt;kStarted)||(Stage&gt;=kTerminated)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    assert(CommandGate);
+
+    retain();
+    ret=CommandGate-&gt;runAction(watchStateAction, (<span class="enscript-type">void</span>*)state, (<span class="enscript-type">void</span>*)mask);
+    release();
+    <span class="enscript-keyword">return</span> ret;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">watchStateAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;watchStateGated((UInt32*)arg0, (UInt32)(uintptr_t)arg1); }
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::watchStateGated</span>(UInt32 *state, UInt32 mask)
+{
+    <span class="enscript-type">bool</span> watchForInactive = false;
+    IOReturn rtn;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::watchStateGated(*0x%08x,0x%08x)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)(*state), (<span class="enscript-type">int</span>)mask);
+    <span class="enscript-keyword">if</span> ((Stage&lt;kStarted)||(Stage&gt;=kTerminated)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> ( !(mask &amp; (PD_S_ACQUIRED | PD_S_ACTIVE)) ) {
+        (*state) &amp;= ~PD_S_ACTIVE;	<span class="enscript-comment">// Check for low PD_S_ACTIVE
+</span>        mask     |=  PD_S_ACTIVE;	<span class="enscript-comment">// Register interest in PD_S_ACTIVE bit
+</span>        watchForInactive = true;
+    }
+    <span class="enscript-keyword">while</span> (true) {
+        <span class="enscript-comment">// compare *state with State, too see if any interesting bits match
+</span>        <span class="enscript-keyword">if</span> (mask &amp; ~((*state) ^ State)) {
+            *state = State;
+            <span class="enscript-keyword">if</span> (watchForInactive &amp;&amp; !(State &amp; PD_S_ACTIVE))
+                rtn = kIOReturnOffline;
+            <span class="enscript-keyword">else</span>
+                rtn = kIOReturnSuccess;
+            <span class="enscript-keyword">break</span>;
+        }
+        <span class="enscript-comment">// Everytime we go around the loop we have to reset the watch mask.
+</span>        <span class="enscript-comment">// This means any event that could affect the WatchStateMask must
+</span>        <span class="enscript-comment">// wakeup all watch state threads.  The two event's are an interrupt
+</span>        <span class="enscript-comment">// or one of the bits in the WatchStateMask changing.
+</span>        WatchStateMask |= mask;
+        retain();	<span class="enscript-comment">// refuse to be freed until all threads are awake
+</span>        CommandGate-&gt;retain();
+        rtn = CommandGate-&gt;commandSleep((<span class="enscript-type">void</span>*)&amp;State);
+        CommandGate-&gt;release();
+        <span class="enscript-keyword">if</span> (OffLine || (Stage&lt;kStarted)||(Stage&gt;=kTerminated)) {
+            DEBUG_IOLog(<span class="enscript-string">&quot;%s::watchStateGated() awakend to find port going away!\n&quot;</span>, Name);
+            release();
+            <span class="enscript-keyword">return</span> kIOReturnOffline;
+        }
+        <span class="enscript-comment">//DEBUG_IOLog(&quot;%s::watchStateGated() awakend=%p with State=%p\n&quot;, Name, (void*)rtn, (void*)State);
+</span>        <span class="enscript-keyword">if</span> (rtn == THREAD_TIMED_OUT) {
+            rtn=kIOReturnTimeout;
+            <span class="enscript-keyword">break</span>;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (rtn == THREAD_INTERRUPTED) {
+            rtn=kIOReturnAborted;
+            <span class="enscript-keyword">break</span>;
+        }
+        release();
+    }
+    <span class="enscript-comment">// As it is impossible to undo the masking used by this thread,
+</span>    <span class="enscript-comment">// we clear down the watch state mask and wakeup every
+</span>    <span class="enscript-comment">// sleeping thread to reinitialize the mask before exiting.
+</span>    WatchStateMask = 0;
+    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;State);
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::watchStateGated() returning=%p\n&quot;</span>, Name, (<span class="enscript-type">void</span>*)rtn);
+    <span class="enscript-keyword">return</span> rtn;
+}
+
+<span class="enscript-comment">// nextEvent returns the type of the next event on the RX queue.
+</span><span class="enscript-comment">// If no events are present on the RX queue, then PD_E_EOQ is returned.
+</span>UInt32 <span class="enscript-function-name">Apple16X50UARTSync::nextEvent</span>()
+{
+    UInt32 ret=PD_E_EOQ;
+    <span class="enscript-keyword">if</span> (Stage==kAcquired) {
+        retain();
+        ret=(UInt32)(CommandGate-&gt;runAction(nextEventAction));
+        release();
+    }
+    <span class="enscript-keyword">return</span> ret;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">nextEventAction</span>(OSObject *owner, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> (IOReturn)(((Apple16X50UARTSync *)owner)-&gt;nextEventGated()); }
+
+UInt32 <span class="enscript-function-name">Apple16X50UARTSync::nextEventGated</span>()
+{
+    UInt32 event=PD_E_EOQ;
+    <span class="enscript-keyword">if</span> ((Stage==kAcquired) &amp;&amp; RxQ)
+        event = RxQ-&gt;peekEvent();
+<span class="enscript-comment">//  DEBUG_IOLog(&quot;%s::nextEventGated()=0x%02x\n&quot;, Name, (int)event);
+</span>    <span class="enscript-keyword">return</span> event;
+}
+
+<span class="enscript-comment">// executeEvent causes the specified event to be processed immediately.
+</span>IOReturn <span class="enscript-function-name">Apple16X50UARTSync::executeEvent</span>(UInt32 event, UInt32 data)
+{
+    IOReturn ret=kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (Stage==kAcquired) {
+        retain();
+        ret=CommandGate-&gt;runAction(executeEventAction, (<span class="enscript-type">void</span>*)event, (<span class="enscript-type">void</span>*)data);
+        release();
+    }
+    <span class="enscript-keyword">return</span> ret;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">executeEventAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;executeEventGated((UInt32)(uintptr_t)arg0, (UInt32)(uintptr_t)arg1); }
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::executeEventGated</span>(UInt32 event, UInt32 data)
+{
+    IOReturn ret = kIOReturnSuccess;
+    UInt32 tmp, state, delta;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::executeEventGated(0x%02x,0x%02x)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)event, (<span class="enscript-type">int</span>)data);
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">switch</span> (event) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_FLOW_CONTROL</span>:
+            tmp = kRxAutoFlow &amp; (data ^ FlowControl);
+            FlowControl = data &amp; ( kRxAutoFlow | kTxAutoFlow | PD_RS232_N_MASK );
+            <span class="enscript-keyword">if</span> (tmp) {
+                <span class="enscript-keyword">if</span> (tmp &amp; PD_RS232_A_RXO)
+                    RXO_State = kXO_Idle;
+                flowMachine();
+            }
+                <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DELAY</span>:
+            DelayInterval = data;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_SIZE</span>:
+            <span class="enscript-keyword">if</span> (State &amp; PD_S_ACTIVE)
+                ret = kIOReturnBusy;
+            <span class="enscript-keyword">else</span>
+                RxQ-&gt;setSize(data);
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_SIZE</span>:
+            <span class="enscript-keyword">if</span> (State &amp; PD_S_ACTIVE)
+                ret = kIOReturnBusy;
+            <span class="enscript-keyword">else</span>
+                TxQ-&gt;setSize(data);
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-reference">default</span>:
+            delta = 0;
+            state = State;
+            ret = executeEventGated(event, data, &amp;state, &amp;delta);
+            setStateGated(state, delta);
+            <span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">return</span> ret;
+}
+
+<span class="enscript-comment">// executeEvent causes the specified event to be processed immediately.
+</span>IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">executeEventGated</span>(UInt32 event, UInt32 data, UInt32 *state, UInt32 *delta)
+{
+    IOReturn ret = kIOReturnSuccess;
+    UInt32 tmp;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::executeEventGated(0x%02x,0x%02x,*0x%08x,*0x%08x)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)event, (<span class="enscript-type">int</span>)data, (<span class="enscript-type">int</span>)*state, (<span class="enscript-type">int</span>)*delta);
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">switch</span> (event) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_XON_BYTE</span>:
+            <span class="enscript-keyword">if</span> (data&gt;0xff)
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span>
+                XOnChar = data;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_XOFF_BYTE</span>:
+            <span class="enscript-keyword">if</span> (data&gt;0xff)
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span>
+                XOffChar = data;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_SPECIAL_BYTE</span>:
+            <span class="enscript-keyword">if</span> (data&amp;(~0xff))
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span>
+                SW_Special[data&gt;&gt;5] |= (1&lt;&lt;(data&amp;0x1f));
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_VALID_DATA_BYTE</span>:
+            <span class="enscript-keyword">if</span> (data&amp;(~0xff))
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span>
+                SW_Special[data&gt;&gt;5] &amp;= ~(1&lt;&lt;(data&amp;0x1f));
+            <span class="enscript-keyword">break</span>;
+            <span class="enscript-comment">// Enqueued flow control event allows the user to change the state of any flow control
+</span>            <span class="enscript-comment">// signals set on Manual (its Auto bit in exec/req event is cleared)
+</span>        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_FLOW_CONTROL</span> :
+            tmp = (data&gt;&gt;PD_RS232_D_SHIFT) &amp; kRxAutoFlow &amp; (~FlowControl);
+            *state = maskMux(*state, data, tmp);
+            *delta |= tmp;
+            <span class="enscript-keyword">if</span> (tmp &amp; PD_RS232_S_RXO)
+                RXO_State = (data &amp; PD_RS232_S_RXO) ? kXOnNeeded : kXOffNeeded;
+            programMCR(*state);
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_ACTIVE</span>:
+            <span class="enscript-keyword">if</span> (BOOLVAL(data))
+                ret = activatePort();
+            <span class="enscript-keyword">else</span>
+                deactivatePort();
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_LATENCY</span>:
+            DataLatInterval = data;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_MIN_LATENCY</span>:
+            MinLatency = BOOLVAL(data);
+            Divisor = 0x0000;  <span class="enscript-comment">// force recompute of FIFO levels
+</span>            programUART();
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_INTEGRITY</span>:
+            <span class="enscript-keyword">if</span> ((data &lt; PD_RS232_PARITY_NONE) || (data &gt; PD_RS232_PARITY_SPACE))
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span> {
+                Parity = data;
+                IgnoreParityErrors = false;
+                programUART();
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_RATE</span>:
+            <span class="enscript-keyword">if</span> ((data &lt; kMinBaud) || (data &gt; MaxBaud))
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span> {
+                BaudRate = data;
+                programUART();
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_SIZE</span>:
+            <span class="enscript-keyword">if</span> ((data &lt; (5 bits)) || (data &gt; (8 bits)) || (data&amp;1))
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span> {
+                DataWidth = data;
+                programUART();
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_STOP_BITS</span>:
+            <span class="enscript-keyword">if</span> ((data &lt; (1 bits)) || (data &gt; (2 bits)))
+                ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">else</span> {
+                StopBits = data;
+                programUART();
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_FLUSH</span>:
+            <span class="enscript-keyword">if</span> (RxQ) RxQ-&gt;flush();
+            <span class="enscript-keyword">if</span> (!OffLine) outb(kREG_FIFOControl, (FCR_Image | kFIFO_ResetRx));
+            *state = maskMux(*state, generateRxQState(), (PD_S_RXQ_MASK | kRxAutoFlow));
+            *delta |= PD_S_RXQ_MASK | kRxAutoFlow;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RX_DATA_INTEGRITY</span>:
+            <span class="enscript-keyword">if</span> (data==Parity) <span class="enscript-keyword">break</span>;
+            <span class="enscript-keyword">if</span> (data==PD_RS232_PARITY_DEFAULT) <span class="enscript-keyword">break</span>;
+            <span class="enscript-keyword">if</span> ((data==PD_RS232_PARITY_ANY) &amp;&amp; (Parity!=PD_RS232_PARITY_NONE)) <span class="enscript-keyword">break</span>;
+            ret = kIOReturnUnsupported;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RX_DATA_RATE</span>:
+            <span class="enscript-keyword">if</span> ((data != 0) &amp;&amp; (data != BaudRate))
+                ret = kIOReturnUnsupported;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RX_DATA_SIZE</span>:
+            <span class="enscript-keyword">if</span> ((data != 0) &amp;&amp; (data != DataWidth))
+                ret = kIOReturnUnsupported;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_RX_STOP_BITS</span>:
+            <span class="enscript-keyword">if</span> ((data != 0) &amp;&amp; (data != StopBits))
+                ret = kIOReturnUnsupported;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_FLUSH</span>:
+            <span class="enscript-keyword">if</span> (TxQ) TxQ-&gt;flush();
+            <span class="enscript-keyword">if</span> (!OffLine) outb(kREG_FIFOControl, (FCR_Image | kFIFO_ResetTx));
+            *state = maskMux(*state, TxQ-&gt;getState(), PD_S_TXQ_MASK);
+            *delta |= PD_S_TXQ_MASK;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_LINE_BREAK</span> :
+            <span class="enscript-keyword">if</span> (!OffLine) {
+                LCR_Image = boolBit(LCR_Image, BOOLVAL(data), kLCR_SendBreak);
+                outb(kREG_LineControl, LCR_Image);
+                *state = boolBit(*state, BOOLVAL(data), PD_RS232_S_BRK);
+                *delta |= PD_RS232_S_BRK;
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DELAY</span>:
+            <span class="enscript-keyword">if</span> (data &gt; 0) {
+                DelayTimerRunning=true;
+                DelayTimer-&gt;setTimeoutUS(data);
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_HIGH_WATER</span>:
+            RxQ-&gt;setHighWater(data);
+            *state = maskMux(*state, generateRxQState(), (PD_S_RXQ_MASK | kRxAutoFlow));
+            *delta |= PD_S_RXQ_MASK | kRxAutoFlow;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_LOW_WATER</span>:
+            RxQ-&gt;setLowWater(data);
+            *state = maskMux(*state, generateRxQState(), (PD_S_RXQ_MASK | kRxAutoFlow));
+            *delta |= PD_S_RXQ_MASK | kRxAutoFlow;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_HIGH_WATER</span>:
+            TxQ-&gt;setHighWater(data);
+            *state = maskMux(*state, TxQ-&gt;getState(), PD_S_TXQ_MASK);
+            *delta |= PD_S_TXQ_MASK;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_LOW_WATER</span>:
+            TxQ-&gt;setLowWater(data);
+            *state = maskMux(*state, TxQ-&gt;getState(), PD_S_TXQ_MASK);
+            *delta |= PD_S_TXQ_MASK;
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-reference">default</span>:
+            DEBUG_IOLog(<span class="enscript-string">&quot;%s::executeEventGated() unknown event=0x%02x, data=%p\n&quot;</span>, Name, (<span class="enscript-type">int</span>)event, (<span class="enscript-type">void</span>*)data);
+            ret = kIOReturnBadArgument;
+            <span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">return</span> ret;
+}
+
+<span class="enscript-comment">/* requestEvent processes the specified event as an immediate request and
+ * returns the results in data.  This is primarily used for getting link
+ * status information and verifying baud rate and such.
+ */</span>
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::requestEvent</span>(UInt32 event, UInt32 *data)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::requestEvent(0x%02x,*0x%02x)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)event, (<span class="enscript-type">int</span>)*data);
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (data == NULL) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    <span class="enscript-keyword">switch</span> (event) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_ACTIVE</span> :             *data = BOOLVAL(State&amp;PD_S_ACTIVE);	<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_FLOW_CONTROL</span>:        *data = FlowControl;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DELAY</span> :              *data = DelayInterval;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_LATENCY</span> :       *data = DataLatInterval;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_SIZE</span> :           *data = TxQ-&gt;Size;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_SIZE</span> :           *data = RxQ-&gt;Size;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_LOW_WATER</span> :      *data = TxQ-&gt;LowWater;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_LOW_WATER</span> :      *data = RxQ-&gt;LowWater;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_HIGH_WATER</span> :     *data = TxQ-&gt;HighWater;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_HIGH_WATER</span> :     *data = RxQ-&gt;HighWater;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_TXQ_AVAILABLE</span> :      *data = TxQ-&gt;Size - TxQ-&gt;Count;		<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RXQ_AVAILABLE</span> :      *data = RxQ-&gt;Count;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_RATE</span> :          *data = BaudRate;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RX_DATA_RATE</span> :       *data = 0x00;                            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_SIZE</span> :          *data = DataWidth;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RX_DATA_SIZE</span> :       *data = 0x00;                            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_DATA_INTEGRITY</span> :     *data = Parity;				<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_RX_DATA_INTEGRITY</span> :  *data = IgnoreParityErrors;		<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_STOP_BITS</span> :    *data = StopBits;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_RX_STOP_BITS</span> : *data = 0x00;                            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_XON_BYTE</span> :     *data = XOnChar;				<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_XOFF_BYTE</span> :    *data = XOffChar;			<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_LINE_BREAK</span> :   *data = BOOLVAL(State&amp;PD_RS232_S_BRK);	<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_E_MIN_LATENCY</span>:   *data = BOOLVAL(MinLatency);		<span class="enscript-keyword">break</span>;
+            
+        <span class="enscript-keyword">default</span> :	DEBUG_IOLog(<span class="enscript-string">&quot;%s::requestEvent() unknown event=0x%02x\n&quot;</span>, Name, (<span class="enscript-type">int</span>)event);
+                        <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    }
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-comment">/* enqueueEvent will place the specified event into the TX queue.  The
+ * sleep argument allows the caller to specify the enqueueEvent's
+ * behaviour when the TX queue is full.  If sleep is true, then this
+ * method will sleep until the event is enqueued.  If sleep is false,
+ * then enqueueEvent will immediatly return kIOReturnNoResources.
+ */</span>
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::enqueueEvent</span>(UInt32 event, UInt32 data, <span class="enscript-type">bool</span> sleep)
+{
+    IOReturn ret=kIOReturnOffline;
+    retain();
+    <span class="enscript-keyword">if</span> ((Stage==kAcquired)&amp;&amp;(State&amp;PD_S_ACTIVE)) {
+        assert(CommandGate);
+        ret=CommandGate-&gt;runAction(enqueueEventAction, (<span class="enscript-type">void</span>*)event, (<span class="enscript-type">void</span>*)data, (<span class="enscript-type">void</span>*)sleep);
+    }
+    release();
+    <span class="enscript-keyword">return</span> ret;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">enqueueEventAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;enqueueEventGated((UInt32)(uintptr_t)arg0, (UInt32)(uintptr_t)arg1, (<span class="enscript-type">bool</span>)arg2); }
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::enqueueEventGated</span>(UInt32 event, UInt32 data, <span class="enscript-type">bool</span> sleep)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::enqueueEventGated(0x%02x,0x%02x,%s)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)event, (<span class="enscript-type">int</span>)data, BOOLSTR(sleep));
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (!(State&amp;PD_S_ACTIVE)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    
+    <span class="enscript-keyword">while</span> (!(TxQ-&gt;enqueueEventTry(event, data))) {
+        UInt32 state=0;
+        IOReturn rtn;
+        <span class="enscript-keyword">if</span> (!sleep) <span class="enscript-keyword">return</span> kIOReturnNoResources;
+        rtn = watchStateGated(&amp;state, (UInt32)PD_S_TXQ_FULL);
+        <span class="enscript-keyword">if</span> (rtn != kIOReturnSuccess) <span class="enscript-keyword">return</span> rtn;
+    }
+    <span class="enscript-keyword">if</span> (TxQ-&gt;enqueueThresholdExceeded())
+        setStateGated(TxQ-&gt;getState(), PD_S_TXQ_MASK);
+    startTxEngine();
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-comment">/* dequeueEvent will remove the oldest event from the RX queue and return
+ * it in event &amp; data.  The sleep argument defines the behavior if the RX
+ * queue is empty.  If sleep is true, then this method will sleep until an
+ * event is available.  If sleep is false, then an PD_E_EOQ event will be
+ * returned.  In either case kIOReturnSuccess is returned.
+ */</span>
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::dequeueEvent</span>(UInt32 *event, UInt32 *data, <span class="enscript-type">bool</span> sleep)
+{
+    IOReturn ret=kIOReturnOffline;
+    <span class="enscript-keyword">if</span> ((!event) || (!data)) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    retain();
+    <span class="enscript-keyword">if</span> ((Stage==kAcquired) &amp;&amp; (State&amp;PD_S_ACTIVE)) {
+        assert(CommandGate);
+        ret=CommandGate-&gt;runAction(dequeueEventAction, (<span class="enscript-type">void</span>*)event, (<span class="enscript-type">void</span>*)data, (<span class="enscript-type">void</span>*)sleep);
+    }
+    release();
+    <span class="enscript-keyword">return</span> ret;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">dequeueEventAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;dequeueEventGated((UInt32*)arg0, (UInt32*)arg1, (<span class="enscript-type">bool</span>)arg2); }
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::dequeueEventGated</span>(UInt32 *event, UInt32 *data, <span class="enscript-type">bool</span> sleep)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::dequeueEventGated(*0x%02x,*0x%02x,%s)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)*event, (<span class="enscript-type">int</span>)*data, BOOLSTR(sleep));
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (!(State&amp;PD_S_ACTIVE)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">do</span> {
+        UInt8 e = RxQ-&gt;dequeueEvent(data);
+        <span class="enscript-keyword">if</span> (e != PD_E_EOQ) {
+            *event = (UInt32)e;
+            <span class="enscript-keyword">break</span>; <span class="enscript-comment">// exit do-while loop
+</span>        } <span class="enscript-keyword">else</span> {
+            <span class="enscript-keyword">if</span> (sleep) {
+                UInt32 state=0;
+                IOReturn rtn = watchStateGated(&amp;state, (UInt32)PD_S_TXQ_EMPTY);
+                <span class="enscript-keyword">if</span> (rtn != kIOReturnSuccess) <span class="enscript-keyword">return</span> rtn;
+            }
+        }
+    } <span class="enscript-keyword">while</span> (sleep);
+    <span class="enscript-keyword">if</span> (RxQ-&gt;dequeueThresholdExceeded())
+        setStateGated(generateRxQState(), PD_S_RXQ_MASK | kRxAutoFlow);
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-comment">/* enqueueData will attempt to copy data from the specified buffer to the
+ * TX queue as a sequence of VALID_DATA events.  The argument bufferSize
+ * specifies the number of bytes to be sent.  The actual number of bytes
+ * transferred is returned in transferCount.  If sleep is true, then this
+ * method will sleep until all bytes can be transferred.  If sleep is
+ * false, then as many bytes as possible will be copied to the TX queue.
+ *
+ * Note that the caller should ALWAYS check the transferCount unless the
+ * return value was kIOReturnBadArgument, indicating one or more arguments
+ * were not valid.  Other possible return values are kIOReturnSuccess if all
+ * requirements were met; kIOReturnIPCError if sleep was interrupted by
+ * a signal; kIOReturnIOError if the port was deactivated.
+ */</span>
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">enqueueData</span>(UInt8 *buffer, UInt32 size, UInt32 *count, <span class="enscript-type">bool</span> sleep)
+{
+    UInt8 *p = buffer;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::enqueueData(%p,%d,%p,%s)\n&quot;</span>, Name, buffer, (<span class="enscript-type">int</span>)size, count, BOOLSTR(sleep));
+    <span class="enscript-keyword">if</span> (!(buffer &amp;&amp; count)) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    *count = 0;
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (!(State&amp;PD_S_ACTIVE)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    retain();
+    <span class="enscript-keyword">while</span> (*count &lt; size) {
+        UInt32 chunkSize, chunkCount=0;
+        IOReturn rtn;
+        chunkSize = min((size-(*count)), 2048);
+        rtn = CommandGate-&gt;runAction(enqueueDataAction, (<span class="enscript-type">void</span>*)p, (<span class="enscript-type">void</span>*)chunkSize,
+                                 (<span class="enscript-type">void</span>*)&amp;chunkCount, (<span class="enscript-type">void</span>*)sleep);
+        <span class="enscript-keyword">if</span> (rtn != kIOReturnBadArgument) {
+            *count += chunkCount;
+            p += chunkCount;
+        }
+        <span class="enscript-keyword">if</span> (rtn != kIOReturnSuccess) {
+            release();
+            <span class="enscript-keyword">return</span> rtn;
+        }
+    }
+    release();
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">enqueueDataAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*arg3)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;enqueueDataGated((UInt8*)arg0, (UInt32)(uintptr_t)arg1, (UInt32*)arg2, (<span class="enscript-type">bool</span>)arg3); }
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">enqueueDataGated</span>(UInt8 *buffer, UInt32 size, UInt32 *count, <span class="enscript-type">bool</span> sleep)
+{
+    UInt8 *p = buffer;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::enqueueDataGated(%p,%d,%p,%s)\n&quot;</span>, Name, buffer, (<span class="enscript-type">int</span>)size, count, BOOLSTR(sleep));
+    <span class="enscript-keyword">if</span> (!(buffer &amp;&amp; count)) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    *count = 0;
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (!(State&amp;PD_S_ACTIVE)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">for</span> (*count=0; (*count) &lt; size; (*count)++) {
+        IOReturn rtn = enqueueEventGated(PD_E_VALID_DATA_BYTE, (UInt32)(*p), sleep);
+        <span class="enscript-keyword">if</span> (rtn != kIOReturnSuccess) <span class="enscript-keyword">return</span> rtn;
+        p++;
+    }
+    <span class="enscript-keyword">if</span> (TxQ-&gt;enqueueThresholdExceeded())
+        setStateGated(TxQ-&gt;getState(), PD_S_TXQ_MASK);
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-comment">/* dequeueData() will attempt to copy data from the RX queue to the specified
+ * buffer.  No more than bufferSize VALID_DATA events will be transferred.
+ * In other words, copying will continue until either a non-data event is
+ * encountered or the transfer buffer is full.  The actual number of bytes
+ * transferred is returned in transferCount.
+ *
+ * The sleep semantics of this method are slightly more complicated than
+ * other methods in this API:  Basically, this method will continue to
+ * sleep until either minCount characters have been received or a non
+ * data event is next in the RX queue.  If minCount is zero, then this
+ * method never sleeps and will return immediately if the queue is empty.
+ *
+ * Note that the caller should ALWAYS check the transferCount unless the
+ * return value was kIOReturnBadArgument, indicating one or more arguments
+ * were not valid.  Other possible return values are kIOReturnSuccess if all
+ * requirements were met; kIOReturnIPCError if sleep was interrupted by
+ * a signal; kIOReturnIOError if the port was deactivated.
+ */</span>
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">dequeueData</span>(UInt8 *buffer, UInt32 size, UInt32 *count, UInt32 min)
+{
+    UInt8 *p = buffer;
+    IOReturn rtn = kIOReturnSuccess;
+    <span class="enscript-type">enum</span> { kTimerDisarmed, kTimerArmed, kTimerStarted } timerControl;
+
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::dequeueData(%p,%d,%p,%d)\n&quot;</span>, Name, buffer, (<span class="enscript-type">int</span>)size, count, (<span class="enscript-type">int</span>)min);
+
+    <span class="enscript-keyword">if</span> (!(count &amp;&amp; buffer &amp;&amp; (size &gt;= min))) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    *count = 0;
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) {
+        <span class="enscript-keyword">return</span> kIOReturnOffline;
+    }
+    <span class="enscript-keyword">if</span> (!(State&amp;PD_S_ACTIVE)) {
+        <span class="enscript-keyword">return</span> kIOReturnOffline;
+    }
+
+    <span class="enscript-comment">// 1st, get as much data as we can without sleeping:
+</span>    <span class="enscript-comment">// if we can avoid setting the latency timeout, we should
+</span>
+    <span class="enscript-keyword">while</span> (*count &lt; size) {
+        UInt32 chunkSize, chunkCount;
+        chunkSize = min((size-(*count)), 2048);
+        <span class="enscript-keyword">if</span> (!CommandGate) <span class="enscript-keyword">return</span> kIOReturnOffline;
+        retain();
+        rtn = CommandGate-&gt;runAction(dequeueDataAction, (<span class="enscript-type">void</span>*)p, (<span class="enscript-type">void</span>*)chunkSize, (<span class="enscript-type">void</span>*)&amp;chunkCount, (<span class="enscript-type">void</span>*)(false));
+        release();
+        <span class="enscript-keyword">if</span> (rtn != kIOReturnSuccess) <span class="enscript-keyword">return</span> rtn;
+        <span class="enscript-keyword">if</span> (chunkCount==0) { <span class="enscript-comment">// nothing left on queue
+</span>            <span class="enscript-keyword">if</span> ((*count) &gt;= min) <span class="enscript-comment">// but we've already met the minimum
+</span>                <span class="enscript-keyword">return</span> rtn;
+            <span class="enscript-keyword">else</span>	<span class="enscript-comment">// we are going to have to sleep to meet the minimum
+</span>                <span class="enscript-keyword">break</span>;
+        }
+        *count += chunkCount;	<span class="enscript-comment">// adjust count &amp; p to account for new data
+</span>        p += chunkCount;
+    }
+
+    retain();
+    <span class="enscript-comment">// We now need to sleep for data, but we must set the latency timer if *some* data
+</span>    <span class="enscript-comment">// has already been read.  Otherwise, we set the latency timer after the first
+</span>    <span class="enscript-comment">// byte comes in.
+</span>
+    timerControl = ((DataLatInterval &gt; 0) &amp;&amp; ((min-(*count)) &gt; 1)) ? kTimerArmed : kTimerDisarmed;
+
+    <span class="enscript-keyword">while</span> (*count &lt; min) {
+        UInt32 chunkSize, chunkCount;
+	<span class="enscript-keyword">if</span> ((timerControl == kTimerArmed) &amp;&amp; (*count)) {
+	    WorkLoop-&gt;runAction(timerControlAction, DataLatTimer, (<span class="enscript-type">void</span>*)DataLatInterval); <span class="enscript-comment">// set the latency timeout
+</span>	    timerControl = kTimerStarted;
+	}
+        chunkSize = min((min-(*count)), (timerControl == kTimerArmed) ? (UInt32)1 : (UInt32)2048);
+        rtn = CommandGate-&gt;runAction(dequeueDataAction, (<span class="enscript-type">void</span>*)p, (<span class="enscript-type">void</span>*)chunkSize, (<span class="enscript-type">void</span>*)&amp;chunkCount, (<span class="enscript-type">void</span>*)(true));
+        <span class="enscript-keyword">if</span> (rtn == kIOReturnBadArgument) <span class="enscript-keyword">break</span>;
+        *count += chunkCount;
+        p += chunkCount;
+        <span class="enscript-keyword">if</span> ( (rtn != kIOReturnSuccess) || (chunkCount == 0) )
+            <span class="enscript-keyword">break</span>; <span class="enscript-comment">// non-data next in queue
+</span>    }
+
+    <span class="enscript-keyword">if</span> (timerControl == kTimerStarted)
+	WorkLoop-&gt;runAction(timerControlAction, DataLatTimer); <span class="enscript-comment">// clear the latency timeout
+</span>    release();
+    <span class="enscript-keyword">return</span> rtn;
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">dequeueDataAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*arg3)
+{ <span class="enscript-keyword">return</span> ((Apple16X50UARTSync *)owner)-&gt;dequeueDataGated((UInt8*)arg0, (UInt32)(uintptr_t)arg1, (UInt32*)arg2, (UInt32)(uintptr_t)arg3); }
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">dequeueDataGated</span>(UInt8 *buffer, UInt32 size, UInt32 *count, <span class="enscript-type">bool</span> sleep)
+{
+    UInt8 *p = buffer, event;
+    UInt32 data=<span class="enscript-string">'?'</span>, bytes;
+    IOReturn rtn = kIOReturnSuccess;
+    
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::dequeueDataGated(%p,%d,%p,%s)\n&quot;</span>, Name, buffer, (<span class="enscript-type">int</span>)size, count, BOOLSTR(sleep));
+    <span class="enscript-keyword">if</span> (!(buffer &amp;&amp; count)) <span class="enscript-keyword">return</span> kIOReturnBadArgument;
+    *count = bytes = 0;
+    <span class="enscript-keyword">if</span> (Stage!=kAcquired) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (!(State&amp;PD_S_ACTIVE)) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">while</span> (bytes &lt; size) {
+        event = RxQ-&gt;peekEvent();
+        <span class="enscript-keyword">if</span> (event==PD_E_VALID_DATA_BYTE) {
+            assert(RxQ-&gt;Count);
+            event=RxQ-&gt;dequeueEvent(&amp;data);
+            assert(event==PD_E_VALID_DATA_BYTE);
+            *p++ = (UInt8)data;
+            bytes++;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((event==PD_E_EOQ) &amp;&amp; sleep) {
+            UInt32 state=0;
+            rtn = watchStateGated(&amp;state, (UInt32)PD_S_RXQ_EMPTY);
+            <span class="enscript-keyword">if</span> (rtn != kIOReturnSuccess) <span class="enscript-keyword">break</span>;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">break</span>;
+    }
+    *count = bytes;
+    <span class="enscript-keyword">if</span> (RxQ-&gt;dequeueThresholdExceeded())
+        setStateGated(generateRxQState(), PD_S_RXQ_MASK | kRxAutoFlow);
+    <span class="enscript-keyword">return</span> rtn;
+}
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50UARTSync::attach</span>(IOService *provider)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::attach(%p)\n&quot;</span>, Name, provider);
+    assert(Stage == kAllocated);
+    
+    Provider = OSDynamicCast(Apple16X50BusInterface, provider);
+    <span class="enscript-keyword">if</span> (!Provider) <span class="enscript-keyword">return</span> false;
+
+    <span class="enscript-keyword">if</span> ((!Provider-&gt;metaCast(<span class="enscript-string">&quot;com_apple_driver_16X50PCCard&quot;</span>)) &amp;&amp; (!Provider-&gt;metaCast(<span class="enscript-string">&quot;com_apple_driver_16X50PCI&quot;</span>)) &amp;&amp;
+        (!Provider-&gt;metaCast(<span class="enscript-string">&quot;com_apple_driver_16X50ACPI&quot;</span>)))
+        <span class="enscript-keyword">return</span> false;	<span class="enscript-comment">// Only allow us to attach to classes in this project - this is not a publicly usable class
+</span>    
+    <span class="enscript-keyword">if</span> (!IOService::attach(provider)) <span class="enscript-keyword">return</span> false;
+
+    Stage = kAttached;
+    <span class="enscript-keyword">return</span> true;
+}
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50UARTSync::attachToChild</span>(IORegistryEntry *child, <span class="enscript-type">const</span> IORegistryPlane *plane)
+{
+    <span class="enscript-keyword">if</span> (!super::attachToChild(child, plane))
+        <span class="enscript-keyword">return</span> false;
+    
+    <span class="enscript-keyword">if</span> ((child-&gt;metaCast(<span class="enscript-string">&quot;IOSerialBSDClient&quot;</span>)) &amp;&amp; (plane == gIOServicePlane))
+        child-&gt;setProperty(kNPProductNameKey, getProperty(kNPProductNameKey));
+    
+    <span class="enscript-keyword">return</span> true;
+}
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50UARTSync::start</span>(IOService *provider)
+{
+    <span class="enscript-type">char</span> buf[80];
+    OSString *nameString = OSDynamicCast(OSString, getProperty(kIOTTYSuffixKey));
+    <span class="enscript-keyword">if</span> (nameString) {
+        snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;%s%s&quot;</span>, Name, (<span class="enscript-type">char</span> *)(nameString-&gt;getCStringNoCopy()));
+        setName(buf);
+        Name=getName();
+    }
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::start(%p)\n&quot;</span>, Name, provider);
+    assert(Stage == kAttached);
+
+    <span class="enscript-keyword">if</span> (!super::start(provider)) <span class="enscript-keyword">return</span> false;
+    
+    WorkLoop = OSDynamicCast(IOWorkLoop, Provider-&gt;getWorkLoop(fRefCon));
+    <span class="enscript-keyword">if</span> (!WorkLoop) <span class="enscript-keyword">return</span> false;
+    WorkLoop-&gt;retain();
+    
+    CommandGate = IOCommandGate::commandGate(<span class="enscript-keyword">this</span>);
+    <span class="enscript-keyword">if</span> (!CommandGate) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (WorkLoop-&gt;addEventSource(CommandGate) != kIOReturnSuccess) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    CommandGate-&gt;enable();
+
+    FrameTimer = IOTimerEventSource::timerEventSource(<span class="enscript-keyword">this</span>, frameTimeoutAction);
+    <span class="enscript-keyword">if</span> (!FrameTimer) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (WorkLoop-&gt;addEventSource(FrameTimer) != kIOReturnSuccess) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    FrameTimer-&gt;enable();
+
+    DataLatTimer = IOTimerEventSource::timerEventSource(<span class="enscript-keyword">this</span>, dataLatencyTimeoutAction);
+    <span class="enscript-keyword">if</span> (!DataLatTimer) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (WorkLoop-&gt;addEventSource(DataLatTimer) != kIOReturnSuccess) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    DataLatTimer-&gt;enable();
+
+    DelayTimer = IOTimerEventSource::timerEventSource(<span class="enscript-keyword">this</span>, delayTimeoutAction);
+    <span class="enscript-keyword">if</span> (!DelayTimer) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (WorkLoop-&gt;addEventSource(DelayTimer) != kIOReturnSuccess) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    DelayTimer-&gt;enable();
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+    HeartBeatTimer = IOTimerEventSource::timerEventSource(<span class="enscript-keyword">this</span>, heartbeatTimeoutAction);
+    <span class="enscript-keyword">if</span> (!HeartBeatTimer) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (WorkLoop-&gt;addEventSource(HeartBeatTimer) != kIOReturnSuccess) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    HeartBeatTimer-&gt;enable();
+#<span class="enscript-reference">endif</span>
+    
+    TxQ = <span class="enscript-keyword">new</span> Apple16X50Queue(kTxQ);
+    RxQ = <span class="enscript-keyword">new</span> Apple16X50Queue(kRxQ);
+
+    resetUART();
+    snprintf (buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;%s FIFO=%d MaxBaud=%d&quot;</span>, IOFindNameForValue(UART_Type, gUARTnames), (<span class="enscript-type">int</span>)FIFO_Size, (<span class="enscript-type">int</span>)(MaxBaud&gt;&gt;1));
+    IOLog(<span class="enscript-string">&quot;%s: Detected %s\n&quot;</span>, Name, buf);
+    setProperty(<span class="enscript-string">&quot;UART Type&quot;</span>, buf);
+
+    Stage = kStarted;
+    registerService();
+	
+    <span class="enscript-comment">// register for power changes
+</span>    fCurrentPowerState = 1;		<span class="enscript-comment">// we default to power on
+</span>    <span class="enscript-keyword">if</span> (!initForPM(provider)) 
+	{
+        IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::start - failed to init for power management&quot;</span>);
+        <span class="enscript-comment">//shutDown();
+</span>		<span class="enscript-keyword">return</span> false;
+    }	
+	
+    <span class="enscript-keyword">return</span> true;
+    
+<span class="enscript-reference">fail</span>:
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::start() Unable to setup EventSources\n&quot;</span>, Name);
+    RELEASE(WorkLoop);
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50UARTSync::terminate</span>(IOOptionBits options)
+{
+    Stage = kTerminated;
+    OffLine = true;
+    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;Acquired); <span class="enscript-comment">// wake all waiting to acquire the port
+</span>    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;State); <span class="enscript-comment">// wake all waiting for state
+</span>    <span class="enscript-keyword">return</span> super::terminate(options);
+}
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50UARTSync::finalize</span>(IOOptionBits options)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::finalize()\n&quot;</span>, Name);
+    assert((Stage==kReleased)||(Stage==kStarted)||(Stage==kTerminated));
+    assert(CommandGate);
+    Stage = kFinalized;
+    OffLine = true;
+    <span class="enscript-comment">// There should be no clients at this point, but lets wake everybody up to be sure
+</span>    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;Acquired); <span class="enscript-comment">// wake all waiting to acquire the port
+</span>    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;State); <span class="enscript-comment">// wake all waiting for state
+</span>    <span class="enscript-keyword">if</span> (DelayTimer) {
+        DelayTimer-&gt;cancelTimeout();
+        DelayTimer-&gt;disable();
+    }
+    <span class="enscript-keyword">if</span> (DataLatTimer) {
+        DataLatTimer-&gt;cancelTimeout();
+        DataLatTimer-&gt;disable();
+    }
+    <span class="enscript-keyword">if</span> (FrameTimer) {
+        FrameTimer-&gt;cancelTimeout();
+        FrameTimer-&gt;disable();
+    }
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+    <span class="enscript-keyword">if</span> (HeartBeatTimer) {
+        HeartBeatTimer-&gt;cancelTimeout();
+        HeartBeatTimer-&gt;disable();
+    }
+#<span class="enscript-reference">endif</span>
+    RxQ-&gt;setSize(0);
+    TxQ-&gt;setSize(0);
+    
+    <span class="enscript-keyword">return</span> super::finalize(options);
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::stop</span>(IOService *provider)
+{
+    retain();
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::stop(%p)\n&quot;</span>, Name, provider);
+    assert(Stage==kFinalized);
+    Stage = kStopped;
+    OffLine = true;
+    CommandGate-&gt;runAction(stopAction, (<span class="enscript-type">void</span>*)provider);
+    <span class="enscript-reference">super</span>::stop(provider);
+    release();
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">stopAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{ ((Apple16X50UARTSync *)owner)-&gt;stopGated((IOService *)arg0); <span class="enscript-keyword">return</span> kIOReturnSuccess; }
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::stopGated</span>(IOService *provider)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::stopGated(%p)\n&quot;</span>, Name, provider);
+    OffLine = true;
+    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;Acquired);
+    CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;State);
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::free</span>()
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::free()\n&quot;</span>, Name);
+    assert(Stage == kStopped);
+    assert(WorkLoop);
+    <span class="enscript-keyword">if</span> (DelayTimer) {
+        WorkLoop-&gt;removeEventSource(DelayTimer);
+        RELEASE(DelayTimer);
+    }
+    <span class="enscript-keyword">if</span> (DataLatTimer) {
+        WorkLoop-&gt;removeEventSource(DataLatTimer);
+        RELEASE(DataLatTimer);
+    }
+    <span class="enscript-keyword">if</span> (FrameTimer) {
+        WorkLoop-&gt;removeEventSource(FrameTimer);
+        RELEASE(FrameTimer);
+    }
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+    <span class="enscript-keyword">if</span> (HeartBeatTimer) {
+        WorkLoop-&gt;removeEventSource(HeartBeatTimer);
+        RELEASE(HeartBeatTimer);
+    }
+#<span class="enscript-reference">endif</span>
+    WorkLoop-&gt;removeEventSource(CommandGate);
+<span class="enscript-comment">//    XXX workaround for 2999641 - power off/sleep panic
+</span><span class="enscript-comment">//    RELEASE(CommandGate);
+</span>    RELEASE(WorkLoop);
+    
+    <span class="enscript-keyword">if</span> (RxQ) <span class="enscript-keyword">delete</span> RxQ;
+    <span class="enscript-keyword">if</span> (TxQ) <span class="enscript-keyword">delete</span> TxQ;
+
+    Stage = kFreed;
+    <span class="enscript-reference">super</span>::free();
+}
+
+<span class="enscript-comment">/* flowMachine() - This function is called anytime the auto-bits of FlowControl
+ * change.  It will review the current state of the port and its queues, changing
+ * the state of the modem control bits.
+ */</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::flowMachine</span>()
+{
+    <span class="enscript-type">register</span> UInt32 state = State;
+    <span class="enscript-keyword">if</span> ((FlowControl &amp; PD_RS232_A_RFR) || (FlowControl &amp; PD_RS232_A_RXO)) {
+        <span class="enscript-comment">// RTS/RFR or XON/XOFF is enabled, so DTR is used as session control
+</span>        <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_DTR)
+            state = boolBit(state, (State &amp; PD_S_ACTIVE), PD_RS232_A_DTR);
+        <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_RFR)
+            state = boolBit(state, ((RxQ-&gt;Count &lt;= RxQ-&gt;HighWater) &amp;&amp; (State &amp; PD_S_ACTIVE)), PD_RS232_A_RFR);
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_RXO) {
+            state = boolBit(state, (RxQ-&gt;Count &lt;= RxQ-&gt;HighWater), PD_RS232_A_RXO);
+            <span class="enscript-keyword">if</span> (RxQ-&gt;Count &gt; RxQ-&gt;HighWater)
+                RXO_State = kXOffNeeded;
+            <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((RXO_State != kXO_Idle) &amp;&amp; (State &amp; PD_S_ACTIVE))
+                RXO_State = kXOnNeeded;
+        }
+    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_DTR) {
+        <span class="enscript-comment">// RTS/RFR and XON/XOFF are disabled, so DTR is used as flow control
+</span>        state = boolBit(state, ((RxQ-&gt;Count &lt;= RxQ-&gt;HighWater)  &amp;&amp; (State &amp; PD_S_ACTIVE)), PD_RS232_A_DTR);
+    }
+    setStateGated(state, kRxAutoFlow);
+}
+
+<span class="enscript-comment">// generateRxQState() : Called to generate the status bits for queue control.
+</span><span class="enscript-comment">// This routine should be called any time an enqueue/dequeue boundary is crossed
+</span><span class="enscript-comment">// or any of the queue level variables are changed by the user.
+</span><span class="enscript-comment">// WARNING: {BIGGEST_EVENT ≤ LowWater ≤ (HighWater-BIGGEST_EVENT)} and
+</span><span class="enscript-comment">//	{(LowWater-BIGGEST_EVENT) ≤ HighWater ≤ (size-BIGGEST_EVENT)} must be enforced.
+</span>UInt32 <span class="enscript-function-name">Apple16X50UARTSync::generateRxQState</span>()
+{
+    UInt32 state = State &amp; (kRxAutoFlow | kTxAutoFlow);
+    tQueueState fifostate = RxQ-&gt;getState();
+    state = maskMux(state, (UInt32)fifostate &gt;&gt; PD_S_RX_OFFSET, PD_S_RXQ_MASK);
+    <span class="enscript-keyword">switch</span> (fifostate) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kQueueEmpty</span> :
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kQueueLow</span> :
+            <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_RFR) {
+                state |= PD_RS232_S_RFR;
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_RXO) {
+                state |= PD_RS232_S_RXO;
+                <span class="enscript-keyword">switch</span> (RXO_State) {
+                    <span class="enscript-keyword">case</span> <span class="enscript-reference">kXOffSent</span> :
+                    <span class="enscript-keyword">case</span> <span class="enscript-reference">kXO_Idle</span> :	RXO_State=kXOnNeeded;	<span class="enscript-keyword">break</span>;
+                    <span class="enscript-keyword">case</span> <span class="enscript-reference">kXOffNeeded</span> :	RXO_State=kXOnSent;	<span class="enscript-keyword">break</span>;
+                    <span class="enscript-keyword">default</span> :		<span class="enscript-keyword">break</span>;
+                }                    
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_DTR) {
+                state |= PD_RS232_S_DTR;
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kQueueHigh</span> :
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kQueueFull</span> :
+            <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_RFR) {
+                state &amp;= ~PD_RS232_S_RFR;
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_RXO) {
+                state &amp;= ~PD_RS232_S_RXO;
+                <span class="enscript-keyword">switch</span> (RXO_State) {
+                    <span class="enscript-keyword">case</span> <span class="enscript-reference">kXOnSent</span> :
+                    <span class="enscript-keyword">case</span> <span class="enscript-reference">kXO_Idle</span> :	RXO_State=kXOffNeeded;	<span class="enscript-keyword">break</span>;
+                    <span class="enscript-keyword">case</span> <span class="enscript-reference">kXOnNeeded</span> :	RXO_State=kXOffSent;	<span class="enscript-keyword">break</span>;
+                    <span class="enscript-keyword">default</span> :		<span class="enscript-keyword">break</span>;
+                }
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_DTR) {
+                state &amp;= ~PD_RS232_S_DTR;
+            }
+            <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kQueueMedium</span> : <span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">return</span> state;
+}
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::activatePort</span>()
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::activatePort()\n&quot;</span>, Name);
+    <span class="enscript-keyword">if</span> (State &amp; PD_S_ACTIVE) <span class="enscript-keyword">return</span> kIOReturnSuccess;
+    <span class="enscript-keyword">if</span> (OffLine) <span class="enscript-keyword">return</span> kIOReturnOffline;
+    <span class="enscript-keyword">if</span> (RxQ-&gt;Size == 0) RxQ-&gt;setSize(); <span class="enscript-comment">// default Queue size
+</span>    <span class="enscript-keyword">if</span> (TxQ-&gt;Size == 0) TxQ-&gt;setSize(); <span class="enscript-comment">// default Queue size
+</span>    programUART();
+    outb(kREG_FIFOControl, (FCR_Image | kFIFO_ResetTx | kFIFO_ResetRx));
+    setStateGated(PD_S_ACTIVE, PD_S_ACTIVE); <span class="enscript-comment">// activate port
+</span>    flowMachine();  <span class="enscript-comment">// set up HW Flow Control
+</span>    setStateGated(TxQ-&gt;getState() | generateRxQState(),
+                PD_S_TXQ_MASK | PD_S_RXQ_MASK | kRxAutoFlow);
+    <span class="enscript-keyword">if</span> ( !(State &amp; PD_S_TX_BUSY) ) <span class="enscript-comment">// restart TX engine if idle
+</span>        FrameTimer-&gt;setTimeoutUS(1);
+    outb(kREG_IRQ_Enable, IER_Mask &amp;
+         ( kIRQEN_RxDataAvail | kIRQEN_TxDataEmpty | kIRQEN_LineStatus  | kIRQEN_ModemStatus ) );
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::deactivatePort</span>()
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::deactivatePort()\n&quot;</span>, Name);
+    <span class="enscript-keyword">if</span> (State &amp; PD_S_ACTIVE) {
+        outb(kREG_IRQ_Enable, OffLine?0x00:IER_Mask &amp; kIRQEN_ModemStatus);
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+        HeartBeatTimer-&gt;cancelTimeout();
+#<span class="enscript-reference">endif</span>
+        DelayTimer-&gt;cancelTimeout();
+        DataLatTimer-&gt;cancelTimeout();
+        FrameTimer-&gt;cancelTimeout();
+
+        <span class="enscript-comment">// Clear active and wakeup all sleepers
+</span>        setStateGated(0, PD_S_ACTIVE);
+        TxQ-&gt;setSize(0); <span class="enscript-comment">// frees associated storage
+</span>        RxQ-&gt;setSize(0); <span class="enscript-comment">// frees associated storage
+</span>        flowMachine();
+    }
+}
+
+IOReturn Apple16X50UARTSync::
+<span class="enscript-function-name">timerControlAction</span>(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*)
+{
+    UInt32 usec = (UInt32)(uintptr_t)arg0;
+<span class="enscript-comment">//    DEBUG_IOLog(&quot;Apple16X50UART: timerControl(%p,%d)\n&quot;, owner, (int)usec);
+</span>    <span class="enscript-keyword">if</span> (usec <span class="enscript-comment">/*&amp;&amp; (!(((IOTimerEventSource *)owner)-&gt;OffLine))*/</span>)
+        <span class="enscript-keyword">return</span> ((IOTimerEventSource *)owner)-&gt;setTimeoutUS(usec);
+    <span class="enscript-keyword">else</span>
+        ((IOTimerEventSource *)owner)-&gt;cancelTimeout();
+    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+<span class="enscript-type">inline</span> <span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::startTxEngine</span>()
+{
+    <span class="enscript-keyword">if</span> (OffLine) <span class="enscript-keyword">return</span>;
+    <span class="enscript-keyword">if</span> (!(State &amp; PD_S_TX_BUSY))
+        FrameTimer-&gt;setTimeoutUS(1);
+    State |= PD_S_TX_BUSY;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::startTxEngine()\n&quot;</span>, Name);
+    <span class="enscript-comment">//  Provider-&gt;causeInterrupt(0);
+</span>}
+
+<span class="enscript-comment">/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ * This is where the bulk of the chip driver logic lives.  It isn't pretty.
+ * This section includes the interrupt handler and a couple callouts
+ * that are used to simulate interrupts:
+ *	dataLatencyTimeoutAction()
+ *	frameTimeoutAction()
+ *	delayTimeoutAction()
+ */</span>
+<span class="enscript-type">void</span> Apple16X50UARTSync::
+<span class="enscript-function-name">dataLatencyTimeoutAction</span>(OSObject *owner, IOTimerEventSource *)
+{
+    Apple16X50UARTSync *me = (Apple16X50UARTSync *)owner;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::dataLatencyTimeoutAction(%p,*)\n&quot;</span>, ((Apple16X50UARTSync *)owner)-&gt;Name, owner);
+    me-&gt;RxQ-&gt;enqueueEvent(PD_E_DATA_LATENCY, 0);
+    <span class="enscript-keyword">if</span> (me-&gt;RxQ-&gt;enqueueThresholdExceeded())
+        me-&gt;setStateGated(me-&gt;generateRxQState(), PD_S_RXQ_MASK | kRxAutoFlow);
+}
+
+<span class="enscript-comment">/* Frame TimeOut:
+ * This timeout is used to simulate an interrupt after the transmitter
+ * shift-register goes idle.  Hardware interrupts are only available when
+ * the holding register is empty.  When setting the baud rate, or a line
+ * break, it is important to wait for the xmit shift register to finish
+ * its job first.
+ */</span>
+<span class="enscript-type">void</span> Apple16X50UARTSync::
+<span class="enscript-function-name">frameTimeoutAction</span>(OSObject *owner, IOTimerEventSource *)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::frameTimeoutAction(%p,*) F+&quot;</span>, ((Apple16X50UARTSync *)owner)-&gt;Name, owner);
+    ((Apple16X50UARTSync *)owner)-&gt;FrameTimerRunning = false;
+    ((Apple16X50UARTSync *)owner)-&gt;interrupt();
+    DEBUG_IOLog(<span class="enscript-string">&quot;-F\n&quot;</span>);
+}
+
+<span class="enscript-type">void</span> Apple16X50UARTSync::
+<span class="enscript-function-name">delayTimeoutAction</span>(OSObject *owner, IOTimerEventSource *)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::delayTimeoutAction(%p,*) D+&quot;</span>, ((Apple16X50UARTSync *)owner)-&gt;Name, owner);
+    ((Apple16X50UARTSync *)owner)-&gt;DelayTimerRunning = false;
+    ((Apple16X50UARTSync *)owner)-&gt;interrupt();
+    DEBUG_IOLog(<span class="enscript-string">&quot;-D\n&quot;</span>);
+}
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+<span class="enscript-type">void</span> Apple16X50UARTSync::
+<span class="enscript-function-name">heartbeatTimeoutAction</span>(OSObject *owner, IOTimerEventSource *)
+{
+    Apple16X50UARTSync *me = (Apple16X50UARTSync *)owner;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::heartbeatTimeoutAction(%p,*)\n&quot;</span>, ((Apple16X50UARTSync *)owner)-&gt;Name, owner);
+    <span class="enscript-keyword">if</span> (!OffLine &amp;&amp; (me-&gt;State &amp; PD_S_ACQUIRED)) {
+	<span class="enscript-keyword">if</span> (me-&gt;HeartBeatNeeded) {
+            DEBUG_IOLog(<span class="enscript-string">&quot;H+&quot;</span>);
+	    me-&gt;interrupt();
+            DEBUG_IOLog(<span class="enscript-string">&quot;-H\n&quot;</span>);
+	}
+	me-&gt;HeartBeatNeeded = true;
+	me-&gt;HeartBeatTimer-&gt;setTimeoutUS(me-&gt;HeartBeatInterval);
+    }
+}
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/* The basic strategy is to go through the loop at least once, regardless
+ * of what the Interrupt Identification Register (iir) says.  The real info
+ * is in the Line Status Register (lsr) anyway.  Each pass through the loop
+ * will process one more of each type of event.  This will continue until
+ * the chip clears its interrupt AND there are no deferred operations to
+ * complete.  Specifically, the chip will clear its interrupt when the
+ * FIFO's drop below their low-water mark;  We want to continue reading
+ * RX till empty and writing TX until full, even though the IIR says there
+ * is no interrupt condition.
+ */</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::interrupt</span>()
+{
+    UInt32	delta=0, state=State;
+    UInt32	tmp=0, data=0;
+    UInt8	lsr, event=0;
+    UInt32	fifoOverRun=0, fifoFree=0;
+    <span class="enscript-type">bool</span>	waitForTxIdle = FrameTimerRunning;
+    <span class="enscript-type">bool</span>	again;
+    <span class="enscript-type">bool</span>	breakme=false;
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+    HeartBeatNeeded = false;
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-keyword">if</span> (OffLine || (Stage != kAcquired)) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;interrupt() while offline or not acquired!\n&quot;</span>);
+        <span class="enscript-keyword">return</span>; <span class="enscript-comment">// don't want to touch any registers
+</span>    }
+    DEBUG_putc(<span class="enscript-string">'/'</span>);
+    
+    <span class="enscript-keyword">do</span> {
+        DEBUG_putc(<span class="enscript-string">'A'</span>);
+        again = false;
+
+        <span class="enscript-comment">// this while-loop handles all rx data in the fifo
+</span>        <span class="enscript-keyword">while</span> ((lsr = inb(kREG_LineStatus)) &amp; kLSR_DataReady) {
+            data = inb(kREG_Data);
+            DEBUG_putc(<span class="enscript-string">'B'</span>);
+            <span class="enscript-keyword">if</span> ((lsr == 0xff) &amp;&amp; (data == 0xff)) {
+                DEBUG_IOLog(<span class="enscript-string">&quot;%s::interrupt() UART has been removed or powered down!\\\n&quot;</span>, Name);
+                <span class="enscript-keyword">return</span>;
+            }
+            <span class="enscript-keyword">if</span> (!(state &amp; PD_S_RX_ENABLE))
+                <span class="enscript-keyword">continue</span>;	<span class="enscript-comment">// Discard inbound data if RX is disabled
+</span>            <span class="enscript-keyword">if</span> ((lsr &amp; kLSR_Overrun) &amp;&amp; !fifoOverRun)
+                fifoOverRun = FIFO_Size;	<span class="enscript-comment">// enqueue an HW overrun event after reading FIFO_Size bytes
+</span>            <span class="enscript-keyword">if</span> (lsr &amp; kLSR_GotBreak) {
+                RxQ-&gt;enqueueEvent(PD_RS232_E_RX_LINE_BREAK);
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (lsr &amp; kLSR_FramingError ) {
+                RxQ-&gt;enqueueEvent(PD_E_FRAMING_BYTE, data);
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((lsr &amp; kLSR_ParityError) &amp;&amp; (!IgnoreParityErrors)) {
+                RxQ-&gt;enqueueEvent(PD_E_INTEGRITY_BYTE, data);
+            } <span class="enscript-keyword">else</span> { <span class="enscript-comment">// valid data, or we are ignoring parity errors
+</span>                data &amp;= DataMask;
+                <span class="enscript-keyword">if</span> ((FlowControl &amp; (PD_RS232_A_TXO|PD_RS232_N_TXO))&amp;&amp;(data == XOnChar)) {
+                    state |= PD_RS232_S_TXO;
+                    delta |= PD_RS232_S_TXO;
+                } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> ((FlowControl &amp; (PD_RS232_A_TXO|PD_RS232_N_TXO))&amp;&amp;(data == XOffChar) ) {
+                    state &amp;= ~PD_RS232_S_TXO;
+                    delta |= PD_RS232_S_TXO;
+                } <span class="enscript-keyword">else</span> { <span class="enscript-comment">// real data
+</span>                    <span class="enscript-keyword">if</span> (FlowControl &amp; PD_RS232_A_XANY) {
+                        state |= PD_RS232_S_TXO;
+                        delta |= PD_RS232_S_TXO;
+                    }
+                    event = ((SW_Special[data&gt;&gt;5] &amp; (1&lt;&lt;(data&amp;0x1f))) ? PD_E_SPECIAL_BYTE : PD_E_VALID_DATA_BYTE);
+                    RxQ-&gt;enqueueEvent(event, data);
+                    DEBUG_putc(<span class="enscript-string">'\''</span>);
+                    DEBUG_putc((<span class="enscript-type">char</span>)data);
+                    breakme=true;
+               }
+            }
+            <span class="enscript-keyword">if</span> (fifoOverRun &amp;&amp; (--fifoOverRun == 0))
+                RxQ-&gt;enqueueEvent(PD_E_HW_OVERRUN_ERROR);
+        }
+        <span class="enscript-keyword">if</span> (fifoOverRun) { <span class="enscript-comment">// Odd - we may think the FIFO is bigger than it really is...
+</span>            RxQ-&gt;enqueueEvent(PD_E_HW_OVERRUN_ERROR);
+            fifoOverRun = 0;
+        }
+        <span class="enscript-keyword">if</span> ((state&amp;PD_S_ACTIVE) &amp;&amp; (RxQ-&gt;enqueueThresholdExceeded())) {
+	    <span class="enscript-comment">// Regenerate the RX queue state
+</span>            <span class="enscript-keyword">if</span> (breakme) {
+                breakme=false;
+            }
+            state = maskMux(state, generateRxQState(), (PD_S_RXQ_MASK | kRxAutoFlow));
+            delta |= ((PD_S_RXQ_MASK | kRxAutoFlow) &amp; (State ^ state));
+            programMCR(state);
+        }
+        state = maskMux(state, msrState(), kMSR_StateMask);
+        delta |= (kMSR_StateMask &amp; (State ^ state));
+
+        <span class="enscript-comment">// Now we deal with TX data.  The algorithm is complicated by
+</span>        <span class="enscript-comment">// several things:  The chip will only generate an interrupt when
+</span>        <span class="enscript-comment">// the TX holding register is empty.  Unfortunately, this means the
+</span>        <span class="enscript-comment">// shift register may still be busy for up to one frame time (1ms at
+</span>        <span class="enscript-comment">// 9600 bps).  If any of the following are true, then we must wait
+</span>        <span class="enscript-comment">// till the TX shift register is idle before proceeding:
+</span>        <span class="enscript-comment">// (1) The next event would change the characteristics of the frame
+</span>        <span class="enscript-comment">//     (baud,  word size, parity...).
+</span>        <span class="enscript-comment">// (2) The next event is a break event.
+</span>        <span class="enscript-comment">// (3) The FIFO is enabled and there is exactly one byte in the TX
+</span>        <span class="enscript-comment">//     queue.  This is due to a 16550 bug that might leave one byte
+</span>        <span class="enscript-comment">//     in the TX FIFO  unsent until a second byte is written into
+</span>        <span class="enscript-comment">//     the FIFO.
+</span>        <span class="enscript-comment">//
+</span>        <span class="enscript-comment">// If any of these are true, then we set the bool waitForTxIdle.
+</span>        <span class="enscript-comment">// At the end of the isr, we check this bit and schedule an
+</span>        <span class="enscript-comment">// interrupt event in exactly one frame time.  This may result in
+</span>        <span class="enscript-comment">// some transmitter-idle time but it is the only way to guarantee
+</span>        <span class="enscript-comment">// reliable communications.
+</span>        <span class="enscript-comment">//
+</span>        <span class="enscript-comment">// If none of these three conditions are true, or the the TX shift
+</span>        <span class="enscript-comment">// register is already idle, we can safely process the next event.
+</span>
+        <span class="enscript-keyword">if</span> ((fifoFree == 0) &amp;&amp; (!(lsr &amp; kLSR_TxDataEmpty)))
+            <span class="enscript-keyword">continue</span>; <span class="enscript-comment">// can't TX anything new right now
+</span>        <span class="enscript-keyword">if</span> (lsr &amp; kLSR_TxIdle) {
+            waitForTxIdle = false;
+            fifoFree = FIFO_Size;
+            <span class="enscript-keyword">if</span> (FrameTimerRunning) {
+                FrameTimer-&gt;cancelTimeout();
+                FrameTimerRunning = false;
+            }
+        }
+        <span class="enscript-keyword">if</span> ((FlowControl &amp; PD_RS232_A_RXO) &amp;&amp; (RXO_State &gt; kXO_Idle)) {
+            outb(kREG_Data, (RXO_State == kXOnNeeded) ? XOnChar : XOffChar);
+            (<span class="enscript-type">int</span>)RXO_State = -(<span class="enscript-type">int</span>)(RXO_State);
+            <span class="enscript-keyword">if</span> (fifoFree) fifoFree--;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (DelayTimerRunning) {
+            fifoFree = 0;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">switch</span> (TxQ-&gt;peekEvent()) {
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_EOQ</span> :  <span class="enscript-comment">/* no TX event to process */</span>
+                fifoFree = 0;
+                <span class="enscript-keyword">break</span>;
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_E_VALID_DATA_BYTE</span> : <span class="enscript-comment">// next TX event is Data
+</span>                DEBUG_putc(<span class="enscript-string">'D'</span>);
+                <span class="enscript-keyword">if</span> ( (~state) &amp; ((kTxAutoFlow &amp; FlowControl) | PD_S_TX_ENABLE) ) {
+                    fifoFree = 0;	<span class="enscript-comment">// TX flow control is preventing transmission
+</span>                    <span class="enscript-keyword">break</span>;
+                }
+                <span class="enscript-keyword">if</span> (((lsr&amp;(kLSR_TxDataEmpty|kLSR_TxIdle))==kLSR_TxDataEmpty) &amp;&amp; (TxQ-&gt;peekEvent(1)!=PD_E_VALID_DATA_BYTE))
+                    waitForTxIdle = true;
+                <span class="enscript-keyword">while</span> (fifoFree) {
+                    event = TxQ-&gt;peekEvent();
+                    <span class="enscript-keyword">if</span> (event == PD_E_VALID_DATA_BYTE) {
+                        event = TxQ-&gt;dequeueEvent(&amp;data);
+                        assert(event == PD_E_VALID_DATA_BYTE);
+                        outb(kREG_Data, (UInt8)data);
+                        fifoFree--;
+                    } <span class="enscript-keyword">else</span> <span class="enscript-keyword">break</span>;
+                }
+                    <span class="enscript-keyword">break</span>;
+            <span class="enscript-reference">default</span>: <span class="enscript-comment">// next TX event is Control
+</span>                DEBUG_putc(<span class="enscript-string">'C'</span>);
+                fifoFree = 0;
+                <span class="enscript-keyword">if</span> (lsr &amp; kLSR_TxIdle) {
+                    event = TxQ-&gt;dequeueEvent(&amp;data);
+                    executeEventGated(event, data, &amp;state, &amp;delta);
+                    again = true;
+                } <span class="enscript-keyword">else</span>	<span class="enscript-comment">// TX engine is not Idle
+</span>                    waitForTxIdle = true;
+                <span class="enscript-keyword">break</span>;
+        }
+    } <span class="enscript-keyword">while</span> (again || fifoFree || ((inb(kREG_IRQ_Ident)&amp;kIRQID_None)==0));
+
+        <span class="enscript-keyword">if</span> ((lsr&amp;kLSR_TxDataEmpty) &amp;&amp; (!(lsr&amp;kLSR_TxIdle)))
+        waitForTxIdle = true;
+    <span class="enscript-keyword">if</span> (waitForTxIdle &amp;&amp; (!FrameTimerRunning)) {
+        FrameTimerRunning = true;
+        FrameTimer-&gt;setTimeoutUS(FrameInterval);
+    }
+        
+    <span class="enscript-comment">// Did we dequeue enough to cross a boundary?
+</span>    <span class="enscript-keyword">if</span> (TxQ-&gt;dequeueThresholdExceeded())
+        state = maskMux(state, TxQ-&gt;getState(), PD_S_TXQ_MASK);
+    state = boolBit(state, !(lsr &amp; kLSR_TxIdle), PD_S_TX_BUSY);
+    delta |= (State ^ state); <span class="enscript-comment">// pick up any changes we might have missed
+</span>    <span class="enscript-comment">// If any of the 'delta' bits match the 'notify' bits in FlowControl,
+</span>    <span class="enscript-comment">// then we need to enqueue a FLOW_CONTROL event with 'delta' in the MSW,
+</span>    <span class="enscript-comment">// and State in the LSW.
+</span>    <span class="enscript-keyword">if</span> ( tmp = ((delta &lt;&lt; PD_RS232_D_SHIFT) &amp; FlowControl) )
+        RxQ-&gt;enqueueEvent(PD_E_FLOW_CONTROL, (state &amp; PD_RS232_S_MASK) | tmp);
+        
+    <span class="enscript-comment">// Wake up all threads asleep on WatchStateMask
+</span>    State = state;
+    <span class="enscript-keyword">if</span> (delta &amp; WatchStateMask) {
+        DEBUG_putc(<span class="enscript-string">'W'</span>);
+        assert(CommandGate);
+        CommandGate-&gt;commandWakeup((<span class="enscript-type">void</span>*)&amp;State);
+    }
+    DEBUG_putc(<span class="enscript-string">'\\'</span>);
+    
+    <span class="enscript-keyword">return</span>;
+}
+
+<span class="enscript-comment">// Factory method.  This static factory method will attempt to identify
+</span><span class="enscript-comment">// the UART referenced by provider&amp;refCon.  If no UART is identified,
+</span><span class="enscript-comment">// NULL is returned.  If a UART is identified an instance is allocated,
+</span><span class="enscript-comment">// initialized, and returned.
+</span>Apple16X50UARTSync *Apple16X50UARTSync::
+<span class="enscript-function-name">probeUART</span>(Apple16X50BusInterface *provider, <span class="enscript-type">void</span> *refCon, tUART_Type type)
+{
+    UInt32	fifoSize, tries=0;
+    
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::probeUART(%p,%p,%s)\n&quot;</span>,
+                provider, refCon, IOFindNameForValue(type, gUARTnames));
+
+    <span class="enscript-keyword">if</span> ((!provider-&gt;metaCast(<span class="enscript-string">&quot;com_apple_driver_16X50PCCard&quot;</span>)) &amp;&amp; (!provider-&gt;metaCast(<span class="enscript-string">&quot;com_apple_driver_16X50PCI&quot;</span>)) &amp;&amp;
+        (!provider-&gt;metaCast(<span class="enscript-string">&quot;com_apple_driver_16X50ACPI&quot;</span>)))
+        <span class="enscript-keyword">return</span> NULL;	<span class="enscript-comment">// Only allow us to be instantiated by classes in this project - this is not a publicly usable class
+</span>
+    <span class="enscript-keyword">while</span> ((kUART_Unknown == type) &amp;&amp; (tries++ &lt; 16)) {
+	DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::probeUART() - Try # %d\n&quot;</span>, tries);
+        type = identifyUART(provider, refCon);
+        <span class="enscript-keyword">if</span> ((kUART_Unknown == type) &amp;&amp; (tries &lt; 16)) IOSleep(250); <span class="enscript-comment">// wait 1/4 sec before trying again.
+</span>    }
+    
+    <span class="enscript-keyword">switch</span> (type) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16550C</span> :
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C1550</span> :	fifoSize = 16;	<span class="enscript-keyword">break</span>;
+
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C650</span> :	fifoSize = 32;	<span class="enscript-keyword">break</span>;
+
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C750</span> :
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C950</span> :	fifoSize = 128;	<span class="enscript-keyword">break</span>;
+            
+        <span class="enscript-keyword">default</span> : <span class="enscript-keyword">return</span> NULL;
+    }
+    
+    Apple16X50UARTSync *uart = <span class="enscript-keyword">new</span> Apple16X50UARTSync;
+    <span class="enscript-keyword">if</span> (!uart) <span class="enscript-keyword">return</span> NULL;
+    
+    <span class="enscript-comment">// Initialize ALL the iVars
+</span>
+    <span class="enscript-comment">// Global resources
+</span>    uart-&gt;Provider = NULL;
+    uart-&gt;RxQ = NULL;
+    uart-&gt;TxQ = NULL;
+    uart-&gt;WorkLoop = NULL;
+    uart-&gt;CommandGate = NULL;
+    uart-&gt;Name = <span class="enscript-string">&quot;Apple16X50UARTSync&quot;</span>;
+    uart-&gt;Stage = kAllocated;
+    uart-&gt;State = 0x00000000;
+    uart-&gt;WatchStateMask = 0x00000000;
+    uart-&gt;Acquired = false;
+    uart-&gt;OffLine = false;
+
+    <span class="enscript-comment">// Timers
+</span>    uart-&gt;FrameTimer = NULL;
+    uart-&gt;FrameInterval=0;
+    uart-&gt;FrameTimerRunning=false;
+    uart-&gt;DataLatTimer = NULL;
+    uart-&gt;DataLatInterval=0;
+    uart-&gt;DelayTimer = NULL;
+    uart-&gt;DelayInterval=0;
+    uart-&gt;DelayTimerRunning=false;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+    uart-&gt;HeartBeatTimer = NULL;
+    uart-&gt;HeartBeatInterval=0;
+    uart-&gt;HeartBeatNeeded=false;
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-comment">// UART characteristics and register shadows:
+</span>    uart-&gt;UART_Type=type;
+    uart-&gt;MaxBaud = 115200 bits;
+    uart-&gt;FIFO_Size = fifoSize;
+    uart-&gt;LCR_Image=0x00;
+    uart-&gt;FCR_Image=0x00;
+    uart-&gt;IER_Mask=0x00;
+
+    <span class="enscript-comment">// Framing and data rate
+</span>    bzero(uart-&gt;SW_Special, 256&gt;&gt;3);
+    uart-&gt;DataWidth=0;
+    uart-&gt;DataMask=0x00;
+    uart-&gt;StopBits=0;
+    uart-&gt;Parity=0;
+    uart-&gt;BaudRate=0;
+    uart-&gt;MasterClock=k1xMasterClock;	<span class="enscript-comment">// default, the original AT Serial clock
+</span>    
+    uart-&gt;Divisor=0x0000;
+    uart-&gt;MinLatency=false;
+    uart-&gt;IgnoreParityErrors=false;
+
+    <span class="enscript-comment">// Flow Control
+</span>    uart-&gt;FlowControl = 0x00000000;	<span class="enscript-comment">// notify-on-delta &amp; auto_control
+</span>    uart-&gt;RXO_State = kXO_Idle;
+    uart-&gt;XOnChar=kXOnChar;
+    uart-&gt;XOffChar=kXOffChar;
+    <span class="enscript-keyword">return</span> uart;
+}
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">INB</span>(reg)	( provider-&gt;getReg((reg), refCon) )
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">OUTB</span>(reg,val)	( provider-&gt;setReg((reg), val, refCon) )
+
+<span class="enscript-comment">/* identifyUART() - This function attempts to identify the type of UART
+ * present.  This routine is only intended to be run from the init method,
+ * before the chip is active.  XXX - this routine needs to be revisited
+ * with an eye towards more current chips (650, 750, 850, and 950 variants)
+ */</span>
+tUART_Type Apple16X50UARTSync::
+<span class="enscript-function-name">identifyUART</span>(Apple16X50BusInterface *provider, <span class="enscript-type">void</span> *refCon)
+{
+    <span class="enscript-type">register</span> UInt32 tmp;
+ 
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART()\n&quot;</span>);
+    
+    <span class="enscript-comment">/* Verify that the BRG Divisor Register is accessable */</span>
+    OUTB(kREG_LineControl, kLCR_DivisorAccess);	<span class="enscript-comment">/* Set DLAB=1 */</span>
+    OUTB(kREG_DivisorLSB, 0x5a);
+    <span class="enscript-keyword">if</span> (INB(kREG_DivisorLSB)!=0x5a) <span class="enscript-keyword">return</span> kUART_Unknown;
+    OUTB(kREG_DivisorLSB, 0xa5);
+    <span class="enscript-keyword">if</span> (INB(kREG_DivisorLSB)!=0xa5) <span class="enscript-keyword">return</span> kUART_Unknown;
+    OUTB(kREG_LineControl, 0x00);	<span class="enscript-comment">/* Set DLAB=0 */</span>
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() BRG Divisor is accessable\n&quot;</span>);
+    
+    <span class="enscript-comment">/* Verify that the Scratch Pad Register is accessable */</span>
+    OUTB(kREG_Scratch, 0x5a);
+    <span class="enscript-keyword">if</span> (INB(kREG_Scratch)!=0x5a) <span class="enscript-keyword">return</span> kUART_8250;
+    OUTB(kREG_Scratch, 0xa5);
+    <span class="enscript-keyword">if</span> (INB(kREG_Scratch)!=0xa5) <span class="enscript-keyword">return</span> kUART_8250;
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() Scratchpad is accessable\n&quot;</span>);
+    
+    <span class="enscript-comment">/* Look for FIFO Bits in FIFO Control Register */</span>
+    OUTB(kREG_FIFOControl, kFIFO_Enable);
+    tmp = INB(kREG_IRQ_Ident) &amp; kIRQID_FIFOEnabled;
+    OUTB(kREG_FIFOControl, 0x00);
+    <span class="enscript-keyword">switch</span> (tmp) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0x00</span> : <span class="enscript-keyword">return</span> kUART_16450;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0x40</span> : <span class="enscript-keyword">return</span> kUART_16C650;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0x80</span> : <span class="enscript-keyword">return</span> kUART_16550;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0xC0</span> : <span class="enscript-keyword">break</span>;
+    }
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() FIFO Enable status returned 0xC0\n&quot;</span>);
+
+    <span class="enscript-comment">// Check for an alternate version of the Scratchpad...
+</span>    OUTB(kREG_LineControl, 0x00);
+    OUTB(kREG_Scratch, 0xde);
+    OUTB(kREG_LineControl, kLCR_DivisorAccess);
+    OUTB(kREG_Scratch, 0xa9);
+    tmp = INB(kREG_Scratch);
+    OUTB(kREG_Scratch, 0x00);
+    OUTB(kREG_LineControl, 0x00);
+    <span class="enscript-keyword">if</span> ((INB(kREG_Scratch) == 0xde) &amp;&amp; (tmp == 0xa9)) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() Alternate Scratchpad is accessable\n&quot;</span>);
+        <span class="enscript-keyword">return</span> kUART_16C650;
+    }
+
+    <span class="enscript-comment">// Check for power-down bit in the 16X1550
+</span>    tmp = INB(kREG_ModemControl) &amp; 0x80;
+    OUTB(kREG_ModemControl, 0x00);
+    <span class="enscript-keyword">if</span> (tmp == 0x80) <span class="enscript-keyword">return</span> kUART_16C1550;
+
+    <span class="enscript-comment">// Look for the FCR, which is present only in the 16750 and later
+</span>    OUTB(kREG_FIFOControl, kFIFO_Enable);
+    OUTB(kREG_LineControl, 0x00);	<span class="enscript-comment">/* Set DLAB=0 */</span>
+    OUTB(kREG_LineControl, 0xbf);	<span class="enscript-comment">/* Set DLAB=1 */</span>
+    tmp = INB(kREG_LineControl);
+    OUTB(kREG_LineControl, 0x00);	<span class="enscript-comment">/* Set DLAB=0 */</span>
+    OUTB(kREG_FIFOControl, 0x00);
+    <span class="enscript-keyword">if</span> (tmp == 0x80) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() 0xBF Magic number accepted!\n&quot;</span>);
+        <span class="enscript-keyword">return</span> kUART_16C750;
+    }
+    
+    <span class="enscript-keyword">return</span> kUART_16550C;
+}
+
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">INB</span>
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">OUTB</span>
+
+<span class="enscript-comment">// XXX - This function is a crude first attempt to determing the crystal
+</span><span class="enscript-comment">// frequency by timing a byte through a loopback.  It seems to fail for
+</span><span class="enscript-comment">// some chips (not get any bytes looped) though I'm not sure why yet.
+</span><span class="enscript-comment">// In those cases, it just returns a reasonable default.  When it works,
+</span><span class="enscript-comment">// it seems to work well.  This needs to be made more robust and should
+</span><span class="enscript-comment">// probably be made static and moved to Apple16X50UARTTypes.cpp.
+</span>UInt32 <span class="enscript-function-name">Apple16X50UARTSync::determineMasterClock</span>()
+{
+    UInt32	count;
+    UInt32	sample[5];
+    UInt32	samples=0;
+    UInt32	tries=10;
+    IOSimpleLock *prot;
+
+    <span class="enscript-comment">// 1.8432 Mhz (1x, the original PC ACE clock)
+</span>    <span class="enscript-comment">// 3.072 MHz (5/3 x)
+</span>    <span class="enscript-comment">// 7.372 Mhz (4x)
+</span>    <span class="enscript-comment">// 14.7455 Mhz (8x)
+</span>    <span class="enscript-comment">// 18.432 Mhz (10x)
+</span>
+    prot = IOSimpleLockAlloc();
+    <span class="enscript-keyword">if</span> (!prot) <span class="enscript-keyword">return</span> 0;
+    IOSimpleLockInit(prot);
+
+    resetUART();
+    programMCR(0, false, true);
+    setDivisor(1);
+    outb(kREG_LineControl, kLCR_8bitData | kLCR_1bitStop | kLCR_NoParity); <span class="enscript-comment">// 10-bit frame
+</span>
+    <span class="enscript-keyword">while</span> (tries &amp;&amp; (samples &lt; 5)) {
+        AbsoluteTime before, after;
+        uint64_t duration;
+        <span class="enscript-comment">// make sure there is no data in the receive buffer
+</span>        IOSleep(1);  <span class="enscript-comment">// let the UART &quot;rest&quot; before we pummel it
+</span>        count = 0;
+        <span class="enscript-keyword">while</span> (inb(kREG_LineStatus) &amp; kLSR_DataReady) {
+            inb(kREG_Data);
+            <span class="enscript-keyword">if</span> (count++ &gt;= 256) <span class="enscript-keyword">goto</span> <span class="enscript-reference">nogood</span>;
+        }
+        <span class="enscript-comment">//showRegs();
+</span>        IOSimpleLockLock(prot);	<span class="enscript-comment">// disable preemption
+</span>        outb(kREG_Data, samples*tries);	<span class="enscript-comment">// send a byte
+</span>        clock_get_uptime(&amp;before);	<span class="enscript-comment">// Get the initial abstime
+</span>
+        count = 0;    <span class="enscript-comment">// loop till byte is in
+</span>        <span class="enscript-keyword">while</span> (!(inb(kREG_LineStatus) &amp; kLSR_DataReady))
+            <span class="enscript-keyword">if</span> (count++ &gt;= 256) <span class="enscript-keyword">break</span>;
+
+        clock_get_uptime(&amp;after);	<span class="enscript-comment">// Get the final abstime
+</span>        IOSimpleLockUnlock(prot);	<span class="enscript-comment">// enable preemption
+</span>        <span class="enscript-keyword">if</span> (count &gt;= 256) <span class="enscript-keyword">goto</span> <span class="enscript-reference">nogood</span>;
+
+        <span class="enscript-keyword">if</span> (inb(kREG_Data)!=samples*tries) <span class="enscript-keyword">goto</span> <span class="enscript-reference">nogood</span>;
+
+        <span class="enscript-comment">// compute diff in nano seconds
+</span>        SUB_ABSOLUTETIME(&amp;after, &amp;before);	<span class="enscript-comment">// &quot;after&quot; now holds diff
+</span>        absolutetime_to_nanoseconds(after, &amp;duration);
+        sample[samples]=(UInt32)duration;
+
+        <span class="enscript-keyword">if</span> (sample[samples] &gt; 300000) <span class="enscript-keyword">goto</span> <span class="enscript-reference">nogood</span>;
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::determineMasterClock(): sample[%d/%d]=%d ns took %d loops\n&quot;</span>,
+                    Name, (<span class="enscript-type">int</span>)samples, (<span class="enscript-type">int</span>)tries, (<span class="enscript-type">int</span>)duration, (<span class="enscript-type">int</span>)count);
+        samples++;
+    <span class="enscript-reference">nogood</span>:
+        tries--;
+    }
+    <span class="enscript-comment">// Clean up
+</span>    IOSimpleLockFree(prot);
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::determineMasterClock(): got %d samples out of %d tries: &quot;</span>, Name, (<span class="enscript-type">int</span>)samples, 10-(<span class="enscript-type">int</span>)tries);
+
+    <span class="enscript-type">register</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> i;
+    <span class="enscript-keyword">for</span> (i=0; i&lt;samples; i++)
+        DEBUG_IOLog(<span class="enscript-string">&quot;%d &quot;</span>, (<span class="enscript-type">int</span>)sample[i]);
+    DEBUG_IOLog(<span class="enscript-string">&quot;\n&quot;</span>);
+    <span class="enscript-keyword">if</span> (samples&lt;3) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">for</span> (i=samples-1; i; i--) {	<span class="enscript-comment">// bubble sort
+</span>        <span class="enscript-type">register</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> j;
+        <span class="enscript-keyword">for</span> (j=0; j&lt;i; j++)
+            <span class="enscript-keyword">if</span> (sample[j+1] &lt; sample[j]) {
+                <span class="enscript-type">register</span> UInt32 tmp;
+                tmp=sample[j];
+                sample[j] = sample[j+1];
+                sample[j+1] = tmp;
+            }
+    }
+    samples=sample[samples&gt;&gt;1];
+
+    <span class="enscript-keyword">if</span> (samples &lt; 10000) MasterClock = 10 * k1xMasterClock;
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (samples &lt; 15000) MasterClock = 8 * k1xMasterClock;
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (samples &lt; 30000) MasterClock = 4 * k1xMasterClock;
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (samples &lt; 70000) MasterClock = (5 * k1xMasterClock) / 3;
+    <span class="enscript-keyword">else</span>					
+        
+<span class="enscript-reference">fail</span>:
+    MasterClock = k1xMasterClock;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::determineMasterClock(): median=%d ns, MasterClock=%d : &quot;</span>, Name, (<span class="enscript-type">int</span>)samples, (<span class="enscript-type">int</span>)MasterClock);
+    <span class="enscript-keyword">return</span> MasterClock;
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::setMasterClock</span>(UInt32 clock)
+{
+    MasterClock = clock;
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::setDivisor</span>(UInt32 div)
+{
+    <span class="enscript-type">register</span> UInt8 lcr;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::setDivisor(%d)\n&quot;</span>, Name, (<span class="enscript-type">int</span>)div);
+    div = CONSTRAIN(0x0001,div,0xffff);
+    lcr=inb(kREG_LineControl);
+    outb(kREG_LineControl, lcr | kLCR_DivisorAccess);
+    outb(kREG_DivisorLSB, (UInt8)(div&amp;0xff) );
+    outb(kREG_DivisorMSB, (UInt8)((div%0xff00)&gt;&gt;8) );
+    outb(kREG_LineControl, lcr);
+}
+
+UInt32 <span class="enscript-function-name">Apple16X50UARTSync::getDivisor</span>()
+{
+    <span class="enscript-type">register</span> UInt8 lcr;
+    <span class="enscript-type">register</span> UInt32 div;
+    
+    lcr=inb(kREG_LineControl);
+    outb(kREG_LineControl, lcr | kLCR_DivisorAccess);
+    div = inb(kREG_DivisorLSB);
+    div |= (inb(kREG_DivisorMSB)&lt;&lt;8);
+    outb(kREG_LineControl, lcr);
+
+<span class="enscript-comment">//    DEBUG_IOLog(&quot;%s::getDivisor()=%d\n&quot;, Name, (int)div);
+</span>    <span class="enscript-keyword">return</span> div;
+}
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">DEBUG</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::showRegs</span>()
+{
+<span class="enscript-comment">//    DEBUG_IOLog(&quot;%s::showRegs() RX=%02x IER=%02x IIR=%02x LCR=%02x MCR=%02x LSR=%02x MSR=%02x SCR=%02x DIV=%04x\n&quot;,
+</span>	Name, inb(kREG_Data), inb(kREG_IRQ_Enable), inb(kREG_IRQ_Ident), LCR_Image=inb(kREG_LineControl),
+        inb(kREG_ModemControl), inb(kREG_LineStatus), inb(kREG_ModemStatus), inb(kREG_Scratch), (<span class="enscript-type">int</span>)getDivisor()
+    );
+	
+	IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::showRegs Register Shadows: LCR_Image:(%x) FCR_Image(%x), IER_Mask(%x) \n&quot;</span>,LCR_Image,FCR_Image,IER_Mask);
+	IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::showRegs Register Shadows: Divisor:(%x) MasterClock(%x) \n&quot;</span>,Divisor,MasterClock);
+
+}
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::restoreUART</span>()
+{
+	OffLine = FALSE;
+	outb(kREG_IRQ_Enable, IER_Mask);
+	outb(kREG_LineControl, LCR_Image);
+	outb(kREG_ModemControl, MCR_Image);
+	outb(kREG_FIFOControl, FCR_Image);
+	setDivisor(Divisor);
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::saveUART</span>()
+{	
+	IER_Mask = inb(kREG_IRQ_Enable);
+	LCR_Image= inb(kREG_LineControl);
+	MCR_Image =inb(kREG_ModemControl);
+	FCR_Image =inb(kREG_FIFOControl);
+	OffLine = TRUE;
+}
+
+
+<span class="enscript-comment">// resetUART() - This function sets up various default values for UART
+</span><span class="enscript-comment">// parameters, then calls programUART().
+</span><span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::resetUART</span>()
+{
+    <span class="enscript-keyword">if</span> (OffLine) <span class="enscript-keyword">return</span>; <span class="enscript-comment">// nothing we can do
+</span>    DEBUG_IOLog(<span class="enscript-string">&quot;%s::resetUART()\n&quot;</span>, Name);
+    DataWidth = 8 bits;
+    DataMask = 0xff;
+    StopBits = 1 bits;
+    Parity = PD_RS232_PARITY_NONE;
+    IgnoreParityErrors = false;
+    BaudRate = 9600 bits;
+    Divisor = 0x0000;
+    bzero(SW_Special, 256&gt;&gt;3);
+    XOnChar = kXOnChar;
+    XOffChar = kXOffChar;
+    RXO_State = kXO_Idle;
+    FCR_Image = 0x00;
+    LCR_Image = 0x00;
+    IER_Mask = 0x0f;
+    outb(kREG_IRQ_Enable, 0x00);
+    outb(kREG_Scratch, 0x00);
+    outb(kREG_LineControl, 0x00);
+    outb(kREG_IRQ_Enable, 0x00);
+    outb(kREG_FIFOControl, kFIFO_ResetRx | kFIFO_ResetTx);
+    outb(kREG_ModemControl, 0x00);
+    FlowControl = PD_RS232_A_DTR | PD_RS232_A_RFR | PD_RS232_A_CTS | PD_RS232_A_DSR;
+    programUART();
+    <span class="enscript-keyword">if</span> (RxQ) RxQ-&gt;setSize(0);
+    <span class="enscript-keyword">if</span> (RxQ) TxQ-&gt;setSize(0);
+}
+
+<span class="enscript-comment">/* programUART() - This function programs the UART according to the
+ * various instance variables.  This function should be called
+ * with the CommandGate closed.
+ */</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::programUART</span>()
+{
+    UInt8 lcr=0;
+    UInt16 dlr=0;
+    UInt32 frameSize=0;
+    UInt32 frame;
+    <span class="enscript-type">int</span> level=0;
+
+    <span class="enscript-keyword">if</span> (OffLine) <span class="enscript-keyword">return</span>; <span class="enscript-comment">// nothing we can do
+</span>    DEBUG_IOLog(<span class="enscript-string">&quot;%s::programUART()\n&quot;</span>, Name);
+
+    DataWidth = (DataWidth+1)&amp;(~1); <span class="enscript-comment">// round half-bits up
+</span>    DataWidth = CONSTRAIN((5 bits), DataWidth, (8 bits));
+    <span class="enscript-keyword">switch</span> (DataWidth) {
+        <span class="enscript-keyword">case</span> (5 bits) : lcr = kLCR_5bitData;   DataMask = 0x1f;   <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> (6 bits) : lcr = kLCR_6bitData;   DataMask = 0x3f;   <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> (7 bits) : lcr = kLCR_7bitData;   DataMask = 0x7f;   <span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> (8 bits) : lcr = kLCR_8bitData;   DataMask = 0xff;   <span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">switch</span> (StopBits) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">3</span> :	<span class="enscript-comment">// 1.5 stop bits
+</span>        <span class="enscript-keyword">case</span> (2 bits) :	lcr |= kLCR_2bitStop;
+                        <span class="enscript-keyword">if</span> (DataWidth == (5 bits))
+                            StopBits = 3; <span class="enscript-comment">// 1.5 stop bits
+</span>                        <span class="enscript-keyword">else</span>
+                            StopBits = (2 bits);
+                        <span class="enscript-keyword">break</span>;
+
+        <span class="enscript-keyword">default</span> :	lcr |= kLCR_1bitStop;
+                        StopBits = (1 bits);
+                        <span class="enscript-keyword">break</span>;
+    }
+    <span class="enscript-keyword">switch</span> (Parity) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_PARITY_ODD</span>   : lcr |= kLCR_OddParity;	<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_PARITY_EVEN</span>  : lcr |= kLCR_EvenParity;	<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_PARITY_MARK</span>  : lcr |= kLCR_MarkParity;	<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">PD_RS232_PARITY_SPACE</span> : lcr |= kLCR_SpaceParity;	<span class="enscript-keyword">break</span>;
+        <span class="enscript-keyword">default</span>			   : lcr |= kLCR_NoParity;	<span class="enscript-keyword">break</span>;
+    }
+   <span class="enscript-keyword">if</span> (State &amp; PD_RS232_S_BRK)
+       lcr |= kLCR_SendBreak;
+    BaudRate = CONSTRAIN(kMinBaud, BaudRate, MaxBaud);
+
+        
+
+    <span class="enscript-comment">// The formula for the clock divisor is: divisor = MasterClock/(16*bps)
+</span>    <span class="enscript-comment">// DataWidth &amp; StopBits are in half-bits, and BaudRate is half-bits per second.
+</span>    dlr = (MasterClock) / (BaudRate &lt;&lt; 3);
+    <span class="enscript-comment">// Make sure we didn't loose any significant fractional value.
+</span>    <span class="enscript-type">int</span> err_lo = ((MasterClock) / (dlr &lt;&lt; 3)) - BaudRate;
+    <span class="enscript-type">int</span> err_hi = BaudRate - ((MasterClock) / ((dlr+1) &lt;&lt; 3));
+    <span class="enscript-keyword">if</span> (err_lo &gt; err_hi) dlr++;
+
+    <span class="enscript-keyword">if</span> (dlr != Divisor) {
+        setDivisor(Divisor = dlr);
+        frameSize = ( (DataWidth + StopBits) +
+                      ((Parity==PD_RS232_PARITY_NONE) ? (1 bits) : (2 bits) ) ); <span class="enscript-comment">// frame size in half-bits
+</span>	frame = ( (1000000 * frameSize) / BaudRate); <span class="enscript-comment">// frame duration in microseconds
+</span>        FrameInterval = frame;
+        level = min( ((kTenMS/frame)-3), (FIFO_Size-(kTwoMS/frame)) );
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::programUART() MasterClock=%dHz frame=%dbits BaudRate=%dbps FrameInterval=%dµs\n&quot;</span>,
+                    Name, (<span class="enscript-type">int</span>)MasterClock, (<span class="enscript-type">int</span>)(frameSize&gt;&gt;1), (<span class="enscript-type">int</span>)(BaudRate&gt;&gt;1), (<span class="enscript-type">int</span>)FrameInterval);
+        <span class="enscript-keyword">switch</span> (UART_Type) {
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16550C</span> :
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C1550</span> :
+                <span class="enscript-keyword">if</span> (MinLatency)		FCR_Image = kFIFO_Enable | kFIFO_01of16;
+                <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (level&lt;4)	FCR_Image = kFIFO_Enable | kFIFO_01of16;
+                <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (level&lt;8)	FCR_Image = kFIFO_Enable | kFIFO_04of16;
+                <span class="enscript-keyword">else</span>			FCR_Image = kFIFO_Enable | kFIFO_08of16;
+                <span class="enscript-keyword">break</span>;
+                
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C650</span> :
+                <span class="enscript-keyword">if</span> (MinLatency)		FCR_Image = 0x00;
+                <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (level&lt;16)	FCR_Image = kFIFO_Enable | kFIFO_08of32;
+                <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (level&lt;24)	FCR_Image = kFIFO_Enable | kFIFO_16of32;
+                <span class="enscript-keyword">else</span>			FCR_Image = kFIFO_Enable | kFIFO_24of32;
+                <span class="enscript-keyword">break</span>;
+                
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C750</span> :
+            <span class="enscript-keyword">case</span> <span class="enscript-reference">kUART_16C950</span> :
+                <span class="enscript-keyword">if</span> (MinLatency)		FCR_Image = kFIFO_Enable | kFIFO_001of128;
+                <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (level&lt;32)	FCR_Image = kFIFO_Enable | kFIFO_001of128;
+                <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (level&lt;64)	FCR_Image = kFIFO_Enable | kFIFO_032of128;
+                <span class="enscript-keyword">else</span>			FCR_Image = kFIFO_Enable | kFIFO_064of128;
+                outb(kREG_FIFOControl, FCR_Image);
+                outb(kREG_LineControl, lcr);	<span class="enscript-comment">// Set DLAB=0
+</span>                outb(kREG_LineControl, 0xbf);	<span class="enscript-comment">// Set DLAB=1
+</span>                outb(kREG_FuncControl, 0x10);	<span class="enscript-comment">// Enhanced mode
+</span>                DEBUG_IOLog(<span class="enscript-string">&quot;%s::programUART() set enhanced mode=0x%02x!\n&quot;</span>, Name, inb(kREG_FuncControl));
+                outb(kREG_LineControl, lcr);	<span class="enscript-comment">// Set DLAB=0
+</span>                <span class="enscript-keyword">break</span>;
+                
+            <span class="enscript-keyword">default</span> :
+                FCR_Image = 0x00;
+                <span class="enscript-keyword">break</span>;
+        }
+        outb(kREG_FIFOControl, FCR_Image);
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::programUART() FIFO Target=%d/%d FCR=0x%02x\n&quot;</span>, Name, level, (<span class="enscript-type">int</span>)FIFO_Size, FCR_Image);
+    }
+    outb(kREG_LineControl, lcr);
+    LCR_Image = lcr;
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::programMCR</span>(UInt32 state, <span class="enscript-type">bool</span> irqen, <span class="enscript-type">bool</span> loop)
+{
+    UInt8 mcr=0;
+
+    <span class="enscript-keyword">if</span> (OffLine) <span class="enscript-keyword">return</span>; <span class="enscript-comment">// nothing we can do
+</span>    <span class="enscript-keyword">if</span> (irqen) mcr |= kMCR_Out2; <span class="enscript-comment">// interrupt-enable bit
+</span>    <span class="enscript-keyword">if</span> (loop)  mcr |= kMCR_Loop; <span class="enscript-comment">// loop-back bit
+</span>    <span class="enscript-keyword">if</span> (state&amp;PD_RS232_S_DTR)  mcr |= kMCR_DTR;
+    <span class="enscript-keyword">if</span> (state&amp;PD_RS232_S_RFR)  mcr |= kMCR_RTS;
+    
+    outb(kREG_ModemControl, mcr);
+}
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">REFBUG</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::retain</span>() <span class="enscript-type">const</span>
+{
+    <span class="enscript-reference">super</span>::retain();
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::retain()==%d\n&quot;</span>, Name, getRetainCount());
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::release</span>() <span class="enscript-type">const</span>
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::release()==%d\n&quot;</span>,Name, getRetainCount());
+    <span class="enscript-reference">super</span>::release();
+}
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

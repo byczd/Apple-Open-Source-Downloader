@@ -1,0 +1,505 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>llvm-MathExtras.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">llvm-MathExtras.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="llvm-MathExtras.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//===-- llvm/Support/MathExtras.h - Useful math functions -------*- C++ -*-===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//                     The LLVM Compiler Infrastructure
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file is distributed under the University of Illinois Open Source
+</span><span class="enscript-comment">// License. See LICENSE.TXT for details.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file contains some functions that are useful for math stuff.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span>
+<span class="enscript-comment">// Taken from llvmCore-3425.0.31.
+</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">LLVM_SUPPORT_MATHEXTRAS_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_SUPPORT_MATHEXTRAS_H</span>
+
+namespace objc {
+
+<span class="enscript-comment">// NOTE: The following support functions use the _32/_64 extensions instead of
+</span><span class="enscript-comment">// type overloading so that signed and unsigned integers can be used without
+</span><span class="enscript-comment">// ambiguity.
+</span>
+<span class="enscript-comment">/// Hi_32 - This function returns the high 32 bits of a 64 bit value.
+</span><span class="enscript-type">inline</span> uint32_t <span class="enscript-function-name">Hi_32</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> static_cast&lt;uint32_t&gt;(Value &gt;&gt; 32);
+}
+
+<span class="enscript-comment">/// Lo_32 - This function returns the low 32 bits of a 64 bit value.
+</span><span class="enscript-type">inline</span> uint32_t <span class="enscript-function-name">Lo_32</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> static_cast&lt;uint32_t&gt;(Value);
+}
+
+<span class="enscript-comment">/// isInt - Checks if an integer fits into the given bit width.
+</span><span class="enscript-type">template</span>&lt;<span class="enscript-type">unsigned</span> N&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isInt</span>(int64_t x) {
+  <span class="enscript-keyword">return</span> N &gt;= 64 || (-(INT64_C(1)&lt;&lt;(N-1)) &lt;= x &amp;&amp; x &lt; (INT64_C(1)&lt;&lt;(N-1)));
+}
+<span class="enscript-comment">// Template specializations to get better code for common cases.
+</span><span class="enscript-type">template</span>&lt;&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> isInt&lt;8&gt;(int64_t x) {
+  <span class="enscript-keyword">return</span> static_cast&lt;int8_t&gt;(x) == x;
+}
+<span class="enscript-type">template</span>&lt;&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> isInt&lt;16&gt;(int64_t x) {
+  <span class="enscript-keyword">return</span> static_cast&lt;int16_t&gt;(x) == x;
+}
+<span class="enscript-type">template</span>&lt;&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> isInt&lt;32&gt;(int64_t x) {
+  <span class="enscript-keyword">return</span> static_cast&lt;int32_t&gt;(x) == x;
+}
+
+<span class="enscript-comment">/// isShiftedInt&lt;N,S&gt; - Checks if a signed integer is an N bit number shifted
+</span><span class="enscript-comment">///                     left by S.
+</span><span class="enscript-type">template</span>&lt;<span class="enscript-type">unsigned</span> N, <span class="enscript-type">unsigned</span> S&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isShiftedInt</span>(int64_t x) {
+  <span class="enscript-keyword">return</span> isInt&lt;N+S&gt;(x) &amp;&amp; (x % (1&lt;&lt;S) == 0);
+}
+
+<span class="enscript-comment">/// isUInt - Checks if an unsigned integer fits into the given bit width.
+</span><span class="enscript-type">template</span>&lt;<span class="enscript-type">unsigned</span> N&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isUInt</span>(uint64_t x) {
+  <span class="enscript-keyword">return</span> N &gt;= 64 || x &lt; (UINT64_C(1)&lt;&lt;N);
+}
+<span class="enscript-comment">// Template specializations to get better code for common cases.
+</span><span class="enscript-type">template</span>&lt;&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> isUInt&lt;8&gt;(uint64_t x) {
+  <span class="enscript-keyword">return</span> static_cast&lt;uint8_t&gt;(x) == x;
+}
+<span class="enscript-type">template</span>&lt;&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> isUInt&lt;16&gt;(uint64_t x) {
+  <span class="enscript-keyword">return</span> static_cast&lt;uint16_t&gt;(x) == x;
+}
+<span class="enscript-type">template</span>&lt;&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> isUInt&lt;32&gt;(uint64_t x) {
+  <span class="enscript-keyword">return</span> static_cast&lt;uint32_t&gt;(x) == x;
+}
+
+<span class="enscript-comment">/// isShiftedUInt&lt;N,S&gt; - Checks if a unsigned integer is an N bit number shifted
+</span><span class="enscript-comment">///                     left by S.
+</span><span class="enscript-type">template</span>&lt;<span class="enscript-type">unsigned</span> N, <span class="enscript-type">unsigned</span> S&gt;
+<span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isShiftedUInt</span>(uint64_t x) {
+  <span class="enscript-keyword">return</span> isUInt&lt;N+S&gt;(x) &amp;&amp; (x % (1&lt;&lt;S) == 0);
+}
+
+<span class="enscript-comment">/// isUIntN - Checks if an unsigned integer fits into the given (dynamic)
+</span><span class="enscript-comment">/// bit width.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isUIntN</span>(<span class="enscript-type">unsigned</span> N, uint64_t x) {
+  <span class="enscript-keyword">return</span> x == (x &amp; (~0ULL &gt;&gt; (64 - N)));
+}
+
+<span class="enscript-comment">/// isIntN - Checks if an signed integer fits into the given (dynamic)
+</span><span class="enscript-comment">/// bit width.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isIntN</span>(<span class="enscript-type">unsigned</span> N, int64_t x) {
+  <span class="enscript-keyword">return</span> N &gt;= 64 || (-(INT64_C(1)&lt;&lt;(N-1)) &lt;= x &amp;&amp; x &lt; (INT64_C(1)&lt;&lt;(N-1)));
+}
+
+<span class="enscript-comment">/// isMask_32 - This function returns true if the argument is a sequence of ones
+</span><span class="enscript-comment">/// starting at the least significant bit with the remainder zero (32 bit
+</span><span class="enscript-comment">/// version).   Ex. isMask_32(0x0000FFFFU) == true.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isMask_32</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> Value &amp;&amp; ((Value + 1) &amp; Value) == 0;
+}
+
+<span class="enscript-comment">/// isMask_64 - This function returns true if the argument is a sequence of ones
+</span><span class="enscript-comment">/// starting at the least significant bit with the remainder zero (64 bit
+</span><span class="enscript-comment">/// version).
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isMask_64</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> Value &amp;&amp; ((Value + 1) &amp; Value) == 0;
+}
+
+<span class="enscript-comment">/// isShiftedMask_32 - This function returns true if the argument contains a
+</span><span class="enscript-comment">/// sequence of ones with the remainder zero (32 bit version.)
+</span><span class="enscript-comment">/// Ex. isShiftedMask_32(0x0000FF00U) == true.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isShiftedMask_32</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> isMask_32((Value - 1) | Value);
+}
+
+<span class="enscript-comment">/// isShiftedMask_64 - This function returns true if the argument contains a
+</span><span class="enscript-comment">/// sequence of ones with the remainder zero (64 bit version.)
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isShiftedMask_64</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> isMask_64((Value - 1) | Value);
+}
+
+<span class="enscript-comment">/// isPowerOf2_32 - This function returns true if the argument is a power of
+</span><span class="enscript-comment">/// two &gt; 0. Ex. isPowerOf2_32(0x00100000U) == true (32 bit edition.)
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isPowerOf2_32</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> Value &amp;&amp; !(Value &amp; (Value - 1));
+}
+
+<span class="enscript-comment">/// isPowerOf2_64 - This function returns true if the argument is a power of two
+</span><span class="enscript-comment">/// &gt; 0 (64 bit edition.)
+</span><span class="enscript-type">inline</span> <span class="enscript-type">bool</span> <span class="enscript-function-name">isPowerOf2_64</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> Value &amp;&amp; !(Value &amp; (Value - int64_t(1L)));
+}
+
+<span class="enscript-comment">/// CountLeadingZeros_32 - this function performs the platform optimal form of
+</span><span class="enscript-comment">/// counting the number of zeros from the most significant bit to the first one
+</span><span class="enscript-comment">/// bit.  Ex. CountLeadingZeros_32(0x00F000FF) == 8.
+</span><span class="enscript-comment">/// Returns 32 if the word is zero.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountLeadingZeros_32</span>(uint32_t Value) {
+  <span class="enscript-type">unsigned</span> Count; <span class="enscript-comment">// result
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__GNUC__</span> &gt;= 4
+  <span class="enscript-comment">// PowerPC is defined for __builtin_clz(0)
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__ppc__</span>) &amp;&amp; !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__ppc64__</span>)
+  <span class="enscript-keyword">if</span> (!Value) <span class="enscript-keyword">return</span> 32;
+#<span class="enscript-reference">endif</span>
+  Count = __builtin_clz(Value);
+#<span class="enscript-reference">else</span>
+  <span class="enscript-keyword">if</span> (!Value) <span class="enscript-keyword">return</span> 32;
+  Count = 0;
+  <span class="enscript-comment">// bisection method for count leading zeros
+</span>  <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> Shift = 32 &gt;&gt; 1; Shift; Shift &gt;&gt;= 1) {
+    uint32_t Tmp = Value &gt;&gt; Shift;
+    <span class="enscript-keyword">if</span> (Tmp) {
+      Value = Tmp;
+    } <span class="enscript-keyword">else</span> {
+      Count |= Shift;
+    }
+  }
+#<span class="enscript-reference">endif</span>
+  <span class="enscript-keyword">return</span> Count;
+}
+
+<span class="enscript-comment">/// CountLeadingOnes_32 - this function performs the operation of
+</span><span class="enscript-comment">/// counting the number of ones from the most significant bit to the first zero
+</span><span class="enscript-comment">/// bit.  Ex. CountLeadingOnes_32(0xFF0FFF00) == 8.
+</span><span class="enscript-comment">/// Returns 32 if the word is all ones.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountLeadingOnes_32</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> CountLeadingZeros_32(~Value);
+}
+
+<span class="enscript-comment">/// CountLeadingZeros_64 - This function performs the platform optimal form
+</span><span class="enscript-comment">/// of counting the number of zeros from the most significant bit to the first
+</span><span class="enscript-comment">/// one bit (64 bit edition.)
+</span><span class="enscript-comment">/// Returns 64 if the word is zero.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountLeadingZeros_64</span>(uint64_t Value) {
+  <span class="enscript-type">unsigned</span> Count; <span class="enscript-comment">// result
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__GNUC__</span> &gt;= 4
+  <span class="enscript-comment">// PowerPC is defined for __builtin_clzll(0)
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__ppc__</span>) &amp;&amp; !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__ppc64__</span>)
+  <span class="enscript-keyword">if</span> (!Value) <span class="enscript-keyword">return</span> 64;
+#<span class="enscript-reference">endif</span>
+  Count = __builtin_clzll(Value);
+#<span class="enscript-reference">else</span>
+  <span class="enscript-keyword">if</span> (<span class="enscript-keyword">sizeof</span>(<span class="enscript-type">long</span>) == <span class="enscript-keyword">sizeof</span>(int64_t)) {
+    <span class="enscript-keyword">if</span> (!Value) <span class="enscript-keyword">return</span> 64;
+    Count = 0;
+    <span class="enscript-comment">// bisection method for count leading zeros
+</span>    <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> Shift = 64 &gt;&gt; 1; Shift; Shift &gt;&gt;= 1) {
+      uint64_t Tmp = Value &gt;&gt; Shift;
+      <span class="enscript-keyword">if</span> (Tmp) {
+        Value = Tmp;
+      } <span class="enscript-keyword">else</span> {
+        Count |= Shift;
+      }
+    }
+  } <span class="enscript-keyword">else</span> {
+    <span class="enscript-comment">// get hi portion
+</span>    uint32_t Hi = Hi_32(Value);
+
+    <span class="enscript-comment">// if some bits in hi portion
+</span>    <span class="enscript-keyword">if</span> (Hi) {
+        <span class="enscript-comment">// leading zeros in hi portion plus all bits in lo portion
+</span>        Count = CountLeadingZeros_32(Hi);
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-comment">// get lo portion
+</span>        uint32_t Lo = Lo_32(Value);
+        <span class="enscript-comment">// same as 32 bit value
+</span>        Count = CountLeadingZeros_32(Lo)+32;
+    }
+  }
+#<span class="enscript-reference">endif</span>
+  <span class="enscript-keyword">return</span> Count;
+}
+
+<span class="enscript-comment">/// CountLeadingOnes_64 - This function performs the operation
+</span><span class="enscript-comment">/// of counting the number of ones from the most significant bit to the first
+</span><span class="enscript-comment">/// zero bit (64 bit edition.)
+</span><span class="enscript-comment">/// Returns 64 if the word is all ones.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountLeadingOnes_64</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> CountLeadingZeros_64(~Value);
+}
+
+<span class="enscript-comment">/// CountTrailingZeros_32 - this function performs the platform optimal form of
+</span><span class="enscript-comment">/// counting the number of zeros from the least significant bit to the first one
+</span><span class="enscript-comment">/// bit.  Ex. CountTrailingZeros_32(0xFF00FF00) == 8.
+</span><span class="enscript-comment">/// Returns 32 if the word is zero.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountTrailingZeros_32</span>(uint32_t Value) {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__GNUC__</span> &gt;= 4
+  <span class="enscript-keyword">return</span> Value ? __builtin_ctz(Value) : 32;
+#<span class="enscript-reference">else</span>
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> Mod37BitPosition[] = {
+    32, 0, 1, 26, 2, 23, 27, 0, 3, 16, 24, 30, 28, 11, 0, 13,
+    4, 7, 17, 0, 25, 22, 31, 15, 29, 10, 12, 6, 0, 21, 14, 9,
+    5, 20, 8, 19, 18
+  };
+  <span class="enscript-keyword">return</span> Mod37BitPosition[(-Value &amp; Value) % 37];
+#<span class="enscript-reference">endif</span>
+}
+
+<span class="enscript-comment">/// CountTrailingOnes_32 - this function performs the operation of
+</span><span class="enscript-comment">/// counting the number of ones from the least significant bit to the first zero
+</span><span class="enscript-comment">/// bit.  Ex. CountTrailingOnes_32(0x00FF00FF) == 8.
+</span><span class="enscript-comment">/// Returns 32 if the word is all ones.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountTrailingOnes_32</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> CountTrailingZeros_32(~Value);
+}
+
+<span class="enscript-comment">/// CountTrailingZeros_64 - This function performs the platform optimal form
+</span><span class="enscript-comment">/// of counting the number of zeros from the least significant bit to the first
+</span><span class="enscript-comment">/// one bit (64 bit edition.)
+</span><span class="enscript-comment">/// Returns 64 if the word is zero.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountTrailingZeros_64</span>(uint64_t Value) {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__GNUC__</span> &gt;= 4
+  <span class="enscript-keyword">return</span> Value ? __builtin_ctzll(Value) : 64;
+#<span class="enscript-reference">else</span>
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> Mod67Position[] = {
+    64, 0, 1, 39, 2, 15, 40, 23, 3, 12, 16, 59, 41, 19, 24, 54,
+    4, 64, 13, 10, 17, 62, 60, 28, 42, 30, 20, 51, 25, 44, 55,
+    47, 5, 32, 65, 38, 14, 22, 11, 58, 18, 53, 63, 9, 61, 27,
+    29, 50, 43, 46, 31, 37, 21, 57, 52, 8, 26, 49, 45, 36, 56,
+    7, 48, 35, 6, 34, 33, 0
+  };
+  <span class="enscript-keyword">return</span> Mod67Position[(-Value &amp; Value) % 67];
+#<span class="enscript-reference">endif</span>
+}
+
+<span class="enscript-comment">/// CountTrailingOnes_64 - This function performs the operation
+</span><span class="enscript-comment">/// of counting the number of ones from the least significant bit to the first
+</span><span class="enscript-comment">/// zero bit (64 bit edition.)
+</span><span class="enscript-comment">/// Returns 64 if the word is all ones.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountTrailingOnes_64</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> CountTrailingZeros_64(~Value);
+}
+
+<span class="enscript-comment">/// CountPopulation_32 - this function counts the number of set bits in a value.
+</span><span class="enscript-comment">/// Ex. CountPopulation(0xF000F000) = 8
+</span><span class="enscript-comment">/// Returns 0 if the word is zero.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountPopulation_32</span>(uint32_t Value) {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__GNUC__</span> &gt;= 4
+  <span class="enscript-keyword">return</span> __builtin_popcount(Value);
+#<span class="enscript-reference">else</span>
+  uint32_t v = Value - ((Value &gt;&gt; 1) &amp; 0x55555555);
+  v = (v &amp; 0x33333333) + ((v &gt;&gt; 2) &amp; 0x33333333);
+  <span class="enscript-keyword">return</span> ((v + (v &gt;&gt; 4) &amp; 0xF0F0F0F) * 0x1010101) &gt;&gt; 24;
+#<span class="enscript-reference">endif</span>
+}
+
+<span class="enscript-comment">/// CountPopulation_64 - this function counts the number of set bits in a value,
+</span><span class="enscript-comment">/// (64 bit edition.)
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">CountPopulation_64</span>(uint64_t Value) {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__GNUC__</span> &gt;= 4
+  <span class="enscript-keyword">return</span> __builtin_popcountll(Value);
+#<span class="enscript-reference">else</span>
+  uint64_t v = Value - ((Value &gt;&gt; 1) &amp; 0x5555555555555555ULL);
+  v = (v &amp; 0x3333333333333333ULL) + ((v &gt;&gt; 2) &amp; 0x3333333333333333ULL);
+  v = (v + (v &gt;&gt; 4)) &amp; 0x0F0F0F0F0F0F0F0FULL;
+  <span class="enscript-keyword">return</span> <span class="enscript-type">unsigned</span>((uint64_t)(v * 0x0101010101010101ULL) &gt;&gt; 56);
+#<span class="enscript-reference">endif</span>
+}
+
+<span class="enscript-comment">/// Log2_32 - This function returns the floor log base 2 of the specified value,
+</span><span class="enscript-comment">/// -1 if the value is zero. (32 bit edition.)
+</span><span class="enscript-comment">/// Ex. Log2_32(32) == 5, Log2_32(1) == 0, Log2_32(0) == -1, Log2_32(6) == 2
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">Log2_32</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> 31 - CountLeadingZeros_32(Value);
+}
+
+<span class="enscript-comment">/// Log2_64 - This function returns the floor log base 2 of the specified value,
+</span><span class="enscript-comment">/// -1 if the value is zero. (64 bit edition.)
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">Log2_64</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> 63 - CountLeadingZeros_64(Value);
+}
+
+<span class="enscript-comment">/// Log2_32_Ceil - This function returns the ceil log base 2 of the specified
+</span><span class="enscript-comment">/// value, 32 if the value is zero. (32 bit edition).
+</span><span class="enscript-comment">/// Ex. Log2_32_Ceil(32) == 5, Log2_32_Ceil(1) == 0, Log2_32_Ceil(6) == 3
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">Log2_32_Ceil</span>(uint32_t Value) {
+  <span class="enscript-keyword">return</span> 32-CountLeadingZeros_32(Value-1);
+}
+
+<span class="enscript-comment">/// Log2_64_Ceil - This function returns the ceil log base 2 of the specified
+</span><span class="enscript-comment">/// value, 64 if the value is zero. (64 bit edition.)
+</span><span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">Log2_64_Ceil</span>(uint64_t Value) {
+  <span class="enscript-keyword">return</span> 64-CountLeadingZeros_64(Value-1);
+}
+
+<span class="enscript-comment">/// GreatestCommonDivisor64 - Return the greatest common divisor of the two
+</span><span class="enscript-comment">/// values using Euclid's algorithm.
+</span><span class="enscript-type">inline</span> uint64_t <span class="enscript-function-name">GreatestCommonDivisor64</span>(uint64_t A, uint64_t B) {
+  <span class="enscript-keyword">while</span> (B) {
+    uint64_t T = B;
+    B = A % B;
+    A = T;
+  }
+  <span class="enscript-keyword">return</span> A;
+}
+
+<span class="enscript-comment">/// BitsToDouble - This function takes a 64-bit integer and returns the bit
+</span><span class="enscript-comment">/// equivalent double.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">double</span> <span class="enscript-function-name">BitsToDouble</span>(uint64_t Bits) {
+  <span class="enscript-type">union</span> {
+    uint64_t L;
+    <span class="enscript-type">double</span> D;
+  } T;
+  T.L = Bits;
+  <span class="enscript-keyword">return</span> T.D;
+}
+
+<span class="enscript-comment">/// BitsToFloat - This function takes a 32-bit integer and returns the bit
+</span><span class="enscript-comment">/// equivalent float.
+</span><span class="enscript-type">inline</span> <span class="enscript-type">float</span> <span class="enscript-function-name">BitsToFloat</span>(uint32_t Bits) {
+  <span class="enscript-type">union</span> {
+    uint32_t I;
+    <span class="enscript-type">float</span> F;
+  } T;
+  T.I = Bits;
+  <span class="enscript-keyword">return</span> T.F;
+}
+
+<span class="enscript-comment">/// DoubleToBits - This function takes a double and returns the bit
+</span><span class="enscript-comment">/// equivalent 64-bit integer.  Note that copying doubles around
+</span><span class="enscript-comment">/// changes the bits of NaNs on some hosts, notably x86, so this
+</span><span class="enscript-comment">/// routine cannot be used if these bits are needed.
+</span><span class="enscript-type">inline</span> uint64_t <span class="enscript-function-name">DoubleToBits</span>(<span class="enscript-type">double</span> Double) {
+  <span class="enscript-type">union</span> {
+    uint64_t L;
+    <span class="enscript-type">double</span> D;
+  } T;
+  T.D = Double;
+  <span class="enscript-keyword">return</span> T.L;
+}
+
+<span class="enscript-comment">/// FloatToBits - This function takes a float and returns the bit
+</span><span class="enscript-comment">/// equivalent 32-bit integer.  Note that copying floats around
+</span><span class="enscript-comment">/// changes the bits of NaNs on some hosts, notably x86, so this
+</span><span class="enscript-comment">/// routine cannot be used if these bits are needed.
+</span><span class="enscript-type">inline</span> uint32_t <span class="enscript-function-name">FloatToBits</span>(<span class="enscript-type">float</span> Float) {
+  <span class="enscript-type">union</span> {
+    uint32_t I;
+    <span class="enscript-type">float</span> F;
+  } T;
+  T.F = Float;
+  <span class="enscript-keyword">return</span> T.I;
+}
+
+<span class="enscript-comment">/// Platform-independent wrappers for the C99 isnan() function.
+</span><span class="enscript-type">int</span> <span class="enscript-function-name">IsNAN</span>(<span class="enscript-type">float</span> f);
+<span class="enscript-type">int</span> <span class="enscript-function-name">IsNAN</span>(<span class="enscript-type">double</span> d);
+
+<span class="enscript-comment">/// Platform-independent wrappers for the C99 isinf() function.
+</span><span class="enscript-type">int</span> <span class="enscript-function-name">IsInf</span>(<span class="enscript-type">float</span> f);
+<span class="enscript-type">int</span> <span class="enscript-function-name">IsInf</span>(<span class="enscript-type">double</span> d);
+
+<span class="enscript-comment">/// MinAlign - A and B are either alignments or offsets.  Return the minimum
+</span><span class="enscript-comment">/// alignment that may be assumed after adding the two together.
+</span><span class="enscript-type">inline</span> uint64_t <span class="enscript-function-name">MinAlign</span>(uint64_t A, uint64_t B) {
+  <span class="enscript-comment">// The largest power of 2 that divides both A and B.
+</span>  <span class="enscript-keyword">return</span> (A | B) &amp; -(A | B);
+}
+
+<span class="enscript-comment">/// NextPowerOf2 - Returns the next power of two (in 64-bits)
+</span><span class="enscript-comment">/// that is strictly greater than A.  Returns zero on overflow.
+</span><span class="enscript-type">inline</span> uint64_t <span class="enscript-function-name">NextPowerOf2</span>(uint64_t A) {
+  A |= (A &gt;&gt; 1);
+  A |= (A &gt;&gt; 2);
+  A |= (A &gt;&gt; 4);
+  A |= (A &gt;&gt; 8);
+  A |= (A &gt;&gt; 16);
+  A |= (A &gt;&gt; 32);
+  <span class="enscript-keyword">return</span> A + 1;
+}
+
+<span class="enscript-comment">/// NextPowerOf2 - Returns the next power of two (in 32-bits)
+</span><span class="enscript-comment">/// that is strictly greater than A.  Returns zero on overflow.
+</span><span class="enscript-type">inline</span> uint32_t <span class="enscript-function-name">NextPowerOf2</span>(uint32_t A) {
+  A |= (A &gt;&gt; 1);
+  A |= (A &gt;&gt; 2);
+  A |= (A &gt;&gt; 4);
+  A |= (A &gt;&gt; 8);
+  A |= (A &gt;&gt; 16);
+  <span class="enscript-keyword">return</span> A + 1;
+}
+
+<span class="enscript-comment">/// Returns the next integer (mod 2**64) that is greater than or equal to
+</span><span class="enscript-comment">/// \p Value and is a multiple of \p Align. \p Align must be non-zero.
+</span><span class="enscript-comment">///
+</span><span class="enscript-comment">/// Examples:
+</span><span class="enscript-comment">/// \code
+</span><span class="enscript-comment">///   RoundUpToAlignment(5, 8) = 8
+</span><span class="enscript-comment">///   RoundUpToAlignment(17, 8) = 24
+</span><span class="enscript-comment">///   RoundUpToAlignment(~0LL, 8) = 0
+</span><span class="enscript-comment">/// \endcode
+</span><span class="enscript-type">inline</span> uint64_t <span class="enscript-function-name">RoundUpToAlignment</span>(uint64_t Value, uint64_t Align) {
+  <span class="enscript-keyword">return</span> ((Value + Align - 1) / Align) * Align;
+}
+
+<span class="enscript-comment">/// Returns the offset to the next integer (mod 2**64) that is greater than
+</span><span class="enscript-comment">/// or equal to \p Value and is a multiple of \p Align. \p Align must be
+</span><span class="enscript-comment">/// non-zero.
+</span><span class="enscript-type">inline</span> uint64_t <span class="enscript-function-name">OffsetToAlignment</span>(uint64_t Value, uint64_t Align) {
+  <span class="enscript-keyword">return</span> RoundUpToAlignment(Value, Align) - Value;
+}
+
+<span class="enscript-comment">/// abs64 - absolute value of a 64-bit int.  Not all environments support
+</span><span class="enscript-comment">/// &quot;abs&quot; on whatever their name for the 64-bit int type is.  The absolute
+</span><span class="enscript-comment">/// value of the largest negative number is undefined, as with &quot;abs&quot;.
+</span><span class="enscript-type">inline</span> int64_t <span class="enscript-function-name">abs64</span>(int64_t x) {
+  <span class="enscript-keyword">return</span> (x &lt; 0) ? -x : x;
+}
+
+<span class="enscript-comment">/// SignExtend32 - Sign extend B-bit number x to 32-bit int.
+</span><span class="enscript-comment">/// Usage int32_t r = SignExtend32&lt;5&gt;(x);
+</span><span class="enscript-type">template</span> &lt;<span class="enscript-type">unsigned</span> B&gt; <span class="enscript-type">inline</span> int32_t SignExtend32(uint32_t x) {
+  <span class="enscript-keyword">return</span> int32_t(x &lt;&lt; (32 - B)) &gt;&gt; (32 - B);
+}
+
+<span class="enscript-comment">/// \brief Sign extend number in the bottom B bits of X to a 32-bit int.
+</span><span class="enscript-comment">/// Requires 0 &lt; B &lt;= 32.
+</span><span class="enscript-type">inline</span> int32_t <span class="enscript-function-name">SignExtend32</span>(uint32_t X, <span class="enscript-type">unsigned</span> B) {
+  <span class="enscript-keyword">return</span> int32_t(X &lt;&lt; (32 - B)) &gt;&gt; (32 - B);
+}
+
+<span class="enscript-comment">/// SignExtend64 - Sign extend B-bit number x to 64-bit int.
+</span><span class="enscript-comment">/// Usage int64_t r = SignExtend64&lt;5&gt;(x);
+</span><span class="enscript-type">template</span> &lt;<span class="enscript-type">unsigned</span> B&gt; <span class="enscript-type">inline</span> int64_t SignExtend64(uint64_t x) {
+  <span class="enscript-keyword">return</span> int64_t(x &lt;&lt; (64 - B)) &gt;&gt; (64 - B);
+}
+
+<span class="enscript-comment">/// \brief Sign extend number in the bottom B bits of X to a 64-bit int.
+</span><span class="enscript-comment">/// Requires 0 &lt; B &lt;= 64.
+</span><span class="enscript-type">inline</span> int64_t <span class="enscript-function-name">SignExtend64</span>(uint64_t X, <span class="enscript-type">unsigned</span> B) {
+  <span class="enscript-keyword">return</span> int64_t(X &lt;&lt; (64 - B)) &gt;&gt; (64 - B);
+}
+
+} <span class="enscript-comment">// End llvm namespace
+</span>
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

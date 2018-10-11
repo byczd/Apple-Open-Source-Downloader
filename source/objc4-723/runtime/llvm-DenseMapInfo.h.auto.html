@@ -1,0 +1,225 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>llvm-DenseMapInfo.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">llvm-DenseMapInfo.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="llvm-DenseMapInfo.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//===- llvm/ADT/DenseMapInfo.h - Type traits for DenseMap -------*- C++ -*-===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//                     The LLVM Compiler Infrastructure
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file is distributed under the University of Illinois Open Source
+</span><span class="enscript-comment">// License. See LICENSE.TXT for details.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file defines DenseMapInfo traits for DenseMap.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span>
+<span class="enscript-comment">// Taken from llvmCore-3425.0.31.
+</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">LLVM_ADT_DENSEMAPINFO_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_ADT_DENSEMAPINFO_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-private.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;llvm-type_traits.h&quot;</span>
+
+namespace objc {
+
+<span class="enscript-type">template</span>&lt;typename T&gt;
+<span class="enscript-type">struct</span> DenseMapInfo {
+  <span class="enscript-comment">//static inline T getEmptyKey();
+</span>  <span class="enscript-comment">//static inline T getTombstoneKey();
+</span>  <span class="enscript-comment">//static unsigned getHashValue(const T &amp;Val);
+</span>  <span class="enscript-comment">//static bool isEqual(const T &amp;LHS, const T &amp;RHS);
+</span>};
+
+<span class="enscript-comment">// Provide DenseMapInfo for all pointers.
+</span><span class="enscript-type">template</span>&lt;typename T&gt;
+<span class="enscript-type">struct</span> DenseMapInfo&lt;T*&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> T* getEmptyKey() {
+    uintptr_t Val = static_cast&lt;uintptr_t&gt;(-1);
+    <span class="enscript-keyword">return</span> reinterpret_cast&lt;T*&gt;(Val);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> T* getTombstoneKey() {
+    uintptr_t Val = static_cast&lt;uintptr_t&gt;(-2);
+    <span class="enscript-keyword">return</span> reinterpret_cast&lt;T*&gt;(Val);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> T *PtrVal) {
+      <span class="enscript-keyword">return</span> ptr_hash((uintptr_t)PtrVal);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> T *LHS, <span class="enscript-type">const</span> T *RHS) { <span class="enscript-keyword">return</span> LHS == RHS; }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for disguised pointers.
+</span><span class="enscript-type">template</span>&lt;typename T&gt;
+<span class="enscript-type">struct</span> DenseMapInfo&lt;DisguisedPtr&lt;T&gt;&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> DisguisedPtr&lt;T&gt; getEmptyKey() {
+    <span class="enscript-keyword">return</span> DisguisedPtr&lt;T&gt;((T*)(uintptr_t)-1);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> DisguisedPtr&lt;T&gt; getTombstoneKey() {
+    <span class="enscript-keyword">return</span> DisguisedPtr&lt;T&gt;((T*)(uintptr_t)-2);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> T *PtrVal) {
+      <span class="enscript-keyword">return</span> ptr_hash((uintptr_t)PtrVal);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> DisguisedPtr&lt;T&gt; &amp;LHS, <span class="enscript-type">const</span> DisguisedPtr&lt;T&gt; &amp;RHS) {
+      <span class="enscript-keyword">return</span> LHS == RHS; 
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for cstrings.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">const</span> <span class="enscript-type">char</span>*&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span>* getEmptyKey() { 
+    <span class="enscript-keyword">return</span> reinterpret_cast&lt;<span class="enscript-type">const</span> <span class="enscript-type">char</span> *&gt;((intptr_t)-1); 
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span>* getTombstoneKey() { 
+    <span class="enscript-keyword">return</span> reinterpret_cast&lt;<span class="enscript-type">const</span> <span class="enscript-type">char</span> *&gt;((intptr_t)-2); 
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">char</span>* <span class="enscript-type">const</span> &amp;Val) { 
+    <span class="enscript-keyword">return</span> _objc_strhash(Val); 
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">char</span>* <span class="enscript-type">const</span> &amp;LHS, <span class="enscript-type">const</span> <span class="enscript-type">char</span>* <span class="enscript-type">const</span> &amp;RHS) {
+    <span class="enscript-keyword">return</span> 0 == strcmp(LHS, RHS);
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for chars.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">char</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">char</span> getEmptyKey() { <span class="enscript-keyword">return</span> ~0; }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">char</span> getTombstoneKey() { <span class="enscript-keyword">return</span> ~0 - 1; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">char</span>&amp; Val) { <span class="enscript-keyword">return</span> Val * 37U; }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">char</span> &amp;LHS, <span class="enscript-type">const</span> <span class="enscript-type">char</span> &amp;RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+  
+<span class="enscript-comment">// Provide DenseMapInfo for unsigned ints.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">unsigned</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> getEmptyKey() { <span class="enscript-keyword">return</span> ~0U; }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> getTombstoneKey() { <span class="enscript-keyword">return</span> ~0U - 1; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span>&amp; Val) { <span class="enscript-keyword">return</span> Val * 37U; }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span>&amp; LHS, <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span>&amp; RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for unsigned longs.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> getEmptyKey() { <span class="enscript-keyword">return</span> ~0UL; }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> getTombstoneKey() { <span class="enscript-keyword">return</span> ~0UL - 1L; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>&amp; Val) {
+    <span class="enscript-keyword">return</span> (<span class="enscript-type">unsigned</span>)(Val * 37UL);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>&amp; LHS, <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>&amp; RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for unsigned long longs.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span> getEmptyKey() { <span class="enscript-keyword">return</span> ~0ULL; }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span> getTombstoneKey() { <span class="enscript-keyword">return</span> ~0ULL - 1ULL; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&amp; Val) {
+    <span class="enscript-keyword">return</span> (<span class="enscript-type">unsigned</span>)(Val * 37ULL);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&amp; LHS,
+                      <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&amp; RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for ints.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">int</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">int</span> getEmptyKey() { <span class="enscript-keyword">return</span> 0x7fffffff; }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">int</span> getTombstoneKey() { <span class="enscript-keyword">return</span> -0x7fffffff - 1; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">int</span>&amp; Val) { <span class="enscript-keyword">return</span> (<span class="enscript-type">unsigned</span>)(Val * 37U); }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">int</span>&amp; LHS, <span class="enscript-type">const</span> <span class="enscript-type">int</span>&amp; RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for longs.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">long</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">long</span> getEmptyKey() {
+    <span class="enscript-keyword">return</span> (1UL &lt;&lt; (<span class="enscript-keyword">sizeof</span>(<span class="enscript-type">long</span>) * 8 - 1)) - 1UL;
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">long</span> getTombstoneKey() { <span class="enscript-keyword">return</span> getEmptyKey() - 1L; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">long</span>&amp; Val) {
+    <span class="enscript-keyword">return</span> (<span class="enscript-type">unsigned</span>)(Val * 37UL);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">long</span>&amp; LHS, <span class="enscript-type">const</span> <span class="enscript-type">long</span>&amp; RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for long longs.
+</span><span class="enscript-type">template</span>&lt;&gt; <span class="enscript-type">struct</span> DenseMapInfo&lt;<span class="enscript-type">long</span> <span class="enscript-type">long</span>&gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span> getEmptyKey() { <span class="enscript-keyword">return</span> 0x7fffffffffffffffLL; }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span> getTombstoneKey() { <span class="enscript-keyword">return</span> -0x7fffffffffffffffLL-1; }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&amp; Val) {
+    <span class="enscript-keyword">return</span> (<span class="enscript-type">unsigned</span>)(Val * 37ULL);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&amp; LHS,
+                      <span class="enscript-type">const</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&amp; RHS) {
+    <span class="enscript-keyword">return</span> LHS == RHS;
+  }
+};
+
+<span class="enscript-comment">// Provide DenseMapInfo for all pairs whose members have info.
+</span><span class="enscript-type">template</span>&lt;typename T, typename U&gt;
+<span class="enscript-type">struct</span> DenseMapInfo&lt;std::pair&lt;T, U&gt; &gt; {
+  <span class="enscript-type">typedef</span> std::pair&lt;T, U&gt; Pair;
+  <span class="enscript-type">typedef</span> DenseMapInfo&lt;T&gt; FirstInfo;
+  <span class="enscript-type">typedef</span> DenseMapInfo&lt;U&gt; SecondInfo;
+
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> Pair getEmptyKey() {
+    <span class="enscript-keyword">return</span> std::make_pair(FirstInfo::getEmptyKey(),
+                          <span class="enscript-reference">SecondInfo</span>::getEmptyKey());
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">inline</span> Pair getTombstoneKey() {
+    <span class="enscript-keyword">return</span> std::make_pair(FirstInfo::getTombstoneKey(),
+                          <span class="enscript-reference">SecondInfo</span>::getTombstoneKey());
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> Pair&amp; PairVal) {
+    uint64_t key = (uint64_t)FirstInfo::getHashValue(PairVal.first) &lt;&lt; 32
+          | (uint64_t)SecondInfo::getHashValue(PairVal.second);
+    key += ~(key &lt;&lt; 32);
+    key ^= (key &gt;&gt; 22);
+    key += ~(key &lt;&lt; 13);
+    key ^= (key &gt;&gt; 8);
+    key += (key &lt;&lt; 3);
+    key ^= (key &gt;&gt; 15);
+    key += ~(key &lt;&lt; 27);
+    key ^= (key &gt;&gt; 31);
+    <span class="enscript-keyword">return</span> (<span class="enscript-type">unsigned</span>)key;
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">bool</span> isEqual(<span class="enscript-type">const</span> Pair &amp;LHS, <span class="enscript-type">const</span> Pair &amp;RHS) {
+    <span class="enscript-keyword">return</span> FirstInfo::isEqual(LHS.first, RHS.first) &amp;&amp;
+           <span class="enscript-reference">SecondInfo</span>::isEqual(LHS.second, RHS.second);
+  }
+};
+
+} <span class="enscript-comment">// end namespace objc
+</span>
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

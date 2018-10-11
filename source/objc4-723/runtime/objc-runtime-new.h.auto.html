@@ -1,0 +1,1448 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-runtime-new.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-runtime-new.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-runtime-new.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2005-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_RUNTIME_NEW_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_RUNTIME_NEW_H</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__LP64__</span>
+<span class="enscript-type">typedef</span> uint32_t mask_t;  <span class="enscript-comment">// x86_64 &amp; arm64 asm are less efficient with 16-bits
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-type">typedef</span> uint16_t mask_t;
+#<span class="enscript-reference">endif</span>
+<span class="enscript-type">typedef</span> uintptr_t cache_key_t;
+
+<span class="enscript-type">struct</span> swift_class_t;
+
+
+<span class="enscript-type">struct</span> bucket_t {
+<span class="enscript-reference">private</span>:
+    cache_key_t _key;
+    IMP _imp;
+
+<span class="enscript-reference">public</span>:
+    inline cache_key_t key() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> _key; }
+    inline IMP imp() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> (IMP)_imp; }
+    inline <span class="enscript-type">void</span> setKey(cache_key_t newKey) { _key = newKey; }
+    inline <span class="enscript-type">void</span> setImp(IMP newImp) { _imp = newImp; }
+
+    <span class="enscript-type">void</span> set(cache_key_t newKey, IMP newImp);
+};
+
+
+<span class="enscript-type">struct</span> cache_t {
+    <span class="enscript-type">struct</span> bucket_t *_buckets;
+    mask_t _mask;
+    mask_t _occupied;
+
+<span class="enscript-reference">public</span>:
+    <span class="enscript-type">struct</span> bucket_t *buckets();
+    mask_t mask();
+    mask_t occupied();
+    <span class="enscript-type">void</span> incrementOccupied();
+    <span class="enscript-type">void</span> setBucketsAndMask(<span class="enscript-type">struct</span> bucket_t *newBuckets, mask_t newMask);
+    <span class="enscript-type">void</span> initializeToEmpty();
+
+    mask_t capacity();
+    bool isConstantEmptyCache();
+    bool canBeFreed();
+
+    <span class="enscript-type">static</span> size_t bytesForCapacity(uint32_t cap);
+    <span class="enscript-type">static</span> <span class="enscript-type">struct</span> bucket_t * endMarker(<span class="enscript-type">struct</span> bucket_t *b, uint32_t cap);
+
+    <span class="enscript-type">void</span> expand();
+    <span class="enscript-type">void</span> reallocate(mask_t oldCapacity, mask_t newCapacity);
+    <span class="enscript-type">struct</span> bucket_t * find(cache_key_t key, id receiver);
+
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> bad_cache(id receiver, SEL sel, Class isa) __attribute__((noreturn));
+};
+
+
+<span class="enscript-comment">// classref_t is unremapped class_t*
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> classref * classref_t;
+
+<span class="enscript-comment">/***********************************************************************
+* entsize_list_tt&lt;Element, List, FlagMask&gt;
+* Generic implementation of an array of non-fragile structs.
+*
+* Element is the struct type (e.g. method_t)
+* List is the specialization of entsize_list_tt (e.g. method_list_t)
+* FlagMask is used to stash extra bits in the entsize field
+*   (e.g. method list fixup markers)
+**********************************************************************/</span>
+template &lt;typename Element, typename List, uint32_t FlagMask&gt;
+<span class="enscript-type">struct</span> entsize_list_tt {
+    uint32_t entsizeAndFlags;
+    uint32_t count;
+    Element first;
+
+    uint32_t entsize() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> entsizeAndFlags &amp; ~FlagMask;
+    }
+    uint32_t flags() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> entsizeAndFlags &amp; FlagMask;
+    }
+
+    Element&amp; getOrEnd(uint32_t i) <span class="enscript-type">const</span> { 
+        assert(i &lt;= count);
+        <span class="enscript-keyword">return</span> *(Element *)((uint8_t *)&amp;first + i*entsize()); 
+    }
+    Element&amp; get(uint32_t i) <span class="enscript-type">const</span> { 
+        assert(i &lt; count);
+        <span class="enscript-keyword">return</span> getOrEnd(i);
+    }
+
+    size_t byteSize() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> <span class="enscript-keyword">sizeof</span>(*this) + (count-1)*entsize();
+    }
+
+    List *duplicate() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> (List *)memdup(this, this-&gt;byteSize());
+    }
+
+    <span class="enscript-type">struct</span> iterator;
+    <span class="enscript-type">const</span> iterator begin() <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> iterator(*static_cast&lt;<span class="enscript-type">const</span> List*&gt;(this), 0); 
+    }
+    iterator begin() { 
+        <span class="enscript-keyword">return</span> iterator(*static_cast&lt;<span class="enscript-type">const</span> List*&gt;(this), 0); 
+    }
+    <span class="enscript-type">const</span> iterator end() <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> iterator(*static_cast&lt;<span class="enscript-type">const</span> List*&gt;(this), count); 
+    }
+    iterator end() { 
+        <span class="enscript-keyword">return</span> iterator(*static_cast&lt;<span class="enscript-type">const</span> List*&gt;(this), count); 
+    }
+
+    <span class="enscript-type">struct</span> iterator {
+        uint32_t entsize;
+        uint32_t index;  <span class="enscript-comment">// keeping track of this saves a divide in operator-
+</span>        Element* element;
+
+        <span class="enscript-type">typedef</span> std::random_access_iterator_tag iterator_category;
+        <span class="enscript-type">typedef</span> Element value_type;
+        <span class="enscript-type">typedef</span> ptrdiff_t difference_type;
+        <span class="enscript-type">typedef</span> Element* pointer;
+        <span class="enscript-type">typedef</span> Element&amp; reference;
+
+        iterator() { }
+
+        iterator(<span class="enscript-type">const</span> List&amp; list, uint32_t start = 0)
+            : entsize(list.entsize())
+            , index(start)
+            , element(&amp;list.getOrEnd(start))
+        { }
+
+        <span class="enscript-type">const</span> iterator&amp; operator += (ptrdiff_t delta) {
+            element = (Element*)((uint8_t *)element + delta*entsize);
+            index += (int32_t)delta;
+            <span class="enscript-keyword">return</span> *this;
+        }
+        <span class="enscript-type">const</span> iterator&amp; operator -= (ptrdiff_t delta) {
+            element = (Element*)((uint8_t *)element - delta*entsize);
+            index -= (int32_t)delta;
+            <span class="enscript-keyword">return</span> *this;
+        }
+        <span class="enscript-type">const</span> iterator operator + (ptrdiff_t delta) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> iterator(*this) += delta;
+        }
+        <span class="enscript-type">const</span> iterator operator - (ptrdiff_t delta) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> iterator(*this) -= delta;
+        }
+
+        iterator&amp; operator ++ () { *this += 1; <span class="enscript-keyword">return</span> *this; }
+        iterator&amp; operator -- () { *this -= 1; <span class="enscript-keyword">return</span> *this; }
+        iterator operator ++ (<span class="enscript-type">int</span>) {
+            iterator result(*this); *this += 1; <span class="enscript-keyword">return</span> result;
+        }
+        iterator operator -- (<span class="enscript-type">int</span>) {
+            iterator result(*this); *this -= 1; <span class="enscript-keyword">return</span> result;
+        }
+
+        ptrdiff_t operator - (<span class="enscript-type">const</span> iterator&amp; rhs) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> (ptrdiff_t)this-&gt;index - (ptrdiff_t)rhs.index;
+        }
+
+        Element&amp; operator * () <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> *element; }
+        Element* operator -&gt; () <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> element; }
+
+        operator Element&amp; () <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> *element; }
+
+        bool operator == (<span class="enscript-type">const</span> iterator&amp; rhs) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> this-&gt;element == rhs.element;
+        }
+        bool operator != (<span class="enscript-type">const</span> iterator&amp; rhs) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> this-&gt;element != rhs.element;
+        }
+
+        bool operator &lt; (<span class="enscript-type">const</span> iterator&amp; rhs) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> this-&gt;element &lt; rhs.element;
+        }
+        bool operator &gt; (<span class="enscript-type">const</span> iterator&amp; rhs) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> this-&gt;element &gt; rhs.element;
+        }
+    };
+};
+
+
+<span class="enscript-type">struct</span> method_t {
+    SEL name;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *types;
+    IMP imp;
+
+    <span class="enscript-type">struct</span> SortBySELAddress :
+        public std::binary_function&lt;<span class="enscript-type">const</span> method_t&amp;,
+                                    <span class="enscript-type">const</span> method_t&amp;, bool&gt;
+    {
+        bool operator() (<span class="enscript-type">const</span> method_t&amp; lhs,
+                         <span class="enscript-type">const</span> method_t&amp; rhs)
+        { <span class="enscript-keyword">return</span> lhs.name &lt; rhs.name; }
+    };
+};
+
+<span class="enscript-type">struct</span> ivar_t {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__x86_64__</span>
+    <span class="enscript-comment">// *offset was originally 64-bit on some x86_64 platforms.
+</span>    <span class="enscript-comment">// We read and write only 32 bits of it.
+</span>    <span class="enscript-comment">// Some metadata provides all 64 bits. This is harmless for unsigned 
+</span>    <span class="enscript-comment">// little-endian values.
+</span>    <span class="enscript-comment">// Some code uses all 64 bits. class_addIvar() over-allocates the 
+</span>    <span class="enscript-comment">// offset for their benefit.
+</span>#<span class="enscript-reference">endif</span>
+    int32_t *offset;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *type;
+    <span class="enscript-comment">// alignment is sometimes -1; use alignment() instead
+</span>    uint32_t alignment_raw;
+    uint32_t size;
+
+    uint32_t alignment() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">if</span> (alignment_raw == ~(uint32_t)0) <span class="enscript-keyword">return</span> 1U &lt;&lt; WORD_SHIFT;
+        <span class="enscript-keyword">return</span> 1 &lt;&lt; alignment_raw;
+    }
+};
+
+<span class="enscript-type">struct</span> property_t {
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *attributes;
+};
+
+<span class="enscript-comment">// Two bits of entsize are used for fixup markers.
+</span><span class="enscript-type">struct</span> method_list_t : entsize_list_tt&lt;method_t, method_list_t, 0x3&gt; {
+    bool isFixedUp() <span class="enscript-type">const</span>;
+    <span class="enscript-type">void</span> setFixedUp();
+
+    uint32_t indexOfMethod(<span class="enscript-type">const</span> method_t *meth) <span class="enscript-type">const</span> {
+        uint32_t i = 
+            (uint32_t)(((uintptr_t)meth - (uintptr_t)this) / entsize());
+        assert(i &lt; count);
+        <span class="enscript-keyword">return</span> i;
+    }
+};
+
+<span class="enscript-type">struct</span> ivar_list_t : entsize_list_tt&lt;ivar_t, ivar_list_t, 0&gt; {
+    bool containsIvar(Ivar ivar) <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> (ivar &gt;= (Ivar)&amp;*begin()  &amp;&amp;  ivar &lt; (Ivar)&amp;*end());
+    }
+};
+
+<span class="enscript-type">struct</span> property_list_t : entsize_list_tt&lt;property_t, property_list_t, 0&gt; {
+};
+
+
+<span class="enscript-type">typedef</span> uintptr_t protocol_ref_t;  <span class="enscript-comment">// protocol_t *, but unremapped
+</span>
+<span class="enscript-comment">// Values for protocol_t-&gt;flags
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">PROTOCOL_FIXED_UP_2</span> (1&lt;&lt;31)  // must never be set by compiler
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">PROTOCOL_FIXED_UP_1</span> (1&lt;&lt;30)  // must never be set by compiler
+<span class="enscript-comment">// Bits 0..15 are reserved for Swift's use.
+</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">PROTOCOL_FIXED_UP_MASK</span> (PROTOCOL_FIXED_UP_1 | PROTOCOL_FIXED_UP_2)
+
+<span class="enscript-type">struct</span> protocol_t : objc_object {
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *mangledName;
+    <span class="enscript-type">struct</span> protocol_list_t *protocols;
+    method_list_t *instanceMethods;
+    method_list_t *classMethods;
+    method_list_t *optionalInstanceMethods;
+    method_list_t *optionalClassMethods;
+    property_list_t *instanceProperties;
+    uint32_t size;   <span class="enscript-comment">// sizeof(protocol_t)
+</span>    uint32_t flags;
+    <span class="enscript-comment">// Fields below this point are not always present on disk.
+</span>    <span class="enscript-type">const</span> <span class="enscript-type">char</span> **_extendedMethodTypes;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *_demangledName;
+    property_list_t *_classProperties;
+
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *demangledName();
+
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *nameForLogging() {
+        <span class="enscript-keyword">return</span> demangledName();
+    }
+
+    bool isFixedUp() <span class="enscript-type">const</span>;
+    <span class="enscript-type">void</span> setFixedUp();
+
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">HAS_FIELD</span>(f) (size &gt;= offsetof(protocol_t, f) + sizeof(f))
+
+    bool hasExtendedMethodTypesField() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> HAS_FIELD(_extendedMethodTypes);
+    }
+    bool hasDemangledNameField() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> HAS_FIELD(_demangledName);
+    }
+    bool hasClassPropertiesField() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> HAS_FIELD(_classProperties);
+    }
+
+#   <span class="enscript-reference">undef</span> <span class="enscript-variable-name">HAS_FIELD</span>
+
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> **extendedMethodTypes() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> hasExtendedMethodTypesField() ? _extendedMethodTypes : nil;
+    }
+
+    property_list_t *classProperties() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> hasClassPropertiesField() ? _classProperties : nil;
+    }
+};
+
+<span class="enscript-type">struct</span> protocol_list_t {
+    <span class="enscript-comment">// count is 64-bit by accident. 
+</span>    uintptr_t count;
+    protocol_ref_t list[0]; <span class="enscript-comment">// variable-size
+</span>
+    size_t byteSize() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> <span class="enscript-keyword">sizeof</span>(*this) + count*<span class="enscript-keyword">sizeof</span>(list[0]);
+    }
+
+    protocol_list_t *duplicate() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> (protocol_list_t *)memdup(this, this-&gt;byteSize());
+    }
+
+    <span class="enscript-type">typedef</span> protocol_ref_t* iterator;
+    <span class="enscript-type">typedef</span> <span class="enscript-type">const</span> protocol_ref_t* const_iterator;
+
+    const_iterator begin() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> list;
+    }
+    iterator begin() {
+        <span class="enscript-keyword">return</span> list;
+    }
+    const_iterator end() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> list + count;
+    }
+    iterator end() {
+        <span class="enscript-keyword">return</span> list + count;
+    }
+};
+
+<span class="enscript-type">struct</span> locstamped_category_t {
+    category_t *cat;
+    <span class="enscript-type">struct</span> header_info *hi;
+};
+
+<span class="enscript-type">struct</span> locstamped_category_list_t {
+    uint32_t count;
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__LP64__</span>
+    uint32_t reserved;
+#<span class="enscript-reference">endif</span>
+    locstamped_category_t list[0];
+};
+
+
+<span class="enscript-comment">// class_data_bits_t is the class_t-&gt;data field (class_rw_t pointer plus flags)
+</span><span class="enscript-comment">// The extra bits are optimized for the retain/release and alloc/dealloc paths.
+</span>
+<span class="enscript-comment">// Values for class_ro_t-&gt;flags
+</span><span class="enscript-comment">// These are emitted by the compiler and are part of the ABI.
+</span><span class="enscript-comment">// Note: See CGObjCNonFragileABIMac::BuildClassRoTInitializer in clang
+</span><span class="enscript-comment">// class is a metaclass
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_META</span>               (1&lt;&lt;0)
+<span class="enscript-comment">// class is a root class
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_ROOT</span>               (1&lt;&lt;1)
+<span class="enscript-comment">// class has .cxx_construct/destruct implementations
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_HAS_CXX_STRUCTORS</span>  (1&lt;&lt;2)
+<span class="enscript-comment">// class has +load implementation
+</span><span class="enscript-comment">// #define RO_HAS_LOAD_METHOD    (1&lt;&lt;3)
+</span><span class="enscript-comment">// class has visibility=hidden set
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_HIDDEN</span>             (1&lt;&lt;4)
+<span class="enscript-comment">// class has attribute(objc_exception): OBJC_EHTYPE_$_ThisClass is non-weak
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_EXCEPTION</span>          (1&lt;&lt;5)
+<span class="enscript-comment">// this bit is available for reassignment
+</span><span class="enscript-comment">// #define RO_REUSE_ME           (1&lt;&lt;6) 
+</span><span class="enscript-comment">// class compiled with ARC
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_IS_ARC</span>             (1&lt;&lt;7)
+<span class="enscript-comment">// class has .cxx_destruct but no .cxx_construct (with RO_HAS_CXX_STRUCTORS)
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_HAS_CXX_DTOR_ONLY</span>  (1&lt;&lt;8)
+<span class="enscript-comment">// class is not ARC but has ARC-style weak ivar layout 
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_HAS_WEAK_WITHOUT_ARC</span> (1&lt;&lt;9)
+
+<span class="enscript-comment">// class is in an unloadable bundle - must never be set by compiler
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_FROM_BUNDLE</span>        (1&lt;&lt;29)
+<span class="enscript-comment">// class is unrealized future class - must never be set by compiler
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_FUTURE</span>             (1&lt;&lt;30)
+<span class="enscript-comment">// class is realized - must never be set by compiler
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RO_REALIZED</span>           (1&lt;&lt;31)
+
+<span class="enscript-comment">// Values for class_rw_t-&gt;flags
+</span><span class="enscript-comment">// These are not emitted by the compiler and are never used in class_ro_t. 
+</span><span class="enscript-comment">// Their presence should be considered in future ABI versions.
+</span><span class="enscript-comment">// class_t-&gt;data is class_rw_t, not class_ro_t
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_REALIZED</span>           (1&lt;&lt;31)
+<span class="enscript-comment">// class is unresolved future class
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_FUTURE</span>             (1&lt;&lt;30)
+<span class="enscript-comment">// class is initialized
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_INITIALIZED</span>        (1&lt;&lt;29)
+<span class="enscript-comment">// class is initializing
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_INITIALIZING</span>       (1&lt;&lt;28)
+<span class="enscript-comment">// class_rw_t-&gt;ro is heap copy of class_ro_t
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_COPIED_RO</span>          (1&lt;&lt;27)
+<span class="enscript-comment">// class allocated but not yet registered
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_CONSTRUCTING</span>       (1&lt;&lt;26)
+<span class="enscript-comment">// class allocated and registered
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_CONSTRUCTED</span>        (1&lt;&lt;25)
+<span class="enscript-comment">// available for use; was RW_FINALIZE_ON_MAIN_THREAD
+</span><span class="enscript-comment">// #define RW_24 (1&lt;&lt;24)
+</span><span class="enscript-comment">// class +load has been called
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_LOADED</span>             (1&lt;&lt;23)
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span>
+<span class="enscript-comment">// class instances may have associative references
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_INSTANCES_HAVE_ASSOCIATED_OBJECTS</span> (1&lt;&lt;22)
+#<span class="enscript-reference">endif</span>
+<span class="enscript-comment">// class has instance-specific GC layout
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_INSTANCE_SPECIFIC_LAYOUT</span> (1 &lt;&lt; 21)
+<span class="enscript-comment">// available for use
+</span><span class="enscript-comment">// #define RW_20       (1&lt;&lt;20)
+</span><span class="enscript-comment">// class has started realizing but not yet completed it
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_REALIZING</span>          (1&lt;&lt;19)
+
+<span class="enscript-comment">// NOTE: MORE RW_ FLAGS DEFINED BELOW
+</span>
+
+<span class="enscript-comment">// Values for class_rw_t-&gt;flags or class_t-&gt;bits
+</span><span class="enscript-comment">// These flags are optimized for retain/release and alloc/dealloc
+</span><span class="enscript-comment">// 64-bit stores more of them in class_t-&gt;bits to reduce pointer indirection.
+</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__LP64__</span>
+
+<span class="enscript-comment">// class or superclass has .cxx_construct implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_CXX_CTOR</span>       (1&lt;&lt;18)
+<span class="enscript-comment">// class or superclass has .cxx_destruct implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_CXX_DTOR</span>       (1&lt;&lt;17)
+<span class="enscript-comment">// class or superclass has default alloc/allocWithZone: implementation
+</span><span class="enscript-comment">// Note this is is stored in the metaclass.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_DEFAULT_AWZ</span>    (1&lt;&lt;16)
+<span class="enscript-comment">// class's instances requires raw isa
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_REQUIRES_RAW_ISA</span>   (1&lt;&lt;15)
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// class is a Swift class
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_IS_SWIFT</span>         (1UL&lt;&lt;0)
+<span class="enscript-comment">// class or superclass has default retain/release/autorelease/retainCount/
+</span><span class="enscript-comment">//   _tryRetain/_isDeallocating/retainWeakReference/allowsWeakReference
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_HAS_DEFAULT_RR</span>   (1UL&lt;&lt;1)
+<span class="enscript-comment">// data pointer
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_DATA_MASK</span>        0xfffffffcUL
+
+#<span class="enscript-reference">elif</span> 1
+<span class="enscript-comment">// Leaks-compatible version that steals low bits only.
+</span>
+<span class="enscript-comment">// class or superclass has .cxx_construct implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_CXX_CTOR</span>       (1&lt;&lt;18)
+<span class="enscript-comment">// class or superclass has .cxx_destruct implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_CXX_DTOR</span>       (1&lt;&lt;17)
+<span class="enscript-comment">// class or superclass has default alloc/allocWithZone: implementation
+</span><span class="enscript-comment">// Note this is is stored in the metaclass.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">RW_HAS_DEFAULT_AWZ</span>    (1&lt;&lt;16)
+
+<span class="enscript-comment">// class is a Swift class
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_IS_SWIFT</span>           (1UL&lt;&lt;0)
+<span class="enscript-comment">// class or superclass has default retain/release/autorelease/retainCount/
+</span><span class="enscript-comment">//   _tryRetain/_isDeallocating/retainWeakReference/allowsWeakReference
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_HAS_DEFAULT_RR</span>     (1UL&lt;&lt;1)
+<span class="enscript-comment">// class's instances requires raw isa
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_REQUIRES_RAW_ISA</span>   (1UL&lt;&lt;2)
+<span class="enscript-comment">// data pointer
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_DATA_MASK</span>          0x00007ffffffffff8UL
+
+#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// Leaks-incompatible version that steals lots of bits.
+</span>
+<span class="enscript-comment">// class is a Swift class
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_IS_SWIFT</span>           (1UL&lt;&lt;0)
+<span class="enscript-comment">// class's instances requires raw isa
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_REQUIRES_RAW_ISA</span>   (1UL&lt;&lt;1)
+<span class="enscript-comment">// class or superclass has .cxx_destruct implementation
+</span><span class="enscript-comment">//   This bit is aligned with isa_t-&gt;hasCxxDtor to save an instruction.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_HAS_CXX_DTOR</span>       (1UL&lt;&lt;2)
+<span class="enscript-comment">// data pointer
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_DATA_MASK</span>          0x00007ffffffffff8UL
+<span class="enscript-comment">// class or superclass has .cxx_construct implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_HAS_CXX_CTOR</span>       (1UL&lt;&lt;47)
+<span class="enscript-comment">// class or superclass has default alloc/allocWithZone: implementation
+</span><span class="enscript-comment">// Note this is is stored in the metaclass.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_HAS_DEFAULT_AWZ</span>    (1UL&lt;&lt;48)
+<span class="enscript-comment">// class or superclass has default retain/release/autorelease/retainCount/
+</span><span class="enscript-comment">//   _tryRetain/_isDeallocating/retainWeakReference/allowsWeakReference
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_HAS_DEFAULT_RR</span>     (1UL&lt;&lt;49)
+<span class="enscript-comment">// summary bit for fast alloc path: !hasCxxCtor and 
+</span><span class="enscript-comment">//   !instancesRequireRawIsa and instanceSize fits into shiftedSize
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_ALLOC</span>              (1UL&lt;&lt;50)
+<span class="enscript-comment">// instance size in units of 16 bytes
+</span><span class="enscript-comment">//   or 0 if the instance size is too big in this field
+</span><span class="enscript-comment">//   This field must be LAST
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_SHIFTED_SIZE_SHIFT</span> 51
+
+<span class="enscript-comment">// FAST_ALLOC means
+</span><span class="enscript-comment">//   FAST_HAS_CXX_CTOR is set
+</span><span class="enscript-comment">//   FAST_REQUIRES_RAW_ISA is not set
+</span><span class="enscript-comment">//   FAST_SHIFTED_SIZE is not zero
+</span><span class="enscript-comment">// FAST_ALLOC does NOT check FAST_HAS_DEFAULT_AWZ because that 
+</span><span class="enscript-comment">// bit is stored on the metaclass.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_ALLOC_MASK</span>  (FAST_HAS_CXX_CTOR | FAST_REQUIRES_RAW_ISA)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">FAST_ALLOC_VALUE</span> (0)
+
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">struct</span> class_ro_t {
+    uint32_t flags;
+    uint32_t instanceStart;
+    uint32_t instanceSize;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__LP64__</span>
+    uint32_t reserved;
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-type">const</span> uint8_t * ivarLayout;
+    
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> * name;
+    method_list_t * baseMethodList;
+    protocol_list_t * baseProtocols;
+    <span class="enscript-type">const</span> ivar_list_t * ivars;
+
+    <span class="enscript-type">const</span> uint8_t * weakIvarLayout;
+    property_list_t *baseProperties;
+
+    method_list_t *baseMethods() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> baseMethodList;
+    }
+};
+
+
+<span class="enscript-comment">/***********************************************************************
+* list_array_tt&lt;Element, List&gt;
+* Generic implementation for metadata that can be augmented by categories.
+*
+* Element is the underlying metadata type (e.g. method_t)
+* List is the metadata's list type (e.g. method_list_t)
+*
+* A list_array_tt has one of three values:
+* - empty
+* - a pointer to a single list
+* - an array of pointers to lists
+*
+* countLists/beginLists/endLists iterate the metadata lists
+* count/begin/end iterate the underlying metadata elements
+**********************************************************************/</span>
+template &lt;typename Element, typename List&gt;
+class list_array_tt {
+    <span class="enscript-type">struct</span> array_t {
+        uint32_t count;
+        List* lists[0];
+
+        <span class="enscript-type">static</span> size_t byteSize(uint32_t count) {
+            <span class="enscript-keyword">return</span> <span class="enscript-keyword">sizeof</span>(array_t) + count*<span class="enscript-keyword">sizeof</span>(lists[0]);
+        }
+        size_t byteSize() {
+            <span class="enscript-keyword">return</span> byteSize(count);
+        }
+    };
+
+ <span class="enscript-reference">protected</span>:
+    class iterator {
+        List **lists;
+        List **listsEnd;
+        typename List::iterator m, mEnd;
+
+     <span class="enscript-reference">public</span>:
+        iterator(List **begin, List **end) 
+            : lists(begin), listsEnd(end)
+        {
+            <span class="enscript-keyword">if</span> (begin != end) {
+                m = (*begin)-&gt;begin();
+                mEnd = (*begin)-&gt;end();
+            }
+        }
+
+        <span class="enscript-type">const</span> Element&amp; operator * () <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">return</span> *m;
+        }
+        Element&amp; operator * () {
+            <span class="enscript-keyword">return</span> *m;
+        }
+
+        bool operator != (<span class="enscript-type">const</span> iterator&amp; rhs) <span class="enscript-type">const</span> {
+            <span class="enscript-keyword">if</span> (lists != rhs.lists) <span class="enscript-keyword">return</span> true;
+            <span class="enscript-keyword">if</span> (lists == listsEnd) <span class="enscript-keyword">return</span> false;  <span class="enscript-comment">// m is undefined
+</span>            <span class="enscript-keyword">if</span> (m != rhs.m) <span class="enscript-keyword">return</span> true;
+            <span class="enscript-keyword">return</span> false;
+        }
+
+        <span class="enscript-type">const</span> iterator&amp; operator ++ () {
+            assert(m != mEnd);
+            m++;
+            <span class="enscript-keyword">if</span> (m == mEnd) {
+                assert(lists != listsEnd);
+                lists++;
+                <span class="enscript-keyword">if</span> (lists != listsEnd) {
+                    m = (*lists)-&gt;begin();
+                    mEnd = (*lists)-&gt;end();
+                }
+            }
+            <span class="enscript-keyword">return</span> *this;
+        }
+    };
+
+ <span class="enscript-reference">private</span>:
+    <span class="enscript-type">union</span> {
+        List* list;
+        uintptr_t arrayAndFlag;
+    };
+
+    bool hasArray() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> arrayAndFlag &amp; 1;
+    }
+
+    array_t *array() {
+        <span class="enscript-keyword">return</span> (array_t *)(arrayAndFlag &amp; ~1);
+    }
+
+    <span class="enscript-type">void</span> setArray(array_t *array) {
+        arrayAndFlag = (uintptr_t)array | 1;
+    }
+
+ <span class="enscript-reference">public</span>:
+
+    uint32_t count() {
+        uint32_t result = 0;
+        <span class="enscript-keyword">for</span> (<span class="enscript-type">auto</span> lists = beginLists(), end = endLists(); 
+             lists != end;
+             ++lists)
+        {
+            result += (*lists)-&gt;count;
+        }
+        <span class="enscript-keyword">return</span> result;
+    }
+
+    iterator begin() {
+        <span class="enscript-keyword">return</span> iterator(beginLists(), endLists());
+    }
+
+    iterator end() {
+        List **e = endLists();
+        <span class="enscript-keyword">return</span> iterator(e, e);
+    }
+
+
+    uint32_t countLists() {
+        <span class="enscript-keyword">if</span> (hasArray()) {
+            <span class="enscript-keyword">return</span> array()-&gt;count;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (list) {
+            <span class="enscript-keyword">return</span> 1;
+        } <span class="enscript-keyword">else</span> {
+            <span class="enscript-keyword">return</span> 0;
+        }
+    }
+
+    List** beginLists() {
+        <span class="enscript-keyword">if</span> (hasArray()) {
+            <span class="enscript-keyword">return</span> array()-&gt;lists;
+        } <span class="enscript-keyword">else</span> {
+            <span class="enscript-keyword">return</span> &amp;list;
+        }
+    }
+
+    List** endLists() {
+        <span class="enscript-keyword">if</span> (hasArray()) {
+            <span class="enscript-keyword">return</span> array()-&gt;lists + array()-&gt;count;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (list) {
+            <span class="enscript-keyword">return</span> &amp;list + 1;
+        } <span class="enscript-keyword">else</span> {
+            <span class="enscript-keyword">return</span> &amp;list;
+        }
+    }
+
+    <span class="enscript-type">void</span> attachLists(List* <span class="enscript-type">const</span> * addedLists, uint32_t addedCount) {
+        <span class="enscript-keyword">if</span> (addedCount == 0) <span class="enscript-keyword">return</span>;
+
+        <span class="enscript-keyword">if</span> (hasArray()) {
+            <span class="enscript-comment">// many lists -&gt; many lists
+</span>            uint32_t oldCount = array()-&gt;count;
+            uint32_t newCount = oldCount + addedCount;
+            setArray((array_t *)realloc(array(), array_t::byteSize(newCount)));
+            array()-&gt;count = newCount;
+            memmove(array()-&gt;lists + addedCount, array()-&gt;lists, 
+                    oldCount * <span class="enscript-keyword">sizeof</span>(array()-&gt;lists[0]));
+            memcpy(array()-&gt;lists, addedLists, 
+                   addedCount * <span class="enscript-keyword">sizeof</span>(array()-&gt;lists[0]));
+        }
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (!list  &amp;&amp;  addedCount == 1) {
+            <span class="enscript-comment">// 0 lists -&gt; 1 list
+</span>            list = addedLists[0];
+        } 
+        <span class="enscript-keyword">else</span> {
+            <span class="enscript-comment">// 1 list -&gt; many lists
+</span>            List* oldList = list;
+            uint32_t oldCount = oldList ? 1 : 0;
+            uint32_t newCount = oldCount + addedCount;
+            setArray((array_t *)malloc(array_t::byteSize(newCount)));
+            array()-&gt;count = newCount;
+            <span class="enscript-keyword">if</span> (oldList) array()-&gt;lists[addedCount] = oldList;
+            memcpy(array()-&gt;lists, addedLists, 
+                   addedCount * <span class="enscript-keyword">sizeof</span>(array()-&gt;lists[0]));
+        }
+    }
+
+    <span class="enscript-type">void</span> tryFree() {
+        <span class="enscript-keyword">if</span> (hasArray()) {
+            <span class="enscript-keyword">for</span> (uint32_t i = 0; i &lt; array()-&gt;count; i++) {
+                try_free(array()-&gt;lists[i]);
+            }
+            try_free(array());
+        }
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (list) {
+            try_free(list);
+        }
+    }
+
+    template&lt;typename Result&gt;
+    Result duplicate() {
+        Result result;
+
+        <span class="enscript-keyword">if</span> (hasArray()) {
+            array_t *a = array();
+            result.setArray((array_t *)memdup(a, a-&gt;byteSize()));
+            <span class="enscript-keyword">for</span> (uint32_t i = 0; i &lt; a-&gt;count; i++) {
+                result.array()-&gt;lists[i] = a-&gt;lists[i]-&gt;duplicate();
+            }
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (list) {
+            result.list = list-&gt;duplicate();
+        } <span class="enscript-keyword">else</span> {
+            result.list = nil;
+        }
+
+        <span class="enscript-keyword">return</span> result;
+    }
+};
+
+
+class method_array_t : 
+    public list_array_tt&lt;method_t, method_list_t&gt; 
+{
+    <span class="enscript-type">typedef</span> list_array_tt&lt;method_t, method_list_t&gt; Super;
+
+ <span class="enscript-reference">public</span>:
+    method_list_t **beginCategoryMethodLists() {
+        <span class="enscript-keyword">return</span> beginLists();
+    }
+    
+    method_list_t **endCategoryMethodLists(Class cls);
+
+    method_array_t duplicate() {
+        <span class="enscript-keyword">return</span> Super::duplicate&lt;method_array_t&gt;();
+    }
+};
+
+
+class property_array_t : 
+    public list_array_tt&lt;property_t, property_list_t&gt; 
+{
+    <span class="enscript-type">typedef</span> list_array_tt&lt;property_t, property_list_t&gt; Super;
+
+ <span class="enscript-reference">public</span>:
+    property_array_t duplicate() {
+        <span class="enscript-keyword">return</span> Super::duplicate&lt;property_array_t&gt;();
+    }
+};
+
+
+class protocol_array_t : 
+    public list_array_tt&lt;protocol_ref_t, protocol_list_t&gt; 
+{
+    <span class="enscript-type">typedef</span> list_array_tt&lt;protocol_ref_t, protocol_list_t&gt; Super;
+
+ <span class="enscript-reference">public</span>:
+    protocol_array_t duplicate() {
+        <span class="enscript-keyword">return</span> Super::duplicate&lt;protocol_array_t&gt;();
+    }
+};
+
+
+<span class="enscript-type">struct</span> class_rw_t {
+    <span class="enscript-comment">// Be warned that Symbolication knows the layout of this structure.
+</span>    uint32_t flags;
+    uint32_t version;
+
+    <span class="enscript-type">const</span> class_ro_t *ro;
+
+    method_array_t methods;
+    property_array_t properties;
+    protocol_array_t protocols;
+
+    Class firstSubclass;
+    Class nextSiblingClass;
+
+    <span class="enscript-type">char</span> *demangledName;
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+    uint32_t index;
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-type">void</span> setFlags(uint32_t set) 
+    {
+        OSAtomicOr32Barrier(set, &amp;flags);
+    }
+
+    <span class="enscript-type">void</span> clearFlags(uint32_t clear) 
+    {
+        OSAtomicXor32Barrier(clear, &amp;flags);
+    }
+
+    <span class="enscript-comment">// set and clear must not overlap
+</span>    <span class="enscript-type">void</span> changeFlags(uint32_t set, uint32_t clear) 
+    {
+        assert((set &amp; clear) == 0);
+
+        uint32_t oldf, newf;
+        <span class="enscript-keyword">do</span> {
+            oldf = flags;
+            newf = (oldf | set) &amp; ~clear;
+        } <span class="enscript-keyword">while</span> (!OSAtomicCompareAndSwap32Barrier(oldf, newf, (<span class="enscript-type">volatile</span> int32_t *)&amp;flags));
+    }
+};
+
+
+<span class="enscript-type">struct</span> class_data_bits_t {
+
+    <span class="enscript-comment">// Values are the FAST_ flags above.
+</span>    uintptr_t bits;
+<span class="enscript-reference">private</span>:
+    bool getBit(uintptr_t bit)
+    {
+        <span class="enscript-keyword">return</span> bits &amp; bit;
+    }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">FAST_ALLOC</span>
+    <span class="enscript-type">static</span> uintptr_t updateFastAlloc(uintptr_t oldBits, uintptr_t change)
+    {
+        <span class="enscript-keyword">if</span> (change &amp; FAST_ALLOC_MASK) {
+            <span class="enscript-keyword">if</span> (((oldBits &amp; FAST_ALLOC_MASK) == FAST_ALLOC_VALUE)  &amp;&amp;  
+                ((oldBits &gt;&gt; FAST_SHIFTED_SIZE_SHIFT) != 0)) 
+            {
+                oldBits |= FAST_ALLOC;
+            } <span class="enscript-keyword">else</span> {
+                oldBits &amp;= ~FAST_ALLOC;
+            }
+        }
+        <span class="enscript-keyword">return</span> oldBits;
+    }
+#<span class="enscript-reference">else</span>
+    <span class="enscript-type">static</span> uintptr_t updateFastAlloc(uintptr_t oldBits, uintptr_t change) {
+        <span class="enscript-keyword">return</span> oldBits;
+    }
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-type">void</span> setBits(uintptr_t set) 
+    {
+        uintptr_t oldBits;
+        uintptr_t newBits;
+        <span class="enscript-keyword">do</span> {
+            oldBits = LoadExclusive(&amp;bits);
+            newBits = updateFastAlloc(oldBits | set, set);
+        } <span class="enscript-keyword">while</span> (!StoreReleaseExclusive(&amp;bits, oldBits, newBits));
+    }
+
+    <span class="enscript-type">void</span> clearBits(uintptr_t clear) 
+    {
+        uintptr_t oldBits;
+        uintptr_t newBits;
+        <span class="enscript-keyword">do</span> {
+            oldBits = LoadExclusive(&amp;bits);
+            newBits = updateFastAlloc(oldBits &amp; ~clear, clear);
+        } <span class="enscript-keyword">while</span> (!StoreReleaseExclusive(&amp;bits, oldBits, newBits));
+    }
+
+<span class="enscript-reference">public</span>:
+
+    class_rw_t* data() {
+        <span class="enscript-keyword">return</span> (class_rw_t *)(bits &amp; FAST_DATA_MASK);
+    }
+    <span class="enscript-type">void</span> setData(class_rw_t *newData)
+    {
+        assert(!data()  ||  (newData-&gt;flags &amp; (RW_REALIZING | RW_FUTURE)));
+        <span class="enscript-comment">// Set during realization or construction only. No locking needed.
+</span>        <span class="enscript-comment">// Use a store-release fence because there may be concurrent
+</span>        <span class="enscript-comment">// readers of data and data's contents.
+</span>        uintptr_t newBits = (bits &amp; ~FAST_DATA_MASK) | (uintptr_t)newData;
+        atomic_thread_fence(memory_order_release);
+        bits = newBits;
+    }
+
+    bool hasDefaultRR() {
+        <span class="enscript-keyword">return</span> getBit(FAST_HAS_DEFAULT_RR);
+    }
+    <span class="enscript-type">void</span> setHasDefaultRR() {
+        setBits(FAST_HAS_DEFAULT_RR);
+    }
+    <span class="enscript-type">void</span> setHasCustomRR() {
+        clearBits(FAST_HAS_DEFAULT_RR);
+    }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">FAST_HAS_DEFAULT_AWZ</span>
+    bool hasDefaultAWZ() {
+        <span class="enscript-keyword">return</span> getBit(FAST_HAS_DEFAULT_AWZ);
+    }
+    <span class="enscript-type">void</span> setHasDefaultAWZ() {
+        setBits(FAST_HAS_DEFAULT_AWZ);
+    }
+    <span class="enscript-type">void</span> setHasCustomAWZ() {
+        clearBits(FAST_HAS_DEFAULT_AWZ);
+    }
+#<span class="enscript-reference">else</span>
+    bool hasDefaultAWZ() {
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_HAS_DEFAULT_AWZ;
+    }
+    <span class="enscript-type">void</span> setHasDefaultAWZ() {
+        data()-&gt;setFlags(RW_HAS_DEFAULT_AWZ);
+    }
+    <span class="enscript-type">void</span> setHasCustomAWZ() {
+        data()-&gt;clearFlags(RW_HAS_DEFAULT_AWZ);
+    }
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">FAST_HAS_CXX_CTOR</span>
+    bool hasCxxCtor() {
+        <span class="enscript-keyword">return</span> getBit(FAST_HAS_CXX_CTOR);
+    }
+    <span class="enscript-type">void</span> setHasCxxCtor() {
+        setBits(FAST_HAS_CXX_CTOR);
+    }
+#<span class="enscript-reference">else</span>
+    bool hasCxxCtor() {
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_HAS_CXX_CTOR;
+    }
+    <span class="enscript-type">void</span> setHasCxxCtor() {
+        data()-&gt;setFlags(RW_HAS_CXX_CTOR);
+    }
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">FAST_HAS_CXX_DTOR</span>
+    bool hasCxxDtor() {
+        <span class="enscript-keyword">return</span> getBit(FAST_HAS_CXX_DTOR);
+    }
+    <span class="enscript-type">void</span> setHasCxxDtor() {
+        setBits(FAST_HAS_CXX_DTOR);
+    }
+#<span class="enscript-reference">else</span>
+    bool hasCxxDtor() {
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_HAS_CXX_DTOR;
+    }
+    <span class="enscript-type">void</span> setHasCxxDtor() {
+        data()-&gt;setFlags(RW_HAS_CXX_DTOR);
+    }
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">FAST_REQUIRES_RAW_ISA</span>
+    bool instancesRequireRawIsa() {
+        <span class="enscript-keyword">return</span> getBit(FAST_REQUIRES_RAW_ISA);
+    }
+    <span class="enscript-type">void</span> setInstancesRequireRawIsa() {
+        setBits(FAST_REQUIRES_RAW_ISA);
+    }
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span>
+    bool instancesRequireRawIsa() {
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_REQUIRES_RAW_ISA;
+    }
+    <span class="enscript-type">void</span> setInstancesRequireRawIsa() {
+        data()-&gt;setFlags(RW_REQUIRES_RAW_ISA);
+    }
+#<span class="enscript-reference">else</span>
+    bool instancesRequireRawIsa() {
+        <span class="enscript-keyword">return</span> true;
+    }
+    <span class="enscript-type">void</span> setInstancesRequireRawIsa() {
+        <span class="enscript-comment">// nothing
+</span>    }
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">FAST_ALLOC</span>
+    size_t fastInstanceSize() 
+    {
+        assert(bits &amp; FAST_ALLOC);
+        <span class="enscript-keyword">return</span> (bits &gt;&gt; FAST_SHIFTED_SIZE_SHIFT) * 16;
+    }
+    <span class="enscript-type">void</span> setFastInstanceSize(size_t newSize) 
+    {
+        <span class="enscript-comment">// Set during realization or construction only. No locking needed.
+</span>        assert(data()-&gt;flags &amp; RW_REALIZING);
+
+        <span class="enscript-comment">// Round up to 16-byte boundary, then divide to get 16-byte units
+</span>        newSize = ((newSize + 15) &amp; ~15) / 16;
+        
+        uintptr_t newBits = newSize &lt;&lt; FAST_SHIFTED_SIZE_SHIFT;
+        <span class="enscript-keyword">if</span> ((newBits &gt;&gt; FAST_SHIFTED_SIZE_SHIFT) == newSize) {
+            <span class="enscript-type">int</span> shift = WORD_BITS - FAST_SHIFTED_SIZE_SHIFT;
+            uintptr_t oldBits = (bits &lt;&lt; shift) &gt;&gt; shift;
+            <span class="enscript-keyword">if</span> ((oldBits &amp; FAST_ALLOC_MASK) == FAST_ALLOC_VALUE) {
+                newBits |= FAST_ALLOC;
+            }
+            bits = oldBits | newBits;
+        }
+    }
+
+    bool canAllocFast() {
+        <span class="enscript-keyword">return</span> bits &amp; FAST_ALLOC;
+    }
+#<span class="enscript-reference">else</span>
+    size_t fastInstanceSize() {
+        abort();
+    }
+    <span class="enscript-type">void</span> setFastInstanceSize(size_t) {
+        <span class="enscript-comment">// nothing
+</span>    }
+    bool canAllocFast() {
+        <span class="enscript-keyword">return</span> false;
+    }
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-type">void</span> setClassArrayIndex(<span class="enscript-type">unsigned</span> Idx) {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+        <span class="enscript-comment">// 0 is unused as then we can rely on zero-initialisation from calloc.
+</span>        assert(Idx &gt; 0);
+        data()-&gt;index = Idx;
+#<span class="enscript-reference">endif</span>
+    }
+
+    <span class="enscript-type">unsigned</span> classArrayIndex() {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+        <span class="enscript-keyword">return</span> data()-&gt;index;
+#<span class="enscript-reference">else</span>
+        <span class="enscript-keyword">return</span> 0;
+#<span class="enscript-reference">endif</span>
+    }
+
+    bool isSwift() {
+        <span class="enscript-keyword">return</span> getBit(FAST_IS_SWIFT);
+    }
+
+    <span class="enscript-type">void</span> setIsSwift() {
+        setBits(FAST_IS_SWIFT);
+    }
+};
+
+
+<span class="enscript-type">struct</span> objc_class : objc_object {
+    <span class="enscript-comment">// Class ISA;
+</span>    Class superclass;
+    cache_t cache;             <span class="enscript-comment">// formerly cache pointer and vtable
+</span>    class_data_bits_t bits;    <span class="enscript-comment">// class_rw_t * plus custom rr/alloc flags
+</span>
+    class_rw_t *data() { 
+        <span class="enscript-keyword">return</span> bits.data();
+    }
+    <span class="enscript-type">void</span> setData(class_rw_t *newData) {
+        bits.setData(newData);
+    }
+
+    <span class="enscript-type">void</span> setInfo(uint32_t set) {
+        assert(isFuture()  ||  isRealized());
+        data()-&gt;setFlags(set);
+    }
+
+    <span class="enscript-type">void</span> clearInfo(uint32_t clear) {
+        assert(isFuture()  ||  isRealized());
+        data()-&gt;clearFlags(clear);
+    }
+
+    <span class="enscript-comment">// set and clear must not overlap
+</span>    <span class="enscript-type">void</span> changeInfo(uint32_t set, uint32_t clear) {
+        assert(isFuture()  ||  isRealized());
+        assert((set &amp; clear) == 0);
+        data()-&gt;changeFlags(set, clear);
+    }
+
+    bool hasCustomRR() {
+        <span class="enscript-keyword">return</span> ! bits.hasDefaultRR();
+    }
+    <span class="enscript-type">void</span> setHasDefaultRR() {
+        assert(isInitializing());
+        bits.setHasDefaultRR();
+    }
+    <span class="enscript-type">void</span> setHasCustomRR(bool inherited = false);
+    <span class="enscript-type">void</span> printCustomRR(bool inherited);
+
+    bool hasCustomAWZ() {
+        <span class="enscript-keyword">return</span> ! bits.hasDefaultAWZ();
+    }
+    <span class="enscript-type">void</span> setHasDefaultAWZ() {
+        assert(isInitializing());
+        bits.setHasDefaultAWZ();
+    }
+    <span class="enscript-type">void</span> setHasCustomAWZ(bool inherited = false);
+    <span class="enscript-type">void</span> printCustomAWZ(bool inherited);
+
+    bool instancesRequireRawIsa() {
+        <span class="enscript-keyword">return</span> bits.instancesRequireRawIsa();
+    }
+    <span class="enscript-type">void</span> setInstancesRequireRawIsa(bool inherited = false);
+    <span class="enscript-type">void</span> printInstancesRequireRawIsa(bool inherited);
+
+    bool canAllocNonpointer() {
+        assert(!isFuture());
+        <span class="enscript-keyword">return</span> !instancesRequireRawIsa();
+    }
+    bool canAllocFast() {
+        assert(!isFuture());
+        <span class="enscript-keyword">return</span> bits.canAllocFast();
+    }
+
+
+    bool hasCxxCtor() {
+        <span class="enscript-comment">// addSubclass() propagates this flag from the superclass.
+</span>        assert(isRealized());
+        <span class="enscript-keyword">return</span> bits.hasCxxCtor();
+    }
+    <span class="enscript-type">void</span> setHasCxxCtor() { 
+        bits.setHasCxxCtor();
+    }
+
+    bool hasCxxDtor() {
+        <span class="enscript-comment">// addSubclass() propagates this flag from the superclass.
+</span>        assert(isRealized());
+        <span class="enscript-keyword">return</span> bits.hasCxxDtor();
+    }
+    <span class="enscript-type">void</span> setHasCxxDtor() { 
+        bits.setHasCxxDtor();
+    }
+
+
+    bool isSwift() {
+        <span class="enscript-keyword">return</span> bits.isSwift();
+    }
+
+
+    <span class="enscript-comment">// Return YES if the class's ivars are managed by ARC, 
+</span>    <span class="enscript-comment">// or the class is MRC but has ARC-style weak ivars.
+</span>    bool hasAutomaticIvars() {
+        <span class="enscript-keyword">return</span> data()-&gt;ro-&gt;flags &amp; (RO_IS_ARC | RO_HAS_WEAK_WITHOUT_ARC);
+    }
+
+    <span class="enscript-comment">// Return YES if the class's ivars are managed by ARC.
+</span>    bool isARC() {
+        <span class="enscript-keyword">return</span> data()-&gt;ro-&gt;flags &amp; RO_IS_ARC;
+    }
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span>
+    <span class="enscript-comment">// Tracked in non-pointer isas; not tracked otherwise
+</span>#<span class="enscript-reference">else</span>
+    bool instancesHaveAssociatedObjects() {
+        <span class="enscript-comment">// this may be an unrealized future class in the CF-bridged case
+</span>        assert(isFuture()  ||  isRealized());
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_INSTANCES_HAVE_ASSOCIATED_OBJECTS;
+    }
+
+    <span class="enscript-type">void</span> setInstancesHaveAssociatedObjects() {
+        <span class="enscript-comment">// this may be an unrealized future class in the CF-bridged case
+</span>        assert(isFuture()  ||  isRealized());
+        setInfo(RW_INSTANCES_HAVE_ASSOCIATED_OBJECTS);
+    }
+#<span class="enscript-reference">endif</span>
+
+    bool shouldGrowCache() {
+        <span class="enscript-keyword">return</span> true;
+    }
+
+    <span class="enscript-type">void</span> setShouldGrowCache(bool) {
+        <span class="enscript-comment">// fixme good or bad for memory use?
+</span>    }
+
+    bool isInitializing() {
+        <span class="enscript-keyword">return</span> getMeta()-&gt;data()-&gt;flags &amp; RW_INITIALIZING;
+    }
+
+    <span class="enscript-type">void</span> setInitializing() {
+        assert(!isMetaClass());
+        ISA()-&gt;setInfo(RW_INITIALIZING);
+    }
+
+    bool isInitialized() {
+        <span class="enscript-keyword">return</span> getMeta()-&gt;data()-&gt;flags &amp; RW_INITIALIZED;
+    }
+
+    <span class="enscript-type">void</span> setInitialized();
+
+    bool isLoadable() {
+        assert(isRealized());
+        <span class="enscript-keyword">return</span> true;  <span class="enscript-comment">// any class registered for +load is definitely loadable
+</span>    }
+
+    IMP getLoadMethod();
+
+    <span class="enscript-comment">// Locking: To prevent concurrent realization, hold runtimeLock.
+</span>    bool isRealized() {
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_REALIZED;
+    }
+
+    <span class="enscript-comment">// Returns true if this is an unrealized future class.
+</span>    <span class="enscript-comment">// Locking: To prevent concurrent realization, hold runtimeLock.
+</span>    bool isFuture() { 
+        <span class="enscript-keyword">return</span> data()-&gt;flags &amp; RW_FUTURE;
+    }
+
+    bool isMetaClass() {
+        assert(this);
+        assert(isRealized());
+        <span class="enscript-keyword">return</span> data()-&gt;ro-&gt;flags &amp; RO_META;
+    }
+
+    <span class="enscript-comment">// NOT identical to this-&gt;ISA when this is a metaclass
+</span>    Class getMeta() {
+        <span class="enscript-keyword">if</span> (isMetaClass()) <span class="enscript-keyword">return</span> (Class)this;
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> this-&gt;ISA();
+    }
+
+    bool isRootClass() {
+        <span class="enscript-keyword">return</span> superclass == nil;
+    }
+    bool isRootMetaclass() {
+        <span class="enscript-keyword">return</span> ISA() == (Class)this;
+    }
+
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *mangledName() { 
+        <span class="enscript-comment">// fixme can't assert locks here
+</span>        assert(this);
+
+        <span class="enscript-keyword">if</span> (isRealized()  ||  isFuture()) {
+            <span class="enscript-keyword">return</span> data()-&gt;ro-&gt;name;
+        } <span class="enscript-keyword">else</span> {
+            <span class="enscript-keyword">return</span> ((<span class="enscript-type">const</span> class_ro_t *)data())-&gt;name;
+        }
+    }
+    
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *demangledName(bool realize = false);
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *nameForLogging();
+
+    <span class="enscript-comment">// May be unaligned depending on class's ivars.
+</span>    uint32_t unalignedInstanceStart() {
+        assert(isRealized());
+        <span class="enscript-keyword">return</span> data()-&gt;ro-&gt;instanceStart;
+    }
+
+    <span class="enscript-comment">// Class's instance start rounded up to a pointer-size boundary.
+</span>    <span class="enscript-comment">// This is used for ARC layout bitmaps.
+</span>    uint32_t alignedInstanceStart() {
+        <span class="enscript-keyword">return</span> word_align(unalignedInstanceStart());
+    }
+
+    <span class="enscript-comment">// May be unaligned depending on class's ivars.
+</span>    uint32_t unalignedInstanceSize() {
+        assert(isRealized());
+        <span class="enscript-keyword">return</span> data()-&gt;ro-&gt;instanceSize;
+    }
+
+    <span class="enscript-comment">// Class's ivar size rounded up to a pointer-size boundary.
+</span>    uint32_t alignedInstanceSize() {
+        <span class="enscript-keyword">return</span> word_align(unalignedInstanceSize());
+    }
+
+    size_t instanceSize(size_t extraBytes) {
+        size_t size = alignedInstanceSize() + extraBytes;
+        <span class="enscript-comment">// CF requires all objects be at least 16 bytes.
+</span>        <span class="enscript-keyword">if</span> (size &lt; 16) size = 16;
+        <span class="enscript-keyword">return</span> size;
+    }
+
+    <span class="enscript-type">void</span> setInstanceSize(uint32_t newSize) {
+        assert(isRealized());
+        <span class="enscript-keyword">if</span> (newSize != data()-&gt;ro-&gt;instanceSize) {
+            assert(data()-&gt;flags &amp; RW_COPIED_RO);
+            *const_cast&lt;uint32_t *&gt;(&amp;data()-&gt;ro-&gt;instanceSize) = newSize;
+        }
+        bits.setFastInstanceSize(newSize);
+    }
+
+    <span class="enscript-type">void</span> chooseClassArrayIndex();
+
+    <span class="enscript-type">void</span> setClassArrayIndex(<span class="enscript-type">unsigned</span> Idx) {
+        bits.setClassArrayIndex(Idx);
+    }
+
+    <span class="enscript-type">unsigned</span> classArrayIndex() {
+        <span class="enscript-keyword">return</span> bits.classArrayIndex();
+    }
+
+};
+
+
+<span class="enscript-type">struct</span> swift_class_t : objc_class {
+    uint32_t flags;
+    uint32_t instanceAddressOffset;
+    uint32_t instanceSize;
+    uint16_t instanceAlignMask;
+    uint16_t reserved;
+
+    uint32_t classSize;
+    uint32_t classAddressOffset;
+    <span class="enscript-type">void</span> *description;
+    <span class="enscript-comment">// ...
+</span>
+    <span class="enscript-type">void</span> *baseAddress() {
+        <span class="enscript-keyword">return</span> (<span class="enscript-type">void</span> *)((uint8_t *)this - classAddressOffset);
+    }
+};
+
+
+<span class="enscript-type">struct</span> category_t {
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name;
+    classref_t cls;
+    <span class="enscript-type">struct</span> method_list_t *instanceMethods;
+    <span class="enscript-type">struct</span> method_list_t *classMethods;
+    <span class="enscript-type">struct</span> protocol_list_t *protocols;
+    <span class="enscript-type">struct</span> property_list_t *instanceProperties;
+    <span class="enscript-comment">// Fields below this point are not always present on disk.
+</span>    <span class="enscript-type">struct</span> property_list_t *_classProperties;
+
+    method_list_t *methodsForMeta(bool isMeta) {
+        <span class="enscript-keyword">if</span> (isMeta) <span class="enscript-keyword">return</span> classMethods;
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> instanceMethods;
+    }
+
+    property_list_t *propertiesForMeta(bool isMeta, <span class="enscript-type">struct</span> header_info *hi);
+};
+
+<span class="enscript-type">struct</span> objc_super2 {
+    id receiver;
+    Class current_class;
+};
+
+<span class="enscript-type">struct</span> message_ref_t {
+    IMP imp;
+    SEL sel;
+};
+
+
+<span class="enscript-type">extern</span> Method <span class="enscript-function-name">protocol_getMethod</span>(protocol_t *p, SEL sel, bool isRequiredMethod, bool isInstanceMethod, bool recursive);
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span>
+<span class="enscript-function-name">foreach_realized_class_and_subclass_2</span>(Class top, <span class="enscript-type">unsigned</span>&amp; count,
+                                      <span class="enscript-reference">std</span>::function&lt;bool (Class)&gt; code) 
+{
+    <span class="enscript-comment">// runtimeLock.assertWriting();
+</span>    assert(top);
+    Class cls = top;
+    <span class="enscript-keyword">while</span> (1) {
+        <span class="enscript-keyword">if</span> (--count == 0) {
+            _objc_fatal(<span class="enscript-string">&quot;Memory corruption in class list.&quot;</span>);
+        }
+        <span class="enscript-keyword">if</span> (!code(cls)) <span class="enscript-keyword">break</span>;
+
+        <span class="enscript-keyword">if</span> (cls-&gt;data()-&gt;firstSubclass) {
+            cls = cls-&gt;data()-&gt;firstSubclass;
+        } <span class="enscript-keyword">else</span> {
+            <span class="enscript-keyword">while</span> (!cls-&gt;data()-&gt;nextSiblingClass  &amp;&amp;  cls != top) {
+                cls = cls-&gt;superclass;
+                <span class="enscript-keyword">if</span> (--count == 0) {
+                    _objc_fatal(<span class="enscript-string">&quot;Memory corruption in class list.&quot;</span>);
+                }
+            }
+            <span class="enscript-keyword">if</span> (cls == top) <span class="enscript-keyword">break</span>;
+            cls = cls-&gt;data()-&gt;nextSiblingClass;
+        }
+    }
+}
+
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">firstRealizedClass</span>();
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> <span class="enscript-function-name">unreasonableClassCount</span>();
+
+<span class="enscript-comment">// Enumerates a class and all of its realized subclasses.
+</span><span class="enscript-type">static</span> inline <span class="enscript-type">void</span>
+<span class="enscript-function-name">foreach_realized_class_and_subclass</span>(Class top,
+                                    <span class="enscript-reference">std</span>::function&lt;<span class="enscript-type">void</span> (Class)&gt; code)
+{
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> count = unreasonableClassCount();
+
+    foreach_realized_class_and_subclass_2(top, count,
+                                          [&amp;code](Class cls) -&gt; bool
+    {
+        code(cls);
+        <span class="enscript-keyword">return</span> true; 
+    });
+}
+
+<span class="enscript-comment">// Enumerates all realized classes and metaclasses.
+</span><span class="enscript-type">static</span> inline <span class="enscript-type">void</span>
+<span class="enscript-function-name">foreach_realized_class_and_metaclass</span>(std::function&lt;<span class="enscript-type">void</span> (Class)&gt; code) 
+{
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> count = unreasonableClassCount();
+    
+    <span class="enscript-keyword">for</span> (Class top = firstRealizedClass(); 
+         top != nil; 
+         top = top-&gt;data()-&gt;nextSiblingClass) 
+    {
+        foreach_realized_class_and_subclass_2(top, count,
+                                              [&amp;code](Class cls) -&gt; bool
+        {
+            code(cls);
+            <span class="enscript-keyword">return</span> true; 
+        });
+    }
+
+}
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

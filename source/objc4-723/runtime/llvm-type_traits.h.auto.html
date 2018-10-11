@@ -1,0 +1,246 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>llvm-type_traits.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">llvm-type_traits.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="llvm-type_traits.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//===- llvm/Support/type_traits.h - Simplfied type traits -------*- C++ -*-===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//                     The LLVM Compiler Infrastructure
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file is distributed under the University of Illinois Open Source
+</span><span class="enscript-comment">// License. See LICENSE.TXT for details.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file provides a template class that determines if a type is a class or
+</span><span class="enscript-comment">// not. The basic mechanism, based on using the pointer to member function of
+</span><span class="enscript-comment">// a zero argument to a function was &quot;boosted&quot; from the boost type_traits
+</span><span class="enscript-comment">// library. See <a href="http://www.boost.org/">http://www.boost.org/</a> for all the gory details.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span>
+<span class="enscript-comment">// Taken from llvmCore-3425.0.31.
+</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">LLVM_SUPPORT_TYPE_TRAITS_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_SUPPORT_TYPE_TRAITS_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;cstddef&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;utility&gt;</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__has_feature</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_DEFINED_HAS_FEATURE</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">__has_feature</span>(x) 0
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// This is actually the conforming implementation which works with abstract
+</span><span class="enscript-comment">// classes.  However, enough compilers have trouble with it that most will use
+</span><span class="enscript-comment">// the one in boost/type_traits/object_traits.hpp. This implementation actually
+</span><span class="enscript-comment">// works with VC7.0, but other interactions seem to fail when we use it.
+</span>
+namespace objc {
+  
+namespace dont_use
+{
+    <span class="enscript-comment">// These two functions should never be used. They are helpers to
+</span>    <span class="enscript-comment">// the is_class template below. They cannot be located inside
+</span>    <span class="enscript-comment">// is_class because doing so causes at least GCC to think that
+</span>    <span class="enscript-comment">// the value of the &quot;value&quot; enumerator is not constant. Placing
+</span>    <span class="enscript-comment">// them out here (for some strange reason) allows the sizeof
+</span>    <span class="enscript-comment">// operator against them to magically be constant. This is
+</span>    <span class="enscript-comment">// important to make the is_class&lt;T&gt;::value idiom zero cost. it
+</span>    <span class="enscript-comment">// evaluates to a constant 1 or 0 depending on whether the
+</span>    <span class="enscript-comment">// parameter T is a class or not (respectively).
+</span>    <span class="enscript-type">template</span>&lt;typename T&gt; <span class="enscript-type">char</span> is_class_helper(<span class="enscript-type">void</span>(T::*)());
+    <span class="enscript-type">template</span>&lt;typename T&gt; <span class="enscript-type">double</span> is_class_helper(...);
+}
+
+<span class="enscript-type">template</span> &lt;typename T&gt;
+<span class="enscript-type">struct</span> is_class
+{
+  <span class="enscript-comment">// is_class&lt;&gt; metafunction due to Paul Mensonides (<a href="mailto:leavings@attbi.com">leavings@attbi.com</a>). For
+</span>  <span class="enscript-comment">// more details:
+</span>  <span class="enscript-comment">// <a href="http://groups.google.com/groups?hl=en&amp;selm=000001c1cc83%24e154d5e0%247772e50c%40c161550a&amp;rnum=1">http://groups.google.com/groups?hl=en&amp;selm=000001c1cc83%24e154d5e0%247772e50c%40c161550a&amp;rnum=1</a>
+</span><span class="enscript-type">public</span>:
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">bool</span> value =
+      <span class="enscript-keyword">sizeof</span>(<span class="enscript-type">char</span>) == <span class="enscript-keyword">sizeof</span>(dont_use::is_class_helper&lt;T&gt;(0));
+};
+  
+  
+<span class="enscript-comment">/// isPodLike - This is a type trait that is used to determine whether a given
+</span><span class="enscript-comment">/// type can be copied around with memcpy instead of running ctors etc.
+</span><span class="enscript-type">template</span> &lt;typename T&gt;
+<span class="enscript-type">struct</span> isPodLike {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">is_trivially_copyable</span>)
+  <span class="enscript-comment">// If the compiler supports the is_trivially_copyable trait use it, as it
+</span>  <span class="enscript-comment">// matches the definition of isPodLike closely.
+</span>  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">bool</span> value = __is_trivially_copyable(T);
+#<span class="enscript-reference">else</span>
+  <span class="enscript-comment">// If we don't know anything else, we can (at least) assume that all non-class
+</span>  <span class="enscript-comment">// types are PODs.
+</span>  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">bool</span> value = !is_class&lt;T&gt;::value;
+#<span class="enscript-reference">endif</span>
+};
+
+<span class="enscript-comment">// std::pair's are pod-like if their elements are.
+</span><span class="enscript-type">template</span>&lt;typename T, typename U&gt;
+<span class="enscript-type">struct</span> isPodLike&lt;std::pair&lt;T, U&gt; &gt; {
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">bool</span> value = isPodLike&lt;T&gt;::value &amp;&amp; isPodLike&lt;U&gt;::value;
+};
+  
+
+<span class="enscript-type">template</span> &lt;<span class="enscript-type">class</span> T, T v&gt;
+<span class="enscript-type">struct</span> integral_constant {
+  <span class="enscript-type">typedef</span> T value_type;
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> value_type value = v;
+  <span class="enscript-type">typedef</span> integral_constant&lt;T,v&gt; type;
+  <span class="enscript-keyword">operator</span> value_type() { <span class="enscript-keyword">return</span> value; }
+};
+
+<span class="enscript-type">typedef</span> integral_constant&lt;<span class="enscript-type">bool</span>, true&gt; true_type;
+<span class="enscript-type">typedef</span> integral_constant&lt;<span class="enscript-type">bool</span>, false&gt; false_type;
+
+<span class="enscript-comment">/// \brief Metafunction that determines whether the two given types are 
+</span><span class="enscript-comment">/// equivalent.
+</span><span class="enscript-type">template</span>&lt;typename T, typename U&gt; <span class="enscript-type">struct</span> is_same       : <span class="enscript-type">public</span> false_type {};
+<span class="enscript-type">template</span>&lt;typename T&gt;             <span class="enscript-type">struct</span> is_same&lt;T, T&gt; : <span class="enscript-type">public</span> true_type {};
+
+<span class="enscript-comment">/// \brief Metafunction that removes const qualification from a type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_const          { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_const&lt;<span class="enscript-type">const</span> T&gt; { <span class="enscript-type">typedef</span> T type; };
+
+<span class="enscript-comment">/// \brief Metafunction that removes volatile qualification from a type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_volatile             { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_volatile&lt;<span class="enscript-type">volatile</span> T&gt; { <span class="enscript-type">typedef</span> T type; };
+
+<span class="enscript-comment">/// \brief Metafunction that removes both const and volatile qualification from
+</span><span class="enscript-comment">/// a type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_cv {
+  <span class="enscript-type">typedef</span> typename remove_const&lt;typename remove_volatile&lt;T&gt;::type&gt;::type type;
+};
+
+<span class="enscript-comment">/// \brief Helper to implement is_integral metafunction.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> is_integral_impl           : false_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         <span class="enscript-type">bool</span>&gt;      : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         <span class="enscript-type">char</span>&gt;      : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;  <span class="enscript-type">signed</span> <span class="enscript-type">char</span>&gt;      : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">char</span>&gt;      : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         wchar_t&gt;   : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         <span class="enscript-type">short</span>&gt;     : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">short</span>&gt;     : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         <span class="enscript-type">int</span>&gt;       : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span>&gt;       : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         <span class="enscript-type">long</span>&gt;      : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>&gt;      : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;         <span class="enscript-type">long</span> <span class="enscript-type">long</span>&gt; : true_type {};
+<span class="enscript-type">template</span> &lt;&gt; <span class="enscript-type">struct</span> is_integral_impl&lt;<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>&gt; : true_type {};
+
+<span class="enscript-comment">/// \brief Metafunction that determines whether the given type is an integral
+</span><span class="enscript-comment">/// type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt;
+<span class="enscript-type">struct</span> is_integral : is_integral_impl&lt;T&gt; {};
+
+<span class="enscript-comment">/// \brief Metafunction to remove reference from a type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_reference { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_reference&lt;T&amp;&gt; { <span class="enscript-type">typedef</span> T type; };
+
+<span class="enscript-comment">/// \brief Metafunction that determines whether the given type is a pointer
+</span><span class="enscript-comment">/// type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> is_pointer : false_type {};
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> is_pointer&lt;T*&gt; : true_type {};
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> is_pointer&lt;T* <span class="enscript-type">const</span>&gt; : true_type {};
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> is_pointer&lt;T* <span class="enscript-type">volatile</span>&gt; : true_type {};
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> is_pointer&lt;T* <span class="enscript-type">const</span> <span class="enscript-type">volatile</span>&gt; : true_type {};
+
+<span class="enscript-comment">/// \brief Metafunction that determines whether the given type is either an
+</span><span class="enscript-comment">/// integral type or an enumeration type.
+</span><span class="enscript-comment">///
+</span><span class="enscript-comment">/// Note that this accepts potentially more integral types than we whitelist
+</span><span class="enscript-comment">/// above for is_integral because it is based on merely being convertible
+</span><span class="enscript-comment">/// implicitly to an integral type.
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">class</span> is_integral_or_enum {
+  <span class="enscript-comment">// Provide an overload which can be called with anything implicitly
+</span>  <span class="enscript-comment">// convertible to an unsigned long long. This should catch integer types and
+</span>  <span class="enscript-comment">// enumeration types at least. We blacklist classes with conversion operators
+</span>  <span class="enscript-comment">// below.
+</span>  <span class="enscript-type">static</span> <span class="enscript-type">double</span> check_int_convertible(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-type">long</span>);
+  <span class="enscript-type">static</span> <span class="enscript-type">char</span> check_int_convertible(...);
+
+  <span class="enscript-type">typedef</span> typename remove_reference&lt;T&gt;::type UnderlyingT;
+  <span class="enscript-type">static</span> UnderlyingT &amp;nonce_instance;
+
+<span class="enscript-type">public</span>:
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">bool</span>
+    value = (!is_class&lt;UnderlyingT&gt;::value &amp;&amp; !is_pointer&lt;UnderlyingT&gt;::value &amp;&amp;
+             !is_same&lt;UnderlyingT, <span class="enscript-type">float</span>&gt;::value &amp;&amp;
+             !is_same&lt;UnderlyingT, <span class="enscript-type">double</span>&gt;::value &amp;&amp;
+             <span class="enscript-keyword">sizeof</span>(<span class="enscript-type">char</span>) != <span class="enscript-keyword">sizeof</span>(check_int_convertible(nonce_instance)));
+};
+
+<span class="enscript-comment">// enable_if_c - Enable/disable a template based on a metafunction
+</span><span class="enscript-type">template</span>&lt;<span class="enscript-type">bool</span> Cond, typename T = <span class="enscript-type">void</span>&gt;
+<span class="enscript-type">struct</span> enable_if_c {
+  <span class="enscript-type">typedef</span> T type;
+};
+
+<span class="enscript-type">template</span>&lt;typename T&gt; <span class="enscript-type">struct</span> enable_if_c&lt;false, T&gt; { };
+  
+<span class="enscript-comment">// enable_if - Enable/disable a template based on a metafunction
+</span><span class="enscript-type">template</span>&lt;typename Cond, typename T = <span class="enscript-type">void</span>&gt;
+<span class="enscript-type">struct</span> enable_if : <span class="enscript-type">public</span> enable_if_c&lt;Cond::value, T&gt; { };
+
+namespace dont_use {
+  <span class="enscript-type">template</span>&lt;typename Base&gt; <span class="enscript-type">char</span> base_of_helper(<span class="enscript-type">const</span> <span class="enscript-type">volatile</span> Base*);
+  <span class="enscript-type">template</span>&lt;typename Base&gt; <span class="enscript-type">double</span> base_of_helper(...);
+}
+
+<span class="enscript-comment">/// is_base_of - Metafunction to determine whether one type is a base class of
+</span><span class="enscript-comment">/// (or identical to) another type.
+</span><span class="enscript-type">template</span>&lt;typename Base, typename Derived&gt;
+<span class="enscript-type">struct</span> is_base_of {
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> <span class="enscript-type">bool</span> value 
+    = is_class&lt;Base&gt;::value &amp;&amp; is_class&lt;Derived&gt;::value &amp;&amp;
+      <span class="enscript-keyword">sizeof</span>(<span class="enscript-type">char</span>) == <span class="enscript-keyword">sizeof</span>(dont_use::base_of_helper&lt;Base&gt;((Derived*)0));
+};
+
+<span class="enscript-comment">// remove_pointer - Metafunction to turn Foo* into Foo.  Defined in
+</span><span class="enscript-comment">// C++0x [meta.trans.ptr].
+</span><span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_pointer { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_pointer&lt;T*&gt; { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_pointer&lt;T*<span class="enscript-type">const</span>&gt; { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_pointer&lt;T*<span class="enscript-type">volatile</span>&gt; { <span class="enscript-type">typedef</span> T type; };
+<span class="enscript-type">template</span> &lt;typename T&gt; <span class="enscript-type">struct</span> remove_pointer&lt;T*<span class="enscript-type">const</span> <span class="enscript-type">volatile</span>&gt; {
+    <span class="enscript-type">typedef</span> T type; };
+
+<span class="enscript-type">template</span> &lt;<span class="enscript-type">bool</span>, typename T, typename F&gt;
+<span class="enscript-type">struct</span> conditional { <span class="enscript-type">typedef</span> T type; };
+
+<span class="enscript-type">template</span> &lt;typename T, typename F&gt;
+<span class="enscript-type">struct</span> conditional&lt;false, T, F&gt; { <span class="enscript-type">typedef</span> F type; };
+
+}
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">LLVM_DEFINED_HAS_FEATURE</span>
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">__has_feature</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

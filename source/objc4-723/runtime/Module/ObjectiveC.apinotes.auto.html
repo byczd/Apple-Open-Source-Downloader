@@ -1,0 +1,462 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>ObjectiveC.apinotes</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">ObjectiveC.apinotes&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="ObjectiveC.apinotes">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+---
+Name: ObjectiveC
+Classes:
+- Name: NSArray
+  SwiftBridge: 'Swift.Array'
+- Name: NSDictionary
+  SwiftBridge: 'Swift.Dictionary'
+- Name: NSSet
+  SwiftBridge: 'Swift.Set'
+- Name: NSString
+  SwiftBridge: 'Swift.String'
+- Name: List
+  Methods:
+  - Selector: init
+    MethodKind: Instance
+    NullabilityOfRet: N
+  - Selector: 'isEqual:'
+    MethodKind: Instance
+    Nullability:
+    - O
+    NullabilityOfRet: S
+- Name: NSObject
+  SwiftName: NSObject
+  Methods:
+  - Selector: alloc
+    MethodKind: Class
+    NullabilityOfRet: N
+  - Selector: 'allocWithZone:'
+    MethodKind: Class
+    Nullability:
+    - S
+    NullabilityOfRet: N
+  - Selector: class
+    MethodKind: Class
+    Availability: nonswift
+    AvailabilityMsg: use 'self' instead
+  - Selector: 'conformsToProtocol:'
+    MethodKind: Class
+    Nullability:
+    - N
+    NullabilityOfRet: S
+  - Selector: copy
+    MethodKind: Instance
+    NullabilityOfRet: N
+  - Selector: dealloc
+    MethodKind: Instance
+    Availability: nonswift
+    AvailabilityMsg: use 'deinit' to define a de-initializer
+  - Selector: debugDescription
+    MethodKind: Class
+    NullabilityOfRet: N
+  - Selector: description
+    MethodKind: Class
+    NullabilityOfRet: N
+  - Selector: 'forwardingTargetForSelector:'
+    MethodKind: Instance
+    Nullability:
+    - S
+    NullabilityOfRet: O
+  - Selector: 'forwardInvocation:'
+    MethodKind: Instance
+    Availability: nonswift
+  - Selector: init
+    MethodKind: Instance
+    NullabilityOfRet: N
+    DesignatedInit: true
+  - Selector: 'instanceMethodSignatureForSelector:'
+    MethodKind: Class
+    Availability: nonswift
+  - Selector: 'isSubclassOfClass:'
+    MethodKind: Class
+    Nullability:
+    - N
+    NullabilityOfRet: S
+  - Selector: 'methodSignatureForSelector:'
+    MethodKind: Instance
+    Availability: nonswift
+  - Selector: mutableCopy
+    MethodKind: Instance
+    NullabilityOfRet: N
+  - Selector: new
+    MethodKind: Class
+    NullabilityOfRet: N
+  - Selector: superclass
+    MethodKind: Class
+    NullabilityOfRet: O
+- Name: Object
+  Methods:
+  - Selector: init
+    MethodKind: Instance
+    NullabilityOfRet: N
+  - Selector: 'isEqual:'
+    MethodKind: Instance
+    Nullability:
+    - O
+    NullabilityOfRet: S
+Protocols:
+- Name: NSObject
+  SwiftName: NSObjectProtocol
+  Methods:
+  - Selector: class
+    MethodKind: Instance
+    Availability: nonswift
+    AvailabilityMsg: use 'type(of:)' instead
+  - Selector: 'conformsToProtocol:'
+    MethodKind: Instance
+    Nullability:
+    - N
+    NullabilityOfRet: S
+  - Selector: 'isEqual:'
+    MethodKind: Instance
+    Nullability:
+    - O
+    NullabilityOfRet: S
+  - Selector: 'isKindOfClass:'
+    MethodKind: Instance
+    Nullability:
+    - N
+    NullabilityOfRet: S
+  - Selector: 'isMemberOfClass:'
+    MethodKind: Instance
+    Nullability:
+    - N
+    NullabilityOfRet: S
+  - Selector: self
+    MethodKind: Instance
+    NullabilityOfRet: N
+  Properties:
+  - Name: debugDescription
+    Nullability: N
+  - Name: description
+    Nullability: N
+  - Name: superclass
+    Nullability: O
+Tags:
+- Name: _NSZone
+  SwiftName: _NSZone
+
+
+# Runtime functions did not yet have nullability in Swift 3.
+
+SwiftVersions:
+- Version: 3
+  Functions:
+  # objc.h swift3
+  - Name: object_getClassName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: sel_isMapped
+    Nullability: [U]
+  - Name: sel_getUid
+    NullabilityOfRet: U
+    Nullability: [U]
+
+  # objc-exception.h swift3
+  - Name: objc_exception_throw
+    Nullability: [U]
+  - Name: objc_begin_catch
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_setExceptionPreprocessor
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_setExceptionMatcher
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_setUncaughtExceptionHandler
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_addExceptionHandler
+    Nullability: [U, U]
+
+  # objc-sync.h swift3
+  - Name: objc_sync_enter
+    Nullability: [U]
+  - Name: objc_sync_exit
+    Nullability: [U]
+
+  # runtime.h swift3
+  - Name: object_getClass
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: object_setClass
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: object_isClass
+    Nullability: [U]
+  - Name: object_getIvar
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: object_setIvar
+    Nullability: [U, U, U]
+  - Name: object_setIvarWithStrongDefault
+    Nullability: [U, U, U]
+  - Name: objc_getClass
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_getMetaClass
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_lookUpClass
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_getRequiredClass
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_getClassList
+    Parameters:
+    - Position: 0
+      Type: &quot;Class _Nullable * _Null_unspecified&quot;
+  - Name: objc_copyClassList
+    ResultType: &quot;Class _Nullable * _Null_unspecified&quot;
+    Nullability: [U]
+  - Name: class_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: class_isMetaClass
+    Nullability: [U]
+  - Name: class_getSuperclass
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: class_getVersion
+    Nullability: [U]
+  - Name: class_setVersion
+    Nullability: [U]
+  - Name: class_getInstanceSize
+    Nullability: [U]
+  - Name: class_getInstanceVariable
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_getClassVariable
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_copyIvarList
+    ResultType: &quot;Ivar _Nullable * _Null_unspecified&quot;
+    Nullability: [U, U]
+  - Name: class_getInstanceMethod
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_getClassMethod
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_getMethodImplementation
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_getMethodImplementation_stret
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_respondsToSelector
+    Nullability: [U, U]
+  - Name: class_copyMethodList
+    Nullability: [U, U]
+    ResultType: &quot;Method _Nullable * _Null_unspecified&quot;
+  - Name: class_conformsToProtocol
+    Nullability: [U, U]
+  - Name: class_copyProtocolList
+# fixme ResultType:
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_getProperty
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: class_copyPropertyList
+    ResultType: &quot;objc_property_t _Nullable * _Null_unspecified&quot;
+    Nullability: [U, U]
+  - Name: class_getIvarLayout
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: class_getWeakIvarLayout
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: class_addMethod
+    Nullability: [U, U, U, U]
+  - Name: class_replaceMethod
+    NullabilityOfRet: U
+    Nullability: [U, U, U, U]
+  - Name: class_addIvar
+    Nullability: [U, U, U, U, U]
+  - Name: class_addProtocol
+    Nullability: [U, U]
+  - Name: class_addProperty
+    Nullability: [U, U, U, U]
+  - Name: class_replaceProperty
+    Nullability: [U, U, U, U]
+  - Name: class_setIvarLayout
+    Nullability: [U, U]
+  - Name: class_setWeakIvarLayout
+    Nullability: [U, U]
+  - Name: class_createInstance
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: objc_allocateClassPair
+    NullabilityOfRet: U
+    Nullability: [U, U, U]
+  - Name: objc_registerClassPair
+    Nullability: [U]
+  - Name: objc_duplicateClass
+    NullabilityOfRet: U
+    Nullability: [U, U, U]
+  - Name: objc_disposeClassPair
+    Nullability: [U]
+  - Name: method_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: method_getImplementation
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: method_getTypeEncoding
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: method_getNumberOfArguments
+    Nullability: [U]
+  - Name: method_copyReturnType
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: method_copyArgumentType
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: method_getReturnType
+    Nullability: [U, U, U]
+  - Name: method_getArgumentType
+    Nullability: [U, U, U, U]
+  - Name: method_getDescription
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: method_setImplementation
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: method_exchangeImplementations
+    Nullability: [U, U]
+  - Name: ivar_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: ivar_getTypeEncoding
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: ivar_getOffset
+    Nullability: [U]
+  - Name: property_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: property_getAttributes
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: property_copyAttributeList
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: property_copyAttributeValue
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: objc_getProtocol
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_copyProtocolList
+# fixme ResultType:
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: protocol_conformsToProtocol
+    Nullability: [U, U]
+  - Name: protocol_isEqual
+    Nullability: [U, U]
+  - Name: protocol_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: protocol_getMethodDescription
+    Nullability: [U, U, U, U]
+  - Name: protocol_copyMethodDescriptionList
+    NullabilityOfRet: U
+    Nullability: [U, U, U, U]
+  - Name: protocol_getProperty
+    NullabilityOfRet: U
+    Nullability: [U, U, U, U]
+  - Name: protocol_copyPropertyList
+    ResultType: &quot;objc_property_t _Nullable * _Null_unspecified&quot;
+    Nullability: [U, U]
+  - Name: protocol_copyPropertyList2
+    ResultType: &quot;objc_property_t _Nullable * _Null_unspecified&quot;
+    Nullability: [U, U, U, U]
+  - Name: protocol_copyProtocolList
+# fixme ResultType:
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: objc_allocateProtocol
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_registerProtocol
+    Nullability: [U]
+  - Name: protocol_addMethodDescription
+    Nullability: [U, U, U, U, U]
+  - Name: protocol_addProtocol
+    Nullability: [U, U]
+  - Name: protocol_addProperty
+    Nullability: [U, U, U, U, U, U]
+  - Name: objc_copyImageNames
+    ResultType: &quot;const char * _Nullable * _Null_unspecified&quot;
+    Nullability: [U]
+  - Name: class_getImageName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_copyClassNamesForImage
+    ResultType: &quot;const char * _Nullable * _Null_unspecified&quot;
+    Nullability: [U, U]
+  - Name: sel_getName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: sel_registerName
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: sel_isEqual
+    Nullability: [U, U]
+  - Name: objc_enumerationMutation
+    Nullability: [U]
+  - Name: objc_setEnumerationMutationHandler
+    Nullability: [U]
+  - Name: objc_setForwardHandler
+    Nullability: [U, U]
+  - Name: imp_implementationWithBlock
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: imp_getBlock
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: imp_removeBlock
+    Nullability: [U]
+  - Name: objc_loadWeak
+    NullabilityOfRet: U
+    Nullability: [U]
+  - Name: objc_storeWeak
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: objc_setAssociatedObject
+    Nullability: [U, U, U, U]
+  - Name: objc_getAssociatedObject
+    NullabilityOfRet: U
+    Nullability: [U, U]
+  - Name: objc_removeAssociatedObjects
+    Nullability: [U]
+</pre>
+<hr />
+</body></html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-file.mm</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-file.mm&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-file.mm">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ * Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */
+
+#if __OBJC2__
+
+#include &quot;objc-private.h&quot;
+#include &quot;objc-file.h&quot;
+
+
+// Look for a __DATA or __DATA_CONST or __DATA_DIRTY section 
+// with the given name that stores an array of T.
+template &lt;typename T&gt;
+T* getDataSection(const headerType *mhdr, const char *sectname, 
+                  size_t *outBytes, size_t *outCount)
+{
+    unsigned long byteCount = 0;
+    T* data = (T*)getsectiondata(mhdr, &quot;__DATA&quot;, sectname, &amp;byteCount);
+    if (!data) {
+        data = (T*)getsectiondata(mhdr, &quot;__DATA_CONST&quot;, sectname, &amp;byteCount);
+    }
+    if (!data) {
+        data = (T*)getsectiondata(mhdr, &quot;__DATA_DIRTY&quot;, sectname, &amp;byteCount);
+    }
+    if (outBytes) *outBytes = byteCount;
+    if (outCount) *outCount = byteCount / sizeof(T);
+    return data;
+}
+
+#define GETSECT(name, type, sectname)                                   \
+    type *name(const headerType *mhdr, size_t *outCount) {              \
+        return getDataSection&lt;type&gt;(mhdr, sectname, nil, outCount);     \
+    }                                                                   \
+    type *name(const header_info *hi, size_t *outCount) {               \
+        return getDataSection&lt;type&gt;(hi-&gt;mhdr(), sectname, nil, outCount); \
+    }
+
+//      function name                 content type     section name
+GETSECT(_getObjc2SelectorRefs,        SEL,             &quot;__objc_selrefs&quot;); 
+GETSECT(_getObjc2MessageRefs,         message_ref_t,   &quot;__objc_msgrefs&quot;); 
+GETSECT(_getObjc2ClassRefs,           Class,           &quot;__objc_classrefs&quot;);
+GETSECT(_getObjc2SuperRefs,           Class,           &quot;__objc_superrefs&quot;);
+GETSECT(_getObjc2ClassList,           classref_t,      &quot;__objc_classlist&quot;);
+GETSECT(_getObjc2NonlazyClassList,    classref_t,      &quot;__objc_nlclslist&quot;);
+GETSECT(_getObjc2CategoryList,        category_t *,    &quot;__objc_catlist&quot;);
+GETSECT(_getObjc2NonlazyCategoryList, category_t *,    &quot;__objc_nlcatlist&quot;);
+GETSECT(_getObjc2ProtocolList,        protocol_t *,    &quot;__objc_protolist&quot;);
+GETSECT(_getObjc2ProtocolRefs,        protocol_t *,    &quot;__objc_protorefs&quot;);
+GETSECT(getLibobjcInitializers,       Initializer,     &quot;__objc_init_func&quot;);
+
+
+objc_image_info *
+_getObjcImageInfo(const headerType *mhdr, size_t *outBytes)
+{
+    return getDataSection&lt;objc_image_info&gt;(mhdr, &quot;__objc_imageinfo&quot;, 
+                                           outBytes, nil);
+}
+
+
+static const segmentType *
+getsegbynamefromheader(const headerType *mhdr, const char *segname)
+{
+    const segmentType *seg = (const segmentType *) (mhdr + 1);
+    for (unsigned long i = 0; i &lt; mhdr-&gt;ncmds; i++){
+        if (seg-&gt;cmd == SEGMENT_CMD  &amp;&amp;  segnameEquals(seg-&gt;segname, segname)) {
+            return seg;
+        }
+        seg = (const segmentType *)((char *)seg + seg-&gt;cmdsize);
+    }
+    return nil;
+}
+
+// Look for an __objc* section other than __objc_imageinfo
+static bool segmentHasObjcContents(const segmentType *seg)
+{
+    if (seg) {
+        for (uint32_t i = 0; i &lt; seg-&gt;nsects; i++) {
+            const sectionType *sect = ((const sectionType *)(seg+1))+i;
+            if (sectnameStartsWith(sect-&gt;sectname, &quot;__objc_&quot;)  &amp;&amp;  
+                !sectnameEquals(sect-&gt;sectname, &quot;__objc_imageinfo&quot;)) 
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+// Look for an __objc* section other than __objc_imageinfo
+bool
+_hasObjcContents(const header_info *hi)
+{
+    const segmentType *data = 
+        getsegbynamefromheader(hi-&gt;mhdr(), &quot;__DATA&quot;);
+    const segmentType *data_const = 
+        getsegbynamefromheader(hi-&gt;mhdr(), &quot;__DATA_CONST&quot;);
+    const segmentType *data_dirty = 
+        getsegbynamefromheader(hi-&gt;mhdr(), &quot;__DATA_DIRTY&quot;);
+    
+    return segmentHasObjcContents(data) 
+        || segmentHasObjcContents(data_const) 
+        || segmentHasObjcContents(data_dirty);
+}
+
+
+// OBJC2
+#endif
+</pre>
+<hr />
+</body></html>

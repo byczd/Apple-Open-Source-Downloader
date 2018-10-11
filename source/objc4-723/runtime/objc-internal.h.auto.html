@@ -1,0 +1,807 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-internal.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-internal.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-internal.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2009 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_INTERNAL_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_INTERNAL_H</span>
+
+<span class="enscript-comment">/* 
+ * WARNING  DANGER  HAZARD  BEWARE  EEK
+ * 
+ * Everything in this file is for Apple Internal use only.
+ * These will change in arbitrary OS updates and in unpredictable ways.
+ * When your program breaks, you get to keep both pieces.
+ */</span>
+
+<span class="enscript-comment">/*
+ * objc-internal.h: Private SPI for use by other system frameworks.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/runtime.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;Availability.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc/malloc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;dispatch/dispatch.h&gt;</span>
+
+__BEGIN_DECLS
+
+<span class="enscript-comment">// Termination reasons in the OS_REASON_OBJC namespace.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_EXIT_REASON_UNSPECIFIED</span> 1
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_EXIT_REASON_GC_NOT_SUPPORTED</span> 2
+
+<span class="enscript-comment">// This is the allocation size required for each of the class and the metaclass 
+</span><span class="enscript-comment">// with objc_initializeClassPair() and objc_readClassPair().
+</span><span class="enscript-comment">// The runtime's class structure will never grow beyond this.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_MAX_CLASS_SIZE</span> (32*sizeof(void*))
+
+<span class="enscript-comment">// In-place construction of an Objective-C class.
+</span><span class="enscript-comment">// cls and metacls must each be OBJC_MAX_CLASS_SIZE bytes.
+</span><span class="enscript-comment">// Returns nil if a class with the same name already exists.
+</span><span class="enscript-comment">// Returns nil if the superclass is under construction.
+</span><span class="enscript-comment">// Call objc_registerClassPair() when you are done.
+</span>OBJC_EXPORT Class _Nullable
+<span class="enscript-function-name">objc_initializeClassPair</span>(Class _Nullable superclass, <span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull name,
+                         Class _Nonnull cls, Class _Nonnull metacls) 
+    OBJC_AVAILABLE(10.6, 3.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Class and metaclass construction from a compiler-generated memory image.
+</span><span class="enscript-comment">// cls and cls-&gt;isa must each be OBJC_MAX_CLASS_SIZE bytes. 
+</span><span class="enscript-comment">// Extra bytes not used the the metadata must be zero.
+</span><span class="enscript-comment">// info is the same objc_image_info that would be emitted by a static compiler.
+</span><span class="enscript-comment">// Returns nil if a class with the same name already exists.
+</span><span class="enscript-comment">// Returns nil if the superclass is nil and the class is not marked as a root.
+</span><span class="enscript-comment">// Returns nil if the superclass is under construction.
+</span><span class="enscript-comment">// Do not call objc_registerClassPair().
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+<span class="enscript-type">struct</span> objc_image_info;
+OBJC_EXPORT Class _Nullable
+<span class="enscript-function-name">objc_readClassPair</span>(Class _Nonnull cls,
+                   <span class="enscript-type">const</span> <span class="enscript-type">struct</span> objc_image_info * _Nonnull info)
+    OBJC_AVAILABLE(10.10, 8.0, 9.0, 1.0, 2.0);
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Batch object allocation using malloc_zone_batch_malloc().
+</span>OBJC_EXPORT <span class="enscript-type">unsigned</span>
+<span class="enscript-function-name">class_createInstances</span>(Class _Nullable cls, size_t extraBytes, 
+                      id _Nonnull * _Nonnull results, <span class="enscript-type">unsigned</span> num_requested)
+    OBJC_AVAILABLE(10.7, 4.3, 9.0, 1.0, 2.0)
+    OBJC_ARC_UNAVAILABLE;
+
+<span class="enscript-comment">// Get the isa pointer written into objects just before being freed.
+</span>OBJC_EXPORT Class _Nonnull
+<span class="enscript-function-name">_objc_getFreedObjectClass</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// env NSObjCMessageLoggingEnabled
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">instrumentObjcMessageSends</span>(BOOL flag)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Initializer called by libSystem
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_init</span>(<span class="enscript-type">void</span>)
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+#<span class="enscript-reference">else</span>
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// fork() safety called by libSystem
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_atfork_prepare</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_atfork_parent</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_atfork_child</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+<span class="enscript-comment">// Return YES if GC is on and `object` is a GC allocation.
+</span>OBJC_EXPORT BOOL
+<span class="enscript-function-name">objc_isAuto</span>(id _Nullable object) 
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;it always returns NO&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+<span class="enscript-comment">// GC startup callback from Foundation
+</span>OBJC_EXPORT malloc_zone_t * _Nullable
+<span class="enscript-function-name">objc_collect_init</span>(<span class="enscript-type">int</span> (* _Nonnull callback)(<span class="enscript-type">void</span>))
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+<span class="enscript-comment">// Plainly-implemented GC barriers. Rosetta used to use these.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_assign_strongCast_generic</span>(id _Nullable value, id _Nullable * _Nonnull dest)
+    UNAVAILABLE_ATTRIBUTE;
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_assign_global_generic</span>(id _Nullable value, id _Nullable * _Nonnull dest)
+    UNAVAILABLE_ATTRIBUTE;
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_assign_threadlocal_generic</span>(id _Nullable value,
+                                id _Nullable * _Nonnull dest)
+    UNAVAILABLE_ATTRIBUTE;
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_assign_ivar_generic</span>(id _Nullable value, id _Nonnull dest, ptrdiff_t offset)
+    UNAVAILABLE_ATTRIBUTE;
+
+<span class="enscript-comment">// GC preflight for an app executable.
+</span><span class="enscript-comment">// 1: some slice requires GC
+</span><span class="enscript-comment">// 0: no slice requires GC
+</span><span class="enscript-comment">// -1: I/O or file format error
+</span>OBJC_EXPORT <span class="enscript-type">int</span>
+<span class="enscript-function-name">objc_appRequiresGC</span>(<span class="enscript-type">int</span> fd)
+    __OSX_AVAILABLE(10.11) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+<span class="enscript-comment">// Install missing-class callback. Used by the late unlamented ZeroLink.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_setClassLoader</span>(BOOL (* _Nonnull newClassLoader)(<span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull))
+    OBJC2_UNAVAILABLE;
+
+<span class="enscript-comment">// Install handler for allocation failures. 
+</span><span class="enscript-comment">// Handler may abort, or throw, or provide an object to return.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_setBadAllocHandler</span>(id _Nullable (* _Nonnull newHandler)
+                           (Class _Nullable isa))
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// This can go away when AppKit stops calling it (rdar://7811851)
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_setMultithreaded</span> (BOOL flag)
+    __OSX_DEPRECATED(10.0, 10.5, <span class="enscript-string">&quot;multithreading is always available&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Used by ExceptionHandling.framework
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_error</span>(id _Nullable rcv, <span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull fmt, va_list args)
+    __attribute__((noreturn))
+    __OSX_DEPRECATED(10.0, 10.5, <span class="enscript-string">&quot;use other logging facilities instead&quot;</span>) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">// Tagged pointer objects.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__LP64__</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_HAVE_TAGGED_POINTERS</span> 1
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">OBJC_HAVE_TAGGED_POINTERS</span>
+
+<span class="enscript-comment">// Tagged pointer layout and usage is subject to change on different OS versions.
+</span>
+<span class="enscript-comment">// Tag indexes 0..&lt;7 have a 60-bit payload.
+</span><span class="enscript-comment">// Tag index 7 is reserved.
+</span><span class="enscript-comment">// Tag indexes 8..&lt;264 have a 52-bit payload.
+</span><span class="enscript-comment">// Tag index 264 is reserved.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_fixed_enum</span>)  ||  <span class="enscript-variable-name">__cplusplus</span> &gt;= 201103L
+<span class="enscript-type">enum</span> objc_tag_index_t : uint16_t
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">typedef</span> uint16_t objc_tag_index_t;
+<span class="enscript-type">enum</span>
+#<span class="enscript-reference">endif</span>
+{
+    OBJC_TAG_NSAtom            = 0, 
+    OBJC_TAG_1                 = 1, 
+    OBJC_TAG_NSString          = 2, 
+    OBJC_TAG_NSNumber          = 3, 
+    OBJC_TAG_NSIndexPath       = 4, 
+    OBJC_TAG_NSManagedObjectID = 5, 
+    OBJC_TAG_NSDate            = 6, 
+    OBJC_TAG_RESERVED_7        = 7, 
+
+    OBJC_TAG_First60BitPayload = 0, 
+    OBJC_TAG_Last60BitPayload  = 6, 
+    OBJC_TAG_First52BitPayload = 8, 
+    OBJC_TAG_Last52BitPayload  = 263, 
+
+    OBJC_TAG_RESERVED_264      = 264
+};
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_fixed_enum</span>)  &amp;&amp;  !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__cplusplus</span>)
+<span class="enscript-type">typedef</span> <span class="enscript-type">enum</span> objc_tag_index_t objc_tag_index_t;
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">// Returns true if tagged pointers are enabled.
+</span><span class="enscript-comment">// The other functions below must not be called if tagged pointers are disabled.
+</span><span class="enscript-type">static</span> inline bool 
+<span class="enscript-function-name">_objc_taggedPointersEnabled</span>(<span class="enscript-type">void</span>);
+
+<span class="enscript-comment">// Register a class for a tagged pointer tag.
+</span><span class="enscript-comment">// Aborts if the tag is invalid or already in use.
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_registerTaggedPointerClass</span>(objc_tag_index_t tag, Class _Nonnull cls)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Returns the registered class for the given tag.
+</span><span class="enscript-comment">// Returns nil if the tag is valid but has no registered class.
+</span><span class="enscript-comment">// Aborts if the tag is invalid.
+</span>OBJC_EXPORT Class _Nullable
+<span class="enscript-function-name">_objc_getClassForTag</span>(objc_tag_index_t tag)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Create a tagged pointer object with the given tag and payload.
+</span><span class="enscript-comment">// Assumes the tag is valid.
+</span><span class="enscript-comment">// Assumes tagged pointers are enabled.
+</span><span class="enscript-comment">// The payload will be silently truncated to fit.
+</span><span class="enscript-type">static</span> inline <span class="enscript-type">void</span> * _Nonnull
+<span class="enscript-function-name">_objc_makeTaggedPointer</span>(objc_tag_index_t tag, uintptr_t payload);
+
+<span class="enscript-comment">// Return true if ptr is a tagged pointer object.
+</span><span class="enscript-comment">// Does not check the validity of ptr's class.
+</span><span class="enscript-type">static</span> inline bool 
+<span class="enscript-function-name">_objc_isTaggedPointer</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr);
+
+<span class="enscript-comment">// Extract the tag value from the given tagged pointer object.
+</span><span class="enscript-comment">// Assumes ptr is a valid tagged pointer object.
+</span><span class="enscript-comment">// Does not check the validity of ptr's tag.
+</span><span class="enscript-type">static</span> inline objc_tag_index_t 
+<span class="enscript-function-name">_objc_getTaggedPointerTag</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr);
+
+<span class="enscript-comment">// Extract the payload from the given tagged pointer object.
+</span><span class="enscript-comment">// Assumes ptr is a valid tagged pointer object.
+</span><span class="enscript-comment">// The payload value is zero-extended.
+</span><span class="enscript-type">static</span> inline uintptr_t
+<span class="enscript-function-name">_objc_getTaggedPointerValue</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr);
+
+<span class="enscript-comment">// Extract the payload from the given tagged pointer object.
+</span><span class="enscript-comment">// Assumes ptr is a valid tagged pointer object.
+</span><span class="enscript-comment">// The payload value is sign-extended.
+</span><span class="enscript-type">static</span> inline intptr_t
+<span class="enscript-function-name">_objc_getTaggedPointerSignedValue</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr);
+
+<span class="enscript-comment">// Don't use the values below. Use the declarations above.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_OSX</span> &amp;&amp; <span class="enscript-variable-name">__x86_64__</span>
+    <span class="enscript-comment">// 64-bit Mac - tag bit is LSB
+</span>#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_MSB_TAGGED_POINTERS</span> 0
+#<span class="enscript-reference">else</span>
+    <span class="enscript-comment">// Everything else - tag bit is MSB
+</span>#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_MSB_TAGGED_POINTERS</span> 1
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_INDEX_MASK</span> 0x7
+<span class="enscript-comment">// array slot includes the tag bit itself
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_SLOT_COUNT</span> 16
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_SLOT_MASK</span> 0xf
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_INDEX_MASK</span> 0xff
+<span class="enscript-comment">// array slot has no extra bits
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_SLOT_COUNT</span> 256
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_SLOT_MASK</span> 0xff
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">OBJC_MSB_TAGGED_POINTERS</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_MASK</span> (1UL&lt;&lt;63)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_INDEX_SHIFT</span> 60
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_SLOT_SHIFT</span> 60
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_PAYLOAD_LSHIFT</span> 4
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_PAYLOAD_RSHIFT</span> 4
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_MASK</span> (0xfUL&lt;&lt;60)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_INDEX_SHIFT</span> 52
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_SLOT_SHIFT</span> 52
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_PAYLOAD_LSHIFT</span> 12
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_PAYLOAD_RSHIFT</span> 12
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_MASK</span> 1UL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_INDEX_SHIFT</span> 1
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_SLOT_SHIFT</span> 0
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_PAYLOAD_LSHIFT</span> 0
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_PAYLOAD_RSHIFT</span> 4
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_MASK</span> 0xfUL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_INDEX_SHIFT</span> 4
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_SLOT_SHIFT</span> 4
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_PAYLOAD_LSHIFT</span> 0
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_TAG_EXT_PAYLOAD_RSHIFT</span> 12
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-type">static</span> inline bool 
+<span class="enscript-function-name">_objc_taggedPointersEnabled</span>(<span class="enscript-type">void</span>)
+{
+    <span class="enscript-type">extern</span> uintptr_t objc_debug_taggedpointer_mask;
+    <span class="enscript-keyword">return</span> (objc_debug_taggedpointer_mask != 0);
+}
+
+<span class="enscript-type">static</span> inline <span class="enscript-type">void</span> * _Nonnull
+<span class="enscript-function-name">_objc_makeTaggedPointer</span>(objc_tag_index_t tag, uintptr_t value)
+{
+    <span class="enscript-comment">// PAYLOAD_LSHIFT and PAYLOAD_RSHIFT are the payload extraction shifts.
+</span>    <span class="enscript-comment">// They are reversed here for payload insertion.
+</span>
+    <span class="enscript-comment">// assert(_objc_taggedPointersEnabled());
+</span>    <span class="enscript-keyword">if</span> (tag &lt;= OBJC_TAG_Last60BitPayload) {
+        <span class="enscript-comment">// assert(((value &lt;&lt; _OBJC_TAG_PAYLOAD_RSHIFT) &gt;&gt; _OBJC_TAG_PAYLOAD_LSHIFT) == value);
+</span>        <span class="enscript-keyword">return</span> (<span class="enscript-type">void</span> *)
+            (_OBJC_TAG_MASK | 
+             ((uintptr_t)tag &lt;&lt; _OBJC_TAG_INDEX_SHIFT) | 
+             ((value &lt;&lt; _OBJC_TAG_PAYLOAD_RSHIFT) &gt;&gt; _OBJC_TAG_PAYLOAD_LSHIFT));
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-comment">// assert(tag &gt;= OBJC_TAG_First52BitPayload);
+</span>        <span class="enscript-comment">// assert(tag &lt;= OBJC_TAG_Last52BitPayload);
+</span>        <span class="enscript-comment">// assert(((value &lt;&lt; _OBJC_TAG_EXT_PAYLOAD_RSHIFT) &gt;&gt; _OBJC_TAG_EXT_PAYLOAD_LSHIFT) == value);
+</span>        <span class="enscript-keyword">return</span> (<span class="enscript-type">void</span> *)
+            (_OBJC_TAG_EXT_MASK |
+             ((uintptr_t)(tag - OBJC_TAG_First52BitPayload) &lt;&lt; _OBJC_TAG_EXT_INDEX_SHIFT) |
+             ((value &lt;&lt; _OBJC_TAG_EXT_PAYLOAD_RSHIFT) &gt;&gt; _OBJC_TAG_EXT_PAYLOAD_LSHIFT));
+    }
+}
+
+<span class="enscript-type">static</span> inline bool 
+<span class="enscript-function-name">_objc_isTaggedPointer</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr) 
+{
+    <span class="enscript-keyword">return</span> ((uintptr_t)ptr &amp; _OBJC_TAG_MASK) == _OBJC_TAG_MASK;
+}
+
+<span class="enscript-type">static</span> inline objc_tag_index_t 
+<span class="enscript-function-name">_objc_getTaggedPointerTag</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr) 
+{
+    <span class="enscript-comment">// assert(_objc_isTaggedPointer(ptr));
+</span>    uintptr_t basicTag = ((uintptr_t)ptr &gt;&gt; _OBJC_TAG_INDEX_SHIFT) &amp; _OBJC_TAG_INDEX_MASK;
+    uintptr_t extTag =   ((uintptr_t)ptr &gt;&gt; _OBJC_TAG_EXT_INDEX_SHIFT) &amp; _OBJC_TAG_EXT_INDEX_MASK;
+    <span class="enscript-keyword">if</span> (basicTag == _OBJC_TAG_INDEX_MASK) {
+        <span class="enscript-keyword">return</span> (objc_tag_index_t)(extTag + OBJC_TAG_First52BitPayload);
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">return</span> (objc_tag_index_t)basicTag;
+    }
+}
+
+<span class="enscript-type">static</span> inline uintptr_t
+<span class="enscript-function-name">_objc_getTaggedPointerValue</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr) 
+{
+    <span class="enscript-comment">// assert(_objc_isTaggedPointer(ptr));
+</span>    uintptr_t basicTag = ((uintptr_t)ptr &gt;&gt; _OBJC_TAG_INDEX_SHIFT) &amp; _OBJC_TAG_INDEX_MASK;
+    <span class="enscript-keyword">if</span> (basicTag == _OBJC_TAG_INDEX_MASK) {
+        <span class="enscript-keyword">return</span> ((uintptr_t)ptr &lt;&lt; _OBJC_TAG_EXT_PAYLOAD_LSHIFT) &gt;&gt; _OBJC_TAG_EXT_PAYLOAD_RSHIFT;
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">return</span> ((uintptr_t)ptr &lt;&lt; _OBJC_TAG_PAYLOAD_LSHIFT) &gt;&gt; _OBJC_TAG_PAYLOAD_RSHIFT;
+    }
+}
+
+<span class="enscript-type">static</span> inline intptr_t
+<span class="enscript-function-name">_objc_getTaggedPointerSignedValue</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * _Nullable ptr) 
+{
+    <span class="enscript-comment">// assert(_objc_isTaggedPointer(ptr));
+</span>    uintptr_t basicTag = ((uintptr_t)ptr &gt;&gt; _OBJC_TAG_INDEX_SHIFT) &amp; _OBJC_TAG_INDEX_MASK;
+    <span class="enscript-keyword">if</span> (basicTag == _OBJC_TAG_INDEX_MASK) {
+        <span class="enscript-keyword">return</span> ((intptr_t)ptr &lt;&lt; _OBJC_TAG_EXT_PAYLOAD_LSHIFT) &gt;&gt; _OBJC_TAG_EXT_PAYLOAD_RSHIFT;
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">return</span> ((intptr_t)ptr &lt;&lt; _OBJC_TAG_PAYLOAD_LSHIFT) &gt;&gt; _OBJC_TAG_PAYLOAD_RSHIFT;
+    }
+}
+
+<span class="enscript-comment">// OBJC_HAVE_TAGGED_POINTERS
+</span>#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/**
+ * Returns the method implementation of an object.
+ *
+ * @param obj An Objective-C object.
+ * @param name An Objective-C selector.
+ *
+ * @return The IMP corresponding to the instance method implemented by
+ * the class of \e obj.
+ * 
+ * @note Equivalent to:
+ *
+ * class_getMethodImplementation(object_getClass(obj), name);
+ */</span>
+OBJC_EXPORT IMP _Nonnull
+<span class="enscript-function-name">object_getMethodImplementation</span>(id _Nullable obj, SEL _Nonnull name)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT IMP _Nonnull
+<span class="enscript-function-name">object_getMethodImplementation_stret</span>(id _Nullable obj, SEL _Nonnull name)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+
+<span class="enscript-comment">// Instance-specific instance variable layout.
+</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_class_setIvarLayoutAccessor</span>(Class _Nullable cls,
+                             <span class="enscript-type">const</span> uint8_t* _Nullable (* _Nonnull accessor)
+                               (id _Nullable object))
+    __OSX_AVAILABLE(10.7) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">const</span> uint8_t * _Nullable
+<span class="enscript-function-name">_object_getIvarLayout</span>(Class _Nullable cls, id _Nullable object)
+    __OSX_AVAILABLE(10.7) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+<span class="enscript-comment">/*
+  &quot;Unknown&quot; includes non-object ivars and non-ARC non-__weak ivars
+  &quot;Strong&quot; includes ARC __strong ivars
+  &quot;Weak&quot; includes ARC and new MRC __weak ivars
+  &quot;Unretained&quot; includes ARC __unsafe_unretained and old GC+MRC __weak ivars
+*/</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">enum</span> {
+    objc_ivar_memoryUnknown,     <span class="enscript-comment">// unknown / unknown
+</span>    objc_ivar_memoryStrong,      <span class="enscript-comment">// direct access / objc_storeStrong
+</span>    objc_ivar_memoryWeak,        <span class="enscript-comment">// objc_loadWeak[Retained] / objc_storeWeak
+</span>    objc_ivar_memoryUnretained   <span class="enscript-comment">// direct access / direct access
+</span>} objc_ivar_memory_management_t;
+
+OBJC_EXPORT objc_ivar_memory_management_t
+<span class="enscript-function-name">_class_getIvarMemoryManagement</span>(Class _Nullable cls, Ivar _Nonnull ivar)
+    OBJC_AVAILABLE(10.12, 10.0, 10.0, 3.0, 2.0);
+
+OBJC_EXPORT BOOL <span class="enscript-function-name">_class_isFutureClass</span>(Class _Nullable cls)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
+
+
+<span class="enscript-comment">// API to only be called by root classes like NSObject or NSProxy
+</span>
+OBJC_EXPORT
+id _Nonnull
+<span class="enscript-function-name">_objc_rootRetain</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_rootRelease</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+bool
+<span class="enscript-function-name">_objc_rootReleaseWasZero</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+bool
+<span class="enscript-function-name">_objc_rootTryRetain</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+bool
+<span class="enscript-function-name">_objc_rootIsDeallocating</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+id _Nonnull
+<span class="enscript-function-name">_objc_rootAutorelease</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+uintptr_t
+<span class="enscript-function-name">_objc_rootRetainCount</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+id _Nonnull
+<span class="enscript-function-name">_objc_rootInit</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+id _Nullable
+<span class="enscript-function-name">_objc_rootAllocWithZone</span>(Class _Nonnull cls, malloc_zone_t * _Nullable zone)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+id _Nullable
+<span class="enscript-function-name">_objc_rootAlloc</span>(Class _Nonnull cls)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_rootDealloc</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_rootFinalize</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+malloc_zone_t * _Nonnull
+<span class="enscript-function-name">_objc_rootZone</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+uintptr_t
+<span class="enscript-function-name">_objc_rootHash</span>(id _Nonnull obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+<span class="enscript-type">void</span> * _Nonnull
+<span class="enscript-function-name">objc_autoreleasePoolPush</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT
+<span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_autoreleasePoolPop</span>(<span class="enscript-type">void</span> * _Nonnull context)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_alloc</span>(Class _Nullable cls)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_allocWithZone</span>(Class _Nullable cls)
+    OBJC_AVAILABLE(10.9, 7.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_retain</span>(id _Nullable obj)
+    __asm__(<span class="enscript-string">&quot;_objc_retain&quot;</span>)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_release</span>(id _Nullable obj)
+    __asm__(<span class="enscript-string">&quot;_objc_release&quot;</span>)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_autorelease</span>(id _Nullable obj)
+    __asm__(<span class="enscript-string">&quot;_objc_autorelease&quot;</span>)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Prepare a value at +1 for return through a +0 autoreleasing convention.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_autoreleaseReturnValue</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Prepare a value at +0 for return through a +0 autoreleasing convention.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_retainAutoreleaseReturnValue</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Accept a value returned through a +0 autoreleasing convention for use at +1.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_retainAutoreleasedReturnValue</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Accept a value returned through a +0 autoreleasing convention for use at +0.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_unsafeClaimAutoreleasedReturnValue</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.11, 9.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_storeStrong</span>(id _Nullable * _Nonnull location, id _Nullable obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_retainAutorelease</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// obsolete.
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_retain_autorelease</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_loadWeakRetained</span>(id _Nullable * _Nonnull location)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nullable 
+<span class="enscript-function-name">objc_initWeak</span>(id _Nullable * _Nonnull location, id _Nullable val)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Like objc_storeWeak, but stores nil if the new object is deallocating 
+</span><span class="enscript-comment">// or the new object's class does not support weak references.
+</span><span class="enscript-comment">// Returns the value stored (either the new object or nil).
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_storeWeakOrNil</span>(id _Nullable * _Nonnull location, id _Nullable obj)
+    OBJC_AVAILABLE(10.11, 9.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Like objc_initWeak, but stores nil if the new object is deallocating 
+</span><span class="enscript-comment">// or the new object's class does not support weak references.
+</span><span class="enscript-comment">// Returns the value stored (either the new object or nil).
+</span>OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_initWeakOrNil</span>(id _Nullable * _Nonnull location, id _Nullable val) 
+    OBJC_AVAILABLE(10.11, 9.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_destroyWeak</span>(id _Nullable * _Nonnull location) 
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span> 
+<span class="enscript-function-name">objc_copyWeak</span>(id _Nullable * _Nonnull to, id _Nullable * _Nonnull from)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span> 
+<span class="enscript-function-name">objc_moveWeak</span>(id _Nullable * _Nonnull to, id _Nullable * _Nonnull from) 
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_autoreleasePoolPrint</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT BOOL
+<span class="enscript-function-name">objc_should_deallocate</span>(id _Nonnull object)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_clear_deallocating</span>(id _Nonnull object)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+ 
+<span class="enscript-comment">// to make CF link for now
+</span>
+OBJC_EXPORT <span class="enscript-type">void</span> * _Nonnull
+<span class="enscript-function-name">_objc_autoreleasePoolPush</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_autoreleasePoolPop</span>(<span class="enscript-type">void</span> * _Nonnull context)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+
+<span class="enscript-comment">// Extra @encode data for XPC, or NULL
+</span>OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nullable
+<span class="enscript-function-name">_protocol_getMethodTypeEncoding</span>(Protocol * _Nonnull proto, SEL _Nonnull sel,
+                                BOOL isRequiredMethod, BOOL isInstanceMethod)
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+
+<span class="enscript-comment">// API to only be called by classes that provide their own reference count storage
+</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_deallocOnMainThreadHelper</span>(<span class="enscript-type">void</span> * _Nullable context)
+    OBJC_AVAILABLE(10.7, 5.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// On async versus sync deallocation and the _dealloc2main flag
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Theory:
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// If order matters, then code must always: [self dealloc].
+</span><span class="enscript-comment">// If order doesn't matter, then always async should be safe.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Practice:
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// The _dealloc2main bit is set for GUI objects that may be retained by other
+</span><span class="enscript-comment">// threads. Once deallocation begins on the main thread, doing more async
+</span><span class="enscript-comment">// deallocation will at best cause extra UI latency and at worst cause
+</span><span class="enscript-comment">// use-after-free bugs in unretained delegate style patterns. Yes, this is
+</span><span class="enscript-comment">// extremely fragile. Yes, in the long run, developers should switch to weak
+</span><span class="enscript-comment">// references.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// Note is NOT safe to do any equality check against the result of
+</span><span class="enscript-comment">// dispatch_get_current_queue(). The main thread can and does drain more than
+</span><span class="enscript-comment">// one dispatch queue. That is why we call pthread_main_np().
+</span><span class="enscript-comment">//
+</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">enum</span> {
+    _OBJC_RESURRECT_OBJECT = -1,        <span class="enscript-comment">/* _logicBlock has called -retain, and scheduled a -release for later. */</span>
+    _OBJC_DEALLOC_OBJECT_NOW = 1,       <span class="enscript-comment">/* call [self dealloc] immediately. */</span>
+    _OBJC_DEALLOC_OBJECT_LATER = 2      <span class="enscript-comment">/* call [self dealloc] on the main queue. */</span>
+} _objc_object_disposition_t;
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">_OBJC_SUPPORTED_INLINE_REFCNT_LOGIC_BLOCK</span>(_rc_ivar, _logicBlock)        \
+    -(id)retain {                                                               \
+        <span class="enscript-comment">/* this will fail to compile if _rc_ivar is an unsigned type */</span>         \
+        <span class="enscript-type">int</span> _retain_count_ivar_must_not_be_unsigned[0L - (__typeof__(_rc_ivar))-1] __attribute__((unused)); \
+        __typeof__(_rc_ivar) _prev = __sync_fetch_and_add(&amp;_rc_ivar, 2);        \
+        <span class="enscript-keyword">if</span> (_prev &lt; -2) { <span class="enscript-comment">/* specifically allow resurrection from logical 0. */</span> \
+            __builtin_trap(); <span class="enscript-comment">/* BUG: retain of over-released ref */</span>            \
+        }                                                                       \
+        <span class="enscript-keyword">return</span> self;                                                            \
+    }                                                                           \
+    -(oneway <span class="enscript-type">void</span>)release {                                                     \
+        __typeof__(_rc_ivar) _prev = __sync_fetch_and_sub(&amp;_rc_ivar, 2);        \
+        <span class="enscript-keyword">if</span> (_prev &gt; 0) {                                                        \
+            <span class="enscript-keyword">return</span>;                                                             \
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (_prev &lt; 0) {                                                 \
+            __builtin_trap(); <span class="enscript-comment">/* BUG: over-release */</span>                           \
+        }                                                                       \
+        _objc_object_disposition_t fate = _logicBlock(self);                    \
+        <span class="enscript-keyword">if</span> (fate == _OBJC_RESURRECT_OBJECT) {                                   \
+            <span class="enscript-keyword">return</span>;                                                             \
+        }                                                                       \
+        <span class="enscript-comment">/* mark the object as deallocating. */</span>                                  \
+        <span class="enscript-keyword">if</span> (!__sync_bool_compare_and_swap(&amp;_rc_ivar, -2, 1)) {                  \
+            __builtin_trap(); <span class="enscript-comment">/* BUG: dangling ref did a retain */</span>              \
+        }                                                                       \
+        <span class="enscript-keyword">if</span> (fate == _OBJC_DEALLOC_OBJECT_NOW) {                                 \
+            [self dealloc];                                                     \
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (fate == _OBJC_DEALLOC_OBJECT_LATER) {                        \
+            dispatch_barrier_async_f(dispatch_get_main_queue(), self,           \
+                _objc_deallocOnMainThreadHelper);                               \
+        } <span class="enscript-keyword">else</span> {                                                                \
+            __builtin_trap(); <span class="enscript-comment">/* BUG: bogus fate value */</span>                       \
+        }                                                                       \
+    }                                                                           \
+    -(NSUInteger)retainCount {                                                  \
+        <span class="enscript-keyword">return</span> (_rc_ivar + 2) &gt;&gt; 1;                                             \
+    }                                                                           \
+    -(BOOL)_tryRetain {                                                         \
+        __typeof__(_rc_ivar) _prev;                                             \
+        <span class="enscript-keyword">do</span> {                                                                    \
+            _prev = _rc_ivar;                                                   \
+            <span class="enscript-keyword">if</span> (_prev &amp; 1) {                                                    \
+                <span class="enscript-keyword">return</span> 0;                                                       \
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (_prev == -2) {                                           \
+                <span class="enscript-keyword">return</span> 0;                                                       \
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (_prev &lt; -2) {                                            \
+                __builtin_trap(); <span class="enscript-comment">/* BUG: over-release elsewhere */</span>             \
+            }                                                                   \
+        } <span class="enscript-keyword">while</span> ( ! __sync_bool_compare_and_swap(&amp;_rc_ivar, _prev, _prev + 2)); \
+        <span class="enscript-keyword">return</span> 1;                                                               \
+    }                                                                           \
+    -(BOOL)_isDeallocating {                                                    \
+        <span class="enscript-keyword">if</span> (_rc_ivar == -2) {                                                   \
+            <span class="enscript-keyword">return</span> 1;                                                           \
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (_rc_ivar &lt; -2) {                                             \
+            __builtin_trap(); <span class="enscript-comment">/* BUG: over-release elsewhere */</span>                 \
+        }                                                                       \
+        <span class="enscript-keyword">return</span> _rc_ivar &amp; 1;                                                    \
+    }
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">_OBJC_SUPPORTED_INLINE_REFCNT_LOGIC</span>(_rc_ivar, _dealloc2main)            \
+    _OBJC_SUPPORTED_INLINE_REFCNT_LOGIC_BLOCK(_rc_ivar, (^(id _self_ __attribute__((unused))) { \
+        <span class="enscript-keyword">if</span> (_dealloc2main &amp;&amp; !pthread_main_np()) {                              \
+            <span class="enscript-keyword">return</span> _OBJC_DEALLOC_OBJECT_LATER;                                  \
+        } <span class="enscript-keyword">else</span> {                                                                \
+            <span class="enscript-keyword">return</span> _OBJC_DEALLOC_OBJECT_NOW;                                    \
+        }                                                                       \
+    }))
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">_OBJC_SUPPORTED_INLINE_REFCNT</span>(_rc_ivar) _OBJC_SUPPORTED_INLINE_REFCNT_LOGIC(_rc_ivar, 0)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">_OBJC_SUPPORTED_INLINE_REFCNT_WITH_DEALLOC2MAIN</span>(_rc_ivar) _OBJC_SUPPORTED_INLINE_REFCNT_LOGIC(_rc_ivar, 1)
+
+__END_DECLS
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

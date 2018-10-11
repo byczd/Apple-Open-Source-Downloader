@@ -1,0 +1,181 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-exception.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-exception.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-exception.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2002-2003, 2006-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__OBJC_EXCEPTION_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">__OBJC_EXCEPTION_H_</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdint.h&gt;</span>
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>
+
+<span class="enscript-comment">// compiler reserves a setjmp buffer + 4 words as localExceptionData
+</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_throw</span>(id _Nonnull exception)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_try_enter</span>(<span class="enscript-type">void</span> * _Nonnull localExceptionData)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_try_exit</span>(<span class="enscript-type">void</span> * _Nonnull localExceptionData)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT id _Nonnull
+<span class="enscript-function-name">objc_exception_extract</span>(<span class="enscript-type">void</span> * _Nonnull localExceptionData)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">int</span> <span class="enscript-function-name">objc_exception_match</span>(Class _Nonnull exceptionClass,
+                                     id _Nonnull exception)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    <span class="enscript-type">int</span> version;
+    <span class="enscript-type">void</span> (* _Nonnull throw_exc)(id _Nonnull);	          <span class="enscript-comment">// version 0
+</span>    <span class="enscript-type">void</span> (* _Nonnull try_enter)(<span class="enscript-type">void</span> * _Nonnull);         <span class="enscript-comment">// version 0
+</span>    <span class="enscript-type">void</span> (* _Nonnull try_exit)(<span class="enscript-type">void</span> * _Nonnull);          <span class="enscript-comment">// version 0
+</span>    id _Nonnull (* _Nonnull extract)(<span class="enscript-type">void</span> * _Nonnull);    <span class="enscript-comment">// version 0
+</span>    <span class="enscript-type">int</span>	(* _Nonnull match)(Class _Nonnull, id _Nonnull);  <span class="enscript-comment">// version 0
+</span>} objc_exception_functions_t;
+
+<span class="enscript-comment">// get table; version tells how many
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_get_functions</span>(objc_exception_functions_t * _Nullable table)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+<span class="enscript-comment">// set table
+</span>OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_set_functions</span>(objc_exception_functions_t * _Nullable table)
+    __OSX_AVAILABLE(10.3) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+
+<span class="enscript-comment">// !__OBJC2__
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// __OBJC2__
+</span>
+<span class="enscript-type">typedef</span> id <span class="enscript-function-name">_Nonnull</span> (*objc_exception_preprocessor)(id _Nonnull exception);
+<span class="enscript-type">typedef</span> <span class="enscript-function-name">int</span> (*objc_exception_matcher)(Class _Nonnull catch_type,
+                                      id _Nonnull exception);
+<span class="enscript-type">typedef</span> <span class="enscript-function-name">void</span> (*objc_uncaught_exception_handler)(id _Null_unspecified <span class="enscript-comment">/* _Nonnull */</span> exception);
+<span class="enscript-type">typedef</span> <span class="enscript-function-name">void</span> (*objc_exception_handler)(id _Nullable unused,
+                                       <span class="enscript-type">void</span> * _Nullable context);
+
+<span class="enscript-comment">/** 
+ * Throw a runtime exception. This function is inserted by the compiler
+ * where \c @throw would otherwise be.
+ * 
+ * @param exception The exception to be thrown.
+ */</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_throw</span>(id _Nonnull exception)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_exception_rethrow</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT id _Nonnull
+<span class="enscript-function-name">objc_begin_catch</span>(<span class="enscript-type">void</span> * _Nonnull exc_buf)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_end_catch</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_terminate</span>(<span class="enscript-type">void</span>)
+    OBJC_AVAILABLE(10.8, 6.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT objc_exception_preprocessor _Nonnull
+<span class="enscript-function-name">objc_setExceptionPreprocessor</span>(objc_exception_preprocessor _Nonnull fn)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT objc_exception_matcher _Nonnull
+<span class="enscript-function-name">objc_setExceptionMatcher</span>(objc_exception_matcher _Nonnull fn)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT objc_uncaught_exception_handler _Nonnull
+<span class="enscript-function-name">objc_setUncaughtExceptionHandler</span>(objc_uncaught_exception_handler _Nonnull fn)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">// Not for iOS.
+</span>OBJC_EXPORT uintptr_t
+<span class="enscript-function-name">objc_addExceptionHandler</span>(objc_exception_handler _Nonnull fn,
+                         <span class="enscript-type">void</span> * _Nullable context)
+    __OSX_AVAILABLE(10.5) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_removeExceptionHandler</span>(uintptr_t token)
+    __OSX_AVAILABLE(10.5) 
+    __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
+    __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+<span class="enscript-comment">// __OBJC2__
+</span>#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>  // <span class="enscript-variable-name">__OBJC_EXCEPTION_H_</span>
+
+</pre>
+<hr />
+</body></html>

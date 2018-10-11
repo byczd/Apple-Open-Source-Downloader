@@ -1,0 +1,276 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+<span class="enscript-comment">/*
+ *	objc.h
+ *	Copyright 1988-1996, NeXT Software, Inc.
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_OBJC_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_OBJC_H_</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/types.h&gt;</span>      // for __DARWIN_NULL
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;Availability.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc-api.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdbool.h&gt;</span>
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_TYPES_DEFINED</span>
+<span class="enscript-comment">/// An opaque type that represents an Objective-C class.
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> objc_class *Class;
+
+<span class="enscript-comment">/// Represents an instance of a class.
+</span><span class="enscript-type">struct</span> objc_object {
+    Class _Nonnull isa  OBJC_ISA_AVAILABILITY;
+};
+
+<span class="enscript-comment">/// A pointer to an instance of a class.
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> objc_object *id;
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/// An opaque type that represents a method selector.
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> objc_selector *SEL;
+
+<span class="enscript-comment">/// A pointer to the function of a method implementation. 
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+<span class="enscript-type">typedef</span> <span class="enscript-function-name">void</span> (*IMP)(<span class="enscript-type">void</span> <span class="enscript-comment">/* id, SEL, ... */</span> ); 
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">typedef</span> id <span class="enscript-function-name">_Nullable</span> (*IMP)(id _Nonnull, SEL _Nonnull, ...); 
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/// Type to represent a boolean value.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__OBJC_BOOL_IS_BOOL</span>)
+    <span class="enscript-comment">// Honor __OBJC_BOOL_IS_BOOL when available.
+</span>#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC_BOOL_IS_BOOL</span>
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_BOOL_IS_BOOL</span> 1
+#   <span class="enscript-reference">else</span>
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_BOOL_IS_BOOL</span> 0
+#   <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">else</span>
+    <span class="enscript-comment">// __OBJC_BOOL_IS_BOOL not set.
+</span>#   <span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_OSX</span> || (<span class="enscript-variable-name">TARGET_OS_IOS</span> &amp;&amp; !<span class="enscript-variable-name">__LP64__</span> &amp;&amp; !<span class="enscript-variable-name">__ARM_ARCH_7K</span>)
+#      <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_BOOL_IS_BOOL</span> 0
+#   <span class="enscript-reference">else</span>
+#      <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_BOOL_IS_BOOL</span> 1
+#   <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">OBJC_BOOL_IS_BOOL</span>
+    <span class="enscript-type">typedef</span> bool BOOL;
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_BOOL_IS_CHAR</span> 1
+    <span class="enscript-type">typedef</span> <span class="enscript-type">signed</span> <span class="enscript-type">char</span> BOOL; 
+    <span class="enscript-comment">// BOOL is explicitly signed so @encode(BOOL) == &quot;c&quot; rather than &quot;C&quot; 
+</span>    <span class="enscript-comment">// even if -funsigned-char is used.
+</span>#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_BOOL_DEFINED</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_bool</span>)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">YES</span> __objc_yes
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">NO</span>  __objc_no
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">YES</span> ((BOOL)1)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">NO</span>  ((BOOL)0)
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">Nil</span>
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">cxx_nullptr</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">Nil</span> nullptr
+# <span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">Nil</span> __DARWIN_NULL
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">nil</span>
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">cxx_nullptr</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">nil</span> nullptr
+# <span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">nil</span> __DARWIN_NULL
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__strong</span>
+# <span class="enscript-reference">if</span> !<span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_arc</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">__strong</span> <span class="enscript-comment">/* empty */</span>
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__unsafe_unretained</span>
+# <span class="enscript-reference">if</span> !<span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_arc</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">__unsafe_unretained</span> <span class="enscript-comment">/* empty */</span>
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">__autoreleasing</span>
+# <span class="enscript-reference">if</span> !<span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_arc</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">__autoreleasing</span> <span class="enscript-comment">/* empty */</span>
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/** 
+ * Returns the name of the method specified by a given selector.
+ * 
+ * @param sel A pointer of type \c SEL. Pass the selector whose name you wish to determine.
+ * 
+ * @return A C string indicating the name of the selector.
+ */</span>
+OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull <span class="enscript-function-name">sel_getName</span>(SEL _Nonnull sel)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/** 
+ * Registers a method with the Objective-C runtime system, maps the method 
+ * name to a selector, and returns the selector value.
+ * 
+ * @param str A pointer to a C string. Pass the name of the method you wish to register.
+ * 
+ * @return A pointer of type SEL specifying the selector for the named method.
+ * 
+ * @note You must register a method name with the Objective-C runtime system to obtain the
+ *  method’s selector before you can add the method to a class definition. If the method name
+ *  has already been registered, this function simply returns the selector.
+ */</span>
+OBJC_EXPORT SEL _Nonnull <span class="enscript-function-name">sel_registerName</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull str)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/** 
+ * Returns the class name of a given object.
+ * 
+ * @param obj An Objective-C object.
+ * 
+ * @return The name of the class of which \e obj is an instance.
+ */</span>
+OBJC_EXPORT <span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull <span class="enscript-function-name">object_getClassName</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/** 
+ * Returns a pointer to any extra bytes allocated with an instance given object.
+ * 
+ * @param obj An Objective-C object.
+ * 
+ * @return A pointer to any extra bytes allocated with \e obj. If \e obj was
+ *   not allocated with any extra bytes, then dereferencing the returned pointer is undefined.
+ * 
+ * @note This function returns a pointer to any extra bytes allocated with the instance
+ *  (as specified by \c class_createInstance with extraBytes&gt;0). This memory follows the
+ *  object's ordinary ivars, but may not be adjacent to the last ivar.
+ * @note The returned pointer is guaranteed to be pointer-size aligned, even if the area following
+ *  the object's last ivar is less aligned than that. Alignment greater than pointer-size is never
+ *  guaranteed, even if the area following the object's last ivar is more aligned than that.
+ * @note In a garbage-collected environment, the memory is scanned conservatively.
+ */</span>
+OBJC_EXPORT <span class="enscript-type">void</span> * _Nullable <span class="enscript-function-name">object_getIndexedIvars</span>(id _Nullable obj)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARC_UNAVAILABLE;
+
+<span class="enscript-comment">/** 
+ * Identifies a selector as being valid or invalid.
+ * 
+ * @param sel The selector you want to identify.
+ * 
+ * @return YES if selector is valid and has a function implementation, NO otherwise. 
+ * 
+ * @warning On some platforms, an invalid reference (to invalid memory addresses) can cause
+ *  a crash. 
+ */</span>
+OBJC_EXPORT BOOL <span class="enscript-function-name">sel_isMapped</span>(SEL _Nonnull sel)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/** 
+ * Registers a method name with the Objective-C runtime system.
+ * 
+ * @param str A pointer to a C string. Pass the name of the method you wish to register.
+ * 
+ * @return A pointer of type SEL specifying the selector for the named method.
+ * 
+ * @note The implementation of this method is identical to the implementation of \c sel_registerName.
+ * @note Prior to OS X version 10.0, this method tried to find the selector mapped to the given name
+ *  and returned \c NULL if the selector was not found. This was changed for safety, because it was
+ *  observed that many of the callers of this function did not check the return value for \c NULL.
+ */</span>
+OBJC_EXPORT SEL _Nonnull <span class="enscript-function-name">sel_getUid</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> * _Nonnull str)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">const</span> <span class="enscript-type">void</span>* objc_objectptr_t;
+
+
+<span class="enscript-comment">// Obsolete ARC conversions.
+</span>
+OBJC_EXPORT id _Nullable <span class="enscript-function-name">objc_retainedObject</span>(objc_objectptr_t _Nullable obj)
+    OBJC_UNAVAILABLE(<span class="enscript-string">&quot;use CFBridgingRelease() or a (__bridge_transfer id) cast instead&quot;</span>);
+OBJC_EXPORT id _Nullable <span class="enscript-function-name">objc_unretainedObject</span>(objc_objectptr_t _Nullable obj)
+    OBJC_UNAVAILABLE(<span class="enscript-string">&quot;use a (__bridge id) cast instead&quot;</span>);
+OBJC_EXPORT objc_objectptr_t _Nullable <span class="enscript-function-name">objc_unretainedPointer</span>(id _Nullable obj)
+    OBJC_UNAVAILABLE(<span class="enscript-string">&quot;use a __bridge cast instead&quot;</span>);
+
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>
+
+<span class="enscript-comment">// The following declarations are provided here for source compatibility.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__LP64__</span>)
+    <span class="enscript-type">typedef</span> <span class="enscript-type">long</span> arith_t;
+    <span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> uarith_t;
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ARITH_SHIFT</span> 32
+#<span class="enscript-reference">else</span>
+    <span class="enscript-type">typedef</span> <span class="enscript-type">int</span> arith_t;
+    <span class="enscript-type">typedef</span> <span class="enscript-type">unsigned</span> uarith_t;
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ARITH_SHIFT</span> 16
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">char</span> *STR;
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">ISSELECTOR</span>(sel) sel_isMapped(sel)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">SELNAME</span>(sel)	sel_getName(sel)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">SELUID</span>(str)	sel_getUid(str)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">NAMEOF</span>(obj)     object_getClassName(obj)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">IV</span>(obj)         object_getIndexedIvars(obj)
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>  <span class="enscript-comment">/* _OBJC_OBJC_H_ */</span>
+</pre>
+<hr />
+</body></html>

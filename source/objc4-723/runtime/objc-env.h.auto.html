@@ -1,0 +1,68 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-env.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-env.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-env.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">// -*- truncate-lines: t; -*-
+</span>
+<span class="enscript-comment">// OPTION(var, env, help)
+</span>
+<span class="enscript-function-name">OPTION</span>( PrintImages,              OBJC_PRINT_IMAGES,               <span class="enscript-string">&quot;log image and library names as they are loaded&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintImageTimes,          OBJC_PRINT_IMAGE_TIMES,          <span class="enscript-string">&quot;measure duration of image loading steps&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintLoading,             OBJC_PRINT_LOAD_METHODS,         <span class="enscript-string">&quot;log calls to class and category +load methods&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintInitializing,        OBJC_PRINT_INITIALIZE_METHODS,   <span class="enscript-string">&quot;log calls to class +initialize methods&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintResolving,           OBJC_PRINT_RESOLVED_METHODS,     <span class="enscript-string">&quot;log methods created by +resolveClassMethod: and +resolveInstanceMethod:&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintConnecting,          OBJC_PRINT_CLASS_SETUP,          <span class="enscript-string">&quot;log progress of class and category setup&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintProtocols,           OBJC_PRINT_PROTOCOL_SETUP,       <span class="enscript-string">&quot;log progress of protocol setup&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintIvars,               OBJC_PRINT_IVAR_SETUP,           <span class="enscript-string">&quot;log processing of non-fragile ivars&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintVtables,             OBJC_PRINT_VTABLE_SETUP,         <span class="enscript-string">&quot;log processing of class vtables&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintVtableImages,        OBJC_PRINT_VTABLE_IMAGES,        <span class="enscript-string">&quot;print vtable images showing overridden methods&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintCaches,              OBJC_PRINT_CACHE_SETUP,          <span class="enscript-string">&quot;log processing of method caches&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintFuture,              OBJC_PRINT_FUTURE_CLASSES,       <span class="enscript-string">&quot;log use of future classes for toll-free bridging&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintPreopt,              OBJC_PRINT_PREOPTIMIZATION,      <span class="enscript-string">&quot;log preoptimization courtesy of dyld shared cache&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintCxxCtors,            OBJC_PRINT_CXX_CTORS,            <span class="enscript-string">&quot;log calls to C++ ctors and dtors for instance variables&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintExceptions,          OBJC_PRINT_EXCEPTIONS,           <span class="enscript-string">&quot;log exception handling&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintExceptionThrow,      OBJC_PRINT_EXCEPTION_THROW,      <span class="enscript-string">&quot;log backtrace of every objc_exception_throw()&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintAltHandlers,         OBJC_PRINT_ALT_HANDLERS,         <span class="enscript-string">&quot;log processing of exception alt handlers&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintReplacedMethods,     OBJC_PRINT_REPLACED_METHODS,     <span class="enscript-string">&quot;log methods replaced by category implementations&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintDeprecation,         OBJC_PRINT_DEPRECATION_WARNINGS, <span class="enscript-string">&quot;warn about calls to deprecated runtime functions&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintPoolHiwat,           OBJC_PRINT_POOL_HIGHWATER,       <span class="enscript-string">&quot;log high-water marks for autorelease pools&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintCustomRR,            OBJC_PRINT_CUSTOM_RR,            <span class="enscript-string">&quot;log classes with un-optimized custom retain/release methods&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintCustomAWZ,           OBJC_PRINT_CUSTOM_AWZ,           <span class="enscript-string">&quot;log classes with un-optimized custom allocWithZone methods&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( PrintRawIsa,              OBJC_PRINT_RAW_ISA,              <span class="enscript-string">&quot;log classes that require raw pointer isa fields&quot;</span>)
+
+<span class="enscript-function-name">OPTION</span>( DebugUnload,              OBJC_DEBUG_UNLOAD,               <span class="enscript-string">&quot;warn about poorly-behaving bundles when unloaded&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugFragileSuperclasses, OBJC_DEBUG_FRAGILE_SUPERCLASSES, <span class="enscript-string">&quot;warn about subclasses that may have been broken by subsequent changes to superclasses&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugNilSync,             OBJC_DEBUG_NIL_SYNC,             <span class="enscript-string">&quot;warn about @synchronized(nil), which does no synchronization&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugNonFragileIvars,     OBJC_DEBUG_NONFRAGILE_IVARS,     <span class="enscript-string">&quot;capriciously rearrange non-fragile ivars&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugAltHandlers,         OBJC_DEBUG_ALT_HANDLERS,         <span class="enscript-string">&quot;record more info about bad alt handler use&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugMissingPools,        OBJC_DEBUG_MISSING_POOLS,        <span class="enscript-string">&quot;warn about autorelease with no pool in place, which may be a leak&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugPoolAllocation,      OBJC_DEBUG_POOL_ALLOCATION,      <span class="enscript-string">&quot;halt when autorelease pools are popped out of order, and allow heap debuggers to track autorelease pools&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugDuplicateClasses,    OBJC_DEBUG_DUPLICATE_CLASSES,    <span class="enscript-string">&quot;halt when multiple classes with the same name are present&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DebugDontCrash,           OBJC_DEBUG_DONT_CRASH,           <span class="enscript-string">&quot;halt the process by exiting instead of crashing&quot;</span>)
+
+<span class="enscript-function-name">OPTION</span>( DisableVtables,           OBJC_DISABLE_VTABLES,            <span class="enscript-string">&quot;disable vtable dispatch&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DisablePreopt,            OBJC_DISABLE_PREOPTIMIZATION,    <span class="enscript-string">&quot;disable preoptimization courtesy of dyld shared cache&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DisableTaggedPointers,    OBJC_DISABLE_TAGGED_POINTERS,    <span class="enscript-string">&quot;disable tagged pointer optimization of NSNumber et al.&quot;</span>) 
+<span class="enscript-function-name">OPTION</span>( DisableNonpointerIsa,     OBJC_DISABLE_NONPOINTER_ISA,     <span class="enscript-string">&quot;disable non-pointer isa fields&quot;</span>)
+<span class="enscript-function-name">OPTION</span>( DisableInitializeForkSafety, OBJC_DISABLE_INITIALIZE_FORK_SAFETY, <span class="enscript-string">&quot;disable safety checks for +initialize after fork&quot;</span>)
+</pre>
+<hr />
+</body></html>

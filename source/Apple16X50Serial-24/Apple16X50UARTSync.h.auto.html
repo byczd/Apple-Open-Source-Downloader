@@ -1,0 +1,241 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50UARTSync.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50UARTSync.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50UARTSync.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2006 Apple Computer, Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * Apple16X50UARTSync.h
+ * This file contains the declarations for a generic 16550 (and later) serial
+ * driver.  It is intended to support a variety of chips in this family,
+ * connected via a variety of busses.  One instance of this class controls
+ * a single UART.  One or more of these objects may be attached to a provider
+ * of class com_apple_driver_16X50BusInterface, which provides register access
+ * and interrupt dispatch.
+ * 
+ * 1995-06-23	dreece	Created
+ * 2002-02-15	dreece	I/O Kit port, based on NeXT drvISASerialPort DriverKit driver.
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_APPLE16X50UARTSYNC_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_APPLE16X50UARTSYNC_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50Serial.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/serial/IORS232SerialStreamSync.h&gt;</span> // superclass
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50BusInterface.h&quot;</span> // Provider class
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50Queue.h&quot;</span> // RX &amp; TX command queue class
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50UARTTypes.h&quot;</span> // Hardware specific details
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOCommandGate.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOTimerEventSource.h&gt;</span>
+
+<span class="enscript-comment">// This are the valid values for the software flow Ccontrol
+</span><span class="enscript-comment">// state machine (XON/XOFF/XANY)
+</span><span class="enscript-type">enum</span> tXO_State {
+    kXOnSent = -2,
+    kXOffSent = -1,
+    kXO_Idle = 0,
+    kXOffNeeded = 1,
+    kXOnNeeded = 2
+} ;
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">Apple16X50BusInterface</span> com_apple_driver_16X50BusInterface
+class Apple16X50BusInterface;
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">Apple16X50UARTSync</span> com_apple_driver_16X50UARTSync
+class Apple16X50UARTSync : public IORS232SerialStreamSync
+{
+    OSDeclareDefaultStructors(com_apple_driver_16X50UARTSync);
+
+<span class="enscript-reference">public</span>:
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">REFBUG</span>
+    virtual <span class="enscript-type">void</span> retain() <span class="enscript-type">const</span>;
+    virtual <span class="enscript-type">void</span> release() <span class="enscript-type">const</span>;
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-comment">// For Clients to call (inherited from IORS232SerialStreamSync)
+</span>    virtual IOReturn acquirePort(bool sleep);
+    virtual IOReturn releasePort();
+    virtual IOReturn setState(UInt32 state, UInt32 mask);
+    virtual UInt32 getState();
+    virtual IOReturn watchState(UInt32 *state, UInt32 mask);
+    virtual UInt32 nextEvent();
+    virtual IOReturn executeEvent(UInt32 event, UInt32 data);
+    virtual IOReturn requestEvent(UInt32 event, UInt32 *data);
+    virtual IOReturn enqueueEvent(UInt32 event, UInt32 data, bool sleep);
+    virtual IOReturn dequeueEvent(UInt32 *event, UInt32 *data, bool sleep);
+    virtual IOReturn enqueueData(UInt8 *buffer,  UInt32 size, UInt32 *count, bool sleep );
+    virtual IOReturn dequeueData(UInt8 *buffer, UInt32 size, UInt32 *count, UInt32 min);
+    virtual bool attachToChild(IORegistryEntry *child, <span class="enscript-type">const</span> IORegistryPlane *plane);
+
+    <span class="enscript-comment">// For Providers to call (Apple16X50BusInterface subclasses) */
+</span>    virtual bool start(IOService *provider);
+    virtual bool attach(IOService *provider);
+    virtual bool terminate(IOOptionBits options);
+    virtual bool finalize(IOOptionBits options);
+    virtual <span class="enscript-type">void</span> stop(IOService *provider);
+    virtual <span class="enscript-type">void</span> free();
+    virtual <span class="enscript-type">void</span> interrupt();
+    <span class="enscript-type">static</span> Apple16X50UARTSync* probeUART(Apple16X50BusInterface *provider,
+                                         <span class="enscript-type">void</span> *refCon, tUART_Type type=kUART_Unknown);
+    virtual UInt32 determineMasterClock();
+    virtual <span class="enscript-type">void</span> setMasterClock(UInt32 clock);
+    
+<span class="enscript-reference">protected</span>:
+    <span class="enscript-type">static</span> tUART_Type identifyUART(Apple16X50BusInterface *Provider, <span class="enscript-type">void</span> *refCon);
+    virtual <span class="enscript-type">void</span> setDivisor(UInt32 div);
+    virtual UInt32 getDivisor();
+    virtual <span class="enscript-type">void</span> resetUART();
+    virtual <span class="enscript-type">void</span> programUART();
+    virtual <span class="enscript-type">void</span> startTxEngine();
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> dataLatencyTimeoutAction(OSObject *owner, IOTimerEventSource *);
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> frameTimeoutAction(OSObject *owner, IOTimerEventSource *);
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> delayTimeoutAction(OSObject *owner, IOTimerEventSource *);
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span> heartbeatTimeoutAction(OSObject *owner, IOTimerEventSource *);
+    virtual IOReturn executeEventGated(UInt32 event, UInt32 data, UInt32 *state, UInt32 *delta);
+    virtual UInt32 generateRxQState();
+    virtual <span class="enscript-type">void</span> flowMachine();
+    virtual IOReturn activatePort();
+    virtual <span class="enscript-type">void</span> deactivatePort();
+    virtual <span class="enscript-type">void</span> programMCR(UInt32 state, bool irqen=true, bool loop=false);
+    inline UInt8 inb(tUARTregisters reg) { <span class="enscript-keyword">return</span> Provider-&gt;getReg(reg, fRefCon); };
+    inline <span class="enscript-type">void</span> outb(tUARTregisters reg, UInt8 val) { Provider-&gt;setReg(reg, val, fRefCon); };
+    inline UInt32 msrState();
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">DEBUG</span>
+    virtual <span class="enscript-type">void</span> showRegs();
+#<span class="enscript-reference">endif</span>
+	virtual <span class="enscript-type">void</span> restoreUART();
+	virtual <span class="enscript-type">void</span> saveUART();
+
+    <span class="enscript-comment">// Static stubs for IOCommandGate::runAction()
+</span>    <span class="enscript-type">static</span> IOReturn acquirePortAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn releasePortAction(OSObject *owner, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn setStateAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn watchStateAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn nextEventAction(OSObject *owner, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn executeEventAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn enqueueEventAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn dequeueEventAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn enqueueDataAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*arg3);
+    <span class="enscript-type">static</span> IOReturn dequeueDataAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*arg1, <span class="enscript-type">void</span>*arg2, <span class="enscript-type">void</span>*arg3);
+    <span class="enscript-type">static</span> IOReturn timerControlAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+    <span class="enscript-type">static</span> IOReturn stopAction(OSObject *owner, <span class="enscript-type">void</span>*arg0, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*, <span class="enscript-type">void</span>*);
+
+    <span class="enscript-comment">// Gated methods called by the Static stubs above
+</span>    virtual IOReturn acquirePortGated(bool sleep);
+    virtual IOReturn releasePortGated();
+    virtual <span class="enscript-type">void</span> setStateGated(UInt32 state, UInt32 mask);
+    virtual IOReturn watchStateGated(UInt32 *state, UInt32 mask);
+    virtual UInt32 nextEventGated();
+    virtual IOReturn executeEventGated(UInt32 event, UInt32 data);
+    virtual IOReturn enqueueEventGated(UInt32 event, UInt32 data, bool sleep);
+    virtual IOReturn dequeueEventGated(UInt32 *event, UInt32 *data, bool sleep);
+    virtual IOReturn enqueueDataGated(UInt8 *buffer,  UInt32 size, UInt32 *count, bool sleep);
+    virtual IOReturn dequeueDataGated(UInt8 *buffer, UInt32 size, UInt32 *count, bool sleep);
+    virtual <span class="enscript-type">void</span> stopGated(IOService *provider);
+
+    <span class="enscript-comment">// ***Instance Variables***
+</span>    <span class="enscript-comment">// Primary resources:
+</span>    Apple16X50BusInterface	*Provider;
+    Apple16X50Queue		*RxQ, *TxQ;
+    IOWorkLoop			*WorkLoop;
+    IOCommandGate		*CommandGate;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span>			*Name;
+    UInt32			State;
+    bool			OffLine; <span class="enscript-comment">// true when card cannot be touched
+</span>    bool			Acquired; <span class="enscript-comment">// true while acquired
+</span>    UInt32			WatchStateMask;
+    <span class="enscript-type">enum</span> { kFreed=0, kAllocated, kAttached, kProbed, kStarted, kAcquired, kReleased, kTerminated, kFinalized, kStopped, kDetached } Stage;
+
+    <span class="enscript-comment">// Timers:
+</span>    IOTimerEventSource		*FrameTimer;
+    UInt32			FrameInterval;		<span class="enscript-comment">// Frame time in microseconds, used to wait for TxIdle
+</span>    bool			FrameTimerRunning;
+    IOTimerEventSource		*DataLatTimer;
+    UInt32			DataLatInterval;	<span class="enscript-comment">// Maximum time a char can sit undelivered in the queue
+</span>    IOTimerEventSource		*DelayTimer;
+    UInt32			DelayInterval;
+    bool			DelayTimerRunning;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">HEARTBEAT</span>
+    IOTimerEventSource		*HeartBeatTimer;
+    UInt32			HeartBeatInterval;	<span class="enscript-comment">// Periodically fake an interrupt to prevent data loss
+</span>    bool			HeartBeatNeeded;
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-comment">// UART characteristics and register shadows:
+</span>    tUART_Type			UART_Type;
+    UInt32			MaxBaud;
+    UInt32			FIFO_Size;
+    UInt8			LCR_Image;
+    UInt8			FCR_Image;
+    UInt8			IER_Mask;
+    UInt8			MCR_Image;
+
+    <span class="enscript-comment">// Framing and data rate
+</span>    UInt32			SW_Special[8];
+    UInt32			DataWidth;
+    UInt8			DataMask;
+    UInt32			StopBits;
+    UInt32			Parity;
+    UInt32			BaudRate;
+    UInt32			MasterClock;
+    UInt16			Divisor;
+    bool			MinLatency;
+    bool			IgnoreParityErrors;
+
+    <span class="enscript-comment">// Flow Control
+</span>    UInt32			FlowControl;	<span class="enscript-comment">// notify-on-delta &amp; auto_control
+</span>    tXO_State			RXO_State;
+    UInt8			XOnChar;
+    UInt8			XOffChar;
+	
+    <span class="enscript-comment">// power management
+</span>	bool		portOpened;
+
+	
+    bool				initForPM(IOService *policyMaker);
+    IOReturn			setPowerState(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> powerStateOrdinal, IOService *whatDevice);
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>		powerStateForDomainState(IOPMPowerFlags domainState );
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>		maxCapabilityForDomainState(IOPMPowerFlags domainState);
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span>		initialPowerStateForDomainState(IOPMPowerFlags domainState);
+
+    <span class="enscript-type">static</span> <span class="enscript-type">void</span>			handleSetPowerState(thread_call_param_t param0, thread_call_param_t param1);
+    <span class="enscript-type">static</span> IOReturn		setPowerStateGated(OSObject *owner, <span class="enscript-type">void</span> *arg0, <span class="enscript-type">void</span> *arg1, <span class="enscript-type">void</span> *arg2, <span class="enscript-type">void</span> *arg3);
+
+    <span class="enscript-comment">// private power state stuff
+</span>    thread_call_t		fPowerThreadCall;
+    bool				fWaitForGatedCmd;
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span>		fCurrentPowerState;     <span class="enscript-comment">// current power state (0 or 1)
+</span>};
+
+#<span class="enscript-reference">endif</span> <span class="enscript-comment">/* !_APPLE16X50UARTSYNC_H */</span>
+</pre>
+<hr />
+</body></html>

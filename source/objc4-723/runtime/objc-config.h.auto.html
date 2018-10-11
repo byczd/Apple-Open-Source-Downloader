@@ -1,0 +1,195 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-config.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-config.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-config.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2002, 2005-2008 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_CONFIG_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_CONFIG_H_</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;TargetConditionals.h&gt;</span>
+
+<span class="enscript-comment">// Avoid the !NDEBUG double negative.
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">NDEBUG</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">DEBUG</span> 1
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">DEBUG</span> 0
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_GC_COMPAT=1 to enable compatibility where GC once was.
+</span><span class="enscript-comment">// OBJC_NO_GC and OBJC_NO_GC_API in objc-api.h mean something else.
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">TARGET_OS_OSX</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_GC_COMPAT</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_GC_COMPAT</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_ZONES=1 to enable malloc zone support in NXHashTable.
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">TARGET_OS_OSX</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_ZONES</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_ZONES</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_MOD=1 to use the mod operator in NXHashTable and objc-sel-set
+</span>#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__arm__</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_MOD</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_MOD</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_PREOPT=1 to enable dyld shared cache optimizations
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_WIN32</span>  ||  <span class="enscript-variable-name">TARGET_OS_SIMULATOR</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_PREOPT</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_PREOPT</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_TAGGED_POINTERS=1 to enable tagged pointer objects
+</span><span class="enscript-comment">// Be sure to edit tagged pointer SPI in objc-internal.h as well.
+</span>#<span class="enscript-reference">if</span> !(<span class="enscript-variable-name">__OBJC2__</span>  &amp;&amp;  <span class="enscript-variable-name">__LP64__</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_TAGGED_POINTERS</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_TAGGED_POINTERS</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_MSB_TAGGED_POINTERS to use the MSB 
+</span><span class="enscript-comment">// as the tagged pointer marker instead of the LSB.
+</span><span class="enscript-comment">// Be sure to edit tagged pointer SPI in objc-internal.h as well.
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">SUPPORT_TAGGED_POINTERS</span>  ||  !<span class="enscript-variable-name">TARGET_OS_IPHONE</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_MSB_TAGGED_POINTERS</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_MSB_TAGGED_POINTERS</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_INDEXED_ISA=1 on platforms that store the class in the isa 
+</span><span class="enscript-comment">// field as an index into a class table.
+</span><span class="enscript-comment">// Note, keep this in sync with any .s files which also define it.
+</span><span class="enscript-comment">// Be sure to edit objc-abi.h as well.
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__ARM_ARCH_7K__</span> &gt;= 2
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span> 1
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span> 0
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_PACKED_ISA=1 on platforms that store the class in the isa 
+</span><span class="enscript-comment">// field as a maskable pointer with other data around it.
+</span>#<span class="enscript-reference">if</span> (!<span class="enscript-variable-name">__LP64__</span>  ||  <span class="enscript-variable-name">TARGET_OS_WIN32</span>  ||  <span class="enscript-variable-name">TARGET_OS_SIMULATOR</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_PACKED_ISA</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_PACKED_ISA</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_NONPOINTER_ISA=1 on any platform that may store something
+</span><span class="enscript-comment">// in the isa field that is not a raw pointer.
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>  &amp;&amp;  !<span class="enscript-variable-name">SUPPORT_PACKED_ISA</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_FIXUP=1 to repair calls sites for fixup dispatch.
+</span><span class="enscript-comment">// Fixup messaging itself is no longer supported.
+</span><span class="enscript-comment">// Be sure to edit objc-abi.h as well (objc_msgSend*_fixup)
+</span>#<span class="enscript-reference">if</span> !(<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__x86_64__</span>) &amp;&amp; (<span class="enscript-variable-name">TARGET_OS_OSX</span> || <span class="enscript-variable-name">TARGET_OS_SIMULATOR</span>))
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_FIXUP</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_FIXUP</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_ZEROCOST_EXCEPTIONS to use &quot;zero-cost&quot; exceptions for OBJC2.
+</span><span class="enscript-comment">// Be sure to edit objc-exception.h as well (objc_add/removeExceptionHandler)
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>  ||  (<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__arm__</span>)  &amp;&amp;  <span class="enscript-variable-name">__USING_SJLJ_EXCEPTIONS__</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_ZEROCOST_EXCEPTIONS</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_ZEROCOST_EXCEPTIONS</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_ALT_HANDLERS if you're using zero-cost exceptions 
+</span><span class="enscript-comment">// but also need to support AppKit's alt-handler scheme
+</span><span class="enscript-comment">// Be sure to edit objc-exception.h as well (objc_add/removeExceptionHandler)
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">SUPPORT_ZEROCOST_EXCEPTIONS</span>  ||  <span class="enscript-variable-name">TARGET_OS_IPHONE</span>  ||  <span class="enscript-variable-name">TARGET_OS_EMBEDDED</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_ALT_HANDLERS</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_ALT_HANDLERS</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_RETURN_AUTORELEASE to optimize autoreleased return values
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_WIN32</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_RETURN_AUTORELEASE</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_RETURN_AUTORELEASE</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_STRET on architectures that need separate struct-return ABI.
+</span>#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__arm64__</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_STRET</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_STRET</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_MESSAGE_LOGGING to enable NSObjCMessageLoggingEnabled
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_WIN32</span>  ||  <span class="enscript-variable-name">TARGET_OS_EMBEDDED</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_MESSAGE_LOGGING</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_MESSAGE_LOGGING</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Define SUPPORT_QOS_HACK to work around deadlocks due to QoS bugs.
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>  ||  <span class="enscript-variable-name">TARGET_OS_WIN32</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_QOS_HACK</span> 0
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">SUPPORT_QOS_HACK</span> 1
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// OBJC_INSTRUMENTED controls whether message dispatching is dynamically
+</span><span class="enscript-comment">// monitored.  Monitoring introduces substantial overhead.
+</span><span class="enscript-comment">// NOTE: To define this condition, do so in the build command, NOT by
+</span><span class="enscript-comment">// uncommenting the line here.  This is because objc-class.h heeds this
+</span><span class="enscript-comment">// condition, but objc-class.h can not #include this file (objc-config.h)
+</span><span class="enscript-comment">// because objc-class.h is public and objc-config.h is not.
+</span><span class="enscript-comment">//#define OBJC_INSTRUMENTED
+</span>
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

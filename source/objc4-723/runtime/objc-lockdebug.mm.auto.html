@@ -1,0 +1,647 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-lockdebug.mm</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-lockdebug.mm&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-lockdebug.mm">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ * Copyright (c) 2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */
+
+/***********************************************************************
+* objc-lock.m
+* Error-checking locks for debugging.
+**********************************************************************/
+
+#include &quot;objc-private.h&quot;
+
+#if LOCKDEBUG  &amp;&amp;  !TARGET_OS_WIN32
+
+#include &lt;unordered_map&gt;
+
+
+/***********************************************************************
+* Thread-local bool set during _objc_atfork_prepare().
+* That function is allowed to break some lock ordering rules.
+**********************************************************************/
+
+static tls_key_t fork_prepare_tls;
+
+void
+lockdebug_setInForkPrepare(bool inForkPrepare)
+{
+    INIT_ONCE_PTR(fork_prepare_tls, tls_create(nil), (void)0);
+    tls_set(fork_prepare_tls, (void*)inForkPrepare);
+}
+
+static bool
+inForkPrepare()
+{
+    INIT_ONCE_PTR(fork_prepare_tls, tls_create(nil), (void)0);
+    return (bool)tls_get(fork_prepare_tls);
+}
+
+
+
+/***********************************************************************
+* Lock order graph.
+* &quot;lock X precedes lock Y&quot; means that X must be acquired first.
+* This property is transitive.
+**********************************************************************/
+
+struct lockorder {
+    const void *l;
+    std::vector&lt;const lockorder *&gt; predecessors;
+
+    mutable std::unordered_map&lt;const lockorder *, bool&gt; memo;
+
+    lockorder(const void *newl) : l(newl) { }
+};
+
+static std::unordered_map&lt;const void*, lockorder *&gt; lockOrderList;
+// not mutex_t because we don't want lock debugging on this lock
+static mutex_tt&lt;false&gt; lockOrderLock;
+
+static bool 
+lockPrecedesLock(const lockorder *oldlock, const lockorder *newlock)
+{
+    auto memoed = newlock-&gt;memo.find(oldlock);
+    if (memoed != newlock-&gt;memo.end()) {
+        return memoed-&gt;second;
+    }
+
+    bool result = false;
+    for (const auto *pre : newlock-&gt;predecessors) {
+        if (oldlock == pre  ||  lockPrecedesLock(oldlock, pre)) {
+            result = true;
+            break;
+        }
+    }
+
+    newlock-&gt;memo[oldlock] = result;
+    return result;
+}
+
+static bool 
+lockPrecedesLock(const void *oldlock, const void *newlock)
+{
+    mutex_tt&lt;false&gt;::locker lock(lockOrderLock);
+
+    auto oldorder = lockOrderList.find(oldlock);
+    auto neworder = lockOrderList.find(newlock);
+    if (neworder == lockOrderList.end() || oldorder == lockOrderList.end()) {
+        return false;
+    }
+    return lockPrecedesLock(oldorder-&gt;second, neworder-&gt;second);
+}
+
+static bool
+lockUnorderedWithLock(const void *oldlock, const void *newlock)
+{
+    mutex_tt&lt;false&gt;::locker lock(lockOrderLock);
+    
+    auto oldorder = lockOrderList.find(oldlock);
+    auto neworder = lockOrderList.find(newlock);
+    if (neworder == lockOrderList.end() || oldorder == lockOrderList.end()) {
+        return true;
+    }
+    
+    if (lockPrecedesLock(oldorder-&gt;second, neworder-&gt;second) ||
+        lockPrecedesLock(neworder-&gt;second, oldorder-&gt;second))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void lockdebug_lock_precedes_lock(const void *oldlock, const void *newlock)
+{
+    if (lockPrecedesLock(newlock, oldlock)) {
+        _objc_fatal(&quot;contradiction in lock order declaration&quot;);
+    }
+
+    mutex_tt&lt;false&gt;::locker lock(lockOrderLock);
+
+    auto oldorder = lockOrderList.find(oldlock);
+    auto neworder = lockOrderList.find(newlock);
+    if (oldorder == lockOrderList.end()) {
+        lockOrderList[oldlock] = new lockorder(oldlock);
+        oldorder = lockOrderList.find(oldlock);
+    }
+    if (neworder == lockOrderList.end()) {
+        lockOrderList[newlock] = new lockorder(newlock);
+        neworder = lockOrderList.find(newlock);
+    }
+
+    neworder-&gt;second-&gt;predecessors.push_back(oldorder-&gt;second);
+}
+
+
+/***********************************************************************
+* Recording - per-thread list of mutexes and monitors held
+**********************************************************************/
+
+enum class lockkind {
+    MUTEX = 1, MONITOR = 2, RDLOCK = 3, WRLOCK = 4, RECURSIVE = 5
+};
+
+#define MUTEX     lockkind::MUTEX
+#define MONITOR   lockkind::MONITOR
+#define RDLOCK    lockkind::RDLOCK
+#define WRLOCK    lockkind::WRLOCK
+#define RECURSIVE lockkind::RECURSIVE
+
+struct lockcount {
+    lockkind k;  // the kind of lock it is (MUTEX, MONITOR, etc)
+    int i;       // the lock's nest count
+};
+
+using objc_lock_list = std::unordered_map&lt;const void *, lockcount&gt;;
+
+
+// Thread-local list of locks owned by a thread.
+// Used by lock ownership checks.
+static tls_key_t lock_tls;
+
+// Global list of all locks.
+// Used by fork() safety check.
+// This can't be a static struct because of C++ initialization order problems.
+static objc_lock_list&amp; AllLocks() {
+    static objc_lock_list *locks;
+    INIT_ONCE_PTR(locks, new objc_lock_list, (void)0);
+    return *locks;
+}
+
+
+static void
+destroyLocks(void *value)
+{
+    auto locks = (objc_lock_list *)value;
+    // fixme complain about any still-held locks?
+    if (locks) delete locks;
+}
+
+static objc_lock_list&amp;
+ownedLocks()
+{
+    // Use a dedicated tls key to prevent differences vs non-debug in 
+    // usage of objc's other tls keys (required for some unit tests).
+    INIT_ONCE_PTR(lock_tls, tls_create(&amp;destroyLocks), (void)0);
+
+    auto locks = (objc_lock_list *)tls_get(lock_tls);
+    if (!locks) {
+        locks = new objc_lock_list;
+        tls_set(lock_tls, locks);
+    }
+
+    return *locks;
+}
+
+static bool 
+hasLock(objc_lock_list&amp; locks, const void *lock, lockkind kind)
+{
+    auto iter = locks.find(lock);
+    if (iter != locks.end() &amp;&amp; iter-&gt;second.k == kind) return true;
+    return false;
+}
+
+
+static const char *sym(const void *lock)
+{
+    Dl_info info;
+    int ok = dladdr(lock, &amp;info);
+    if (ok &amp;&amp; info.dli_sname &amp;&amp; info.dli_sname[0]) return info.dli_sname;
+    else return &quot;??&quot;;
+}
+
+static void 
+setLock(objc_lock_list&amp; locks, const void *lock, lockkind kind)
+{
+    // Check if we already own this lock.
+    auto iter = locks.find(lock);
+    if (iter != locks.end() &amp;&amp; iter-&gt;second.k == kind) {
+        iter-&gt;second.i++;
+        return;
+    }
+
+    // Newly-acquired lock. Verify lock ordering.
+    // Locks not in AllLocks are exempt (i.e. @synchronize locks)
+    if (&amp;locks != &amp;AllLocks() &amp;&amp; AllLocks().find(lock) != AllLocks().end()) {
+        for (auto&amp; oldlock : locks) {
+            if (AllLocks().find(oldlock.first) == AllLocks().end()) {
+                // oldlock is exempt
+                continue;
+            }
+
+            if (lockPrecedesLock(lock, oldlock.first)) {
+                _objc_fatal(&quot;lock %p (%s) incorrectly acquired before %p (%s)&quot;,
+                            oldlock.first, sym(oldlock.first), lock, sym(lock));
+            }
+            if (!inForkPrepare() &amp;&amp;
+                lockUnorderedWithLock(lock, oldlock.first))
+            {
+                // _objc_atfork_prepare is allowed to acquire
+                // otherwise-unordered locks, but nothing else may.
+                _objc_fatal(&quot;lock %p (%s) acquired before %p (%s) &quot;
+                            &quot;with no defined lock order&quot;,
+                            oldlock.first, sym(oldlock.first), lock, sym(lock));
+            }
+        }
+    }
+
+    locks[lock] = lockcount{kind, 1};
+}
+
+static void 
+clearLock(objc_lock_list&amp; locks, const void *lock, lockkind kind)
+{
+    auto iter = locks.find(lock);
+    if (iter != locks.end()) {
+        auto&amp; l = iter-&gt;second;
+        if (l.k == kind) {
+            if (--l.i == 0) {
+                locks.erase(iter);
+            }
+            return;
+        }
+    }
+
+    _objc_fatal(&quot;lock not found!&quot;);
+}
+
+
+/***********************************************************************
+* fork() safety checking
+**********************************************************************/
+
+void
+lockdebug_remember_mutex(mutex_t *lock)
+{
+    setLock(AllLocks(), lock, MUTEX);
+}
+
+void
+lockdebug_remember_recursive_mutex(recursive_mutex_t *lock)
+{
+    setLock(AllLocks(), lock, RECURSIVE);
+}
+
+void
+lockdebug_remember_monitor(monitor_t *lock)
+{
+    setLock(AllLocks(), lock, MONITOR);
+}
+
+void
+lockdebug_remember_rwlock(rwlock_t *lock)
+{
+    setLock(AllLocks(), lock, WRLOCK);
+}
+
+void
+lockdebug_assert_all_locks_locked()
+{
+    auto&amp; owned = ownedLocks();
+
+    for (const auto&amp; l : AllLocks()) {
+        if (!hasLock(owned, l.first, l.second.k)) {
+            _objc_fatal(&quot;lock %p:%d is incorrectly not owned&quot;,
+                        l.first, l.second.k);
+        }
+    }
+}
+
+void
+lockdebug_assert_no_locks_locked()
+{
+    auto&amp; owned = ownedLocks();
+
+    for (const auto&amp; l : AllLocks()) {
+        if (hasLock(owned, l.first, l.second.k)) {
+            _objc_fatal(&quot;lock %p:%d is incorrectly owned&quot;, l.first, l.second.k);
+        }
+    }
+}
+
+
+/***********************************************************************
+* Mutex checking
+**********************************************************************/
+
+void 
+lockdebug_mutex_lock(mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+    
+    if (hasLock(locks, lock, MUTEX)) {
+        _objc_fatal(&quot;deadlock: relocking mutex&quot;);
+    }
+    setLock(locks, lock, MUTEX);
+}
+
+// try-lock success is the only case with lockdebug effects.
+// try-lock when already locked is OK (will fail)
+// try-lock failure does nothing.
+void 
+lockdebug_mutex_try_lock_success(mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+    setLock(locks, lock, MUTEX);
+}
+
+void 
+lockdebug_mutex_unlock(mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, MUTEX)) {
+        _objc_fatal(&quot;unlocking unowned mutex&quot;);
+    }
+    clearLock(locks, lock, MUTEX);
+}
+
+
+void 
+lockdebug_mutex_assert_locked(mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, MUTEX)) {
+        _objc_fatal(&quot;mutex incorrectly not locked&quot;);
+    }
+}
+
+void 
+lockdebug_mutex_assert_unlocked(mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, MUTEX)) {
+        _objc_fatal(&quot;mutex incorrectly locked&quot;);
+    }
+}
+
+
+/***********************************************************************
+* Recursive mutex checking
+**********************************************************************/
+
+void 
+lockdebug_recursive_mutex_lock(recursive_mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+    setLock(locks, lock, RECURSIVE);
+}
+
+void 
+lockdebug_recursive_mutex_unlock(recursive_mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, RECURSIVE)) {
+        _objc_fatal(&quot;unlocking unowned recursive mutex&quot;);
+    }
+    clearLock(locks, lock, RECURSIVE);
+}
+
+
+void 
+lockdebug_recursive_mutex_assert_locked(recursive_mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, RECURSIVE)) {
+        _objc_fatal(&quot;recursive mutex incorrectly not locked&quot;);
+    }
+}
+
+void 
+lockdebug_recursive_mutex_assert_unlocked(recursive_mutex_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, RECURSIVE)) {
+        _objc_fatal(&quot;recursive mutex incorrectly locked&quot;);
+    }
+}
+
+
+/***********************************************************************
+* Monitor checking
+**********************************************************************/
+
+void 
+lockdebug_monitor_enter(monitor_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, MONITOR)) {
+        _objc_fatal(&quot;deadlock: relocking monitor&quot;);
+    }
+    setLock(locks, lock, MONITOR);
+}
+
+void 
+lockdebug_monitor_leave(monitor_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, MONITOR)) {
+        _objc_fatal(&quot;unlocking unowned monitor&quot;);
+    }
+    clearLock(locks, lock, MONITOR);
+}
+
+void 
+lockdebug_monitor_wait(monitor_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, MONITOR)) {
+        _objc_fatal(&quot;waiting in unowned monitor&quot;);
+    }
+}
+
+
+void 
+lockdebug_monitor_assert_locked(monitor_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, MONITOR)) {
+        _objc_fatal(&quot;monitor incorrectly not locked&quot;);
+    }
+}
+
+void 
+lockdebug_monitor_assert_unlocked(monitor_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, MONITOR)) {
+        _objc_fatal(&quot;monitor incorrectly held&quot;);
+    }
+}
+
+
+/***********************************************************************
+* rwlock checking
+**********************************************************************/
+
+void 
+lockdebug_rwlock_read(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, RDLOCK)) {
+        // Recursive rwlock read is bad (may deadlock vs pending writer)
+        _objc_fatal(&quot;recursive rwlock read&quot;);
+    }
+    if (hasLock(locks, lock, WRLOCK)) {
+        _objc_fatal(&quot;deadlock: read after write for rwlock&quot;);
+    }
+    setLock(locks, lock, RDLOCK);
+}
+
+// try-read success is the only case with lockdebug effects.
+// try-read when already reading is OK (won't deadlock)
+// try-read when already writing is OK (will fail)
+// try-read failure does nothing.
+void 
+lockdebug_rwlock_try_read_success(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+    setLock(locks, lock, RDLOCK);
+}
+
+void 
+lockdebug_rwlock_unlock_read(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, RDLOCK)) {
+        _objc_fatal(&quot;un-reading unowned rwlock&quot;);
+    }
+    clearLock(locks, lock, RDLOCK);
+}
+
+
+void 
+lockdebug_rwlock_write(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, RDLOCK)) {
+        // Lock promotion not allowed (may deadlock)
+        _objc_fatal(&quot;deadlock: write after read for rwlock&quot;);
+    }
+    if (hasLock(locks, lock, WRLOCK)) {
+        _objc_fatal(&quot;recursive rwlock write&quot;);
+    }
+    setLock(locks, lock, WRLOCK);
+}
+
+// try-write success is the only case with lockdebug effects.
+// try-write when already reading is OK (will fail)
+// try-write when already writing is OK (will fail)
+// try-write failure does nothing.
+void 
+lockdebug_rwlock_try_write_success(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+    setLock(locks, lock, WRLOCK);
+}
+
+void 
+lockdebug_rwlock_unlock_write(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, WRLOCK)) {
+        _objc_fatal(&quot;un-writing unowned rwlock&quot;);
+    }
+    clearLock(locks, lock, WRLOCK);
+}
+
+
+void 
+lockdebug_rwlock_assert_reading(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, RDLOCK)) {
+        _objc_fatal(&quot;rwlock incorrectly not reading&quot;);
+    }
+}
+
+void 
+lockdebug_rwlock_assert_writing(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, WRLOCK)) {
+        _objc_fatal(&quot;rwlock incorrectly not writing&quot;);
+    }
+}
+
+void 
+lockdebug_rwlock_assert_locked(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (!hasLock(locks, lock, RDLOCK)  &amp;&amp;  !hasLock(locks, lock, WRLOCK)) {
+        _objc_fatal(&quot;rwlock incorrectly neither reading nor writing&quot;);
+    }
+}
+
+void 
+lockdebug_rwlock_assert_unlocked(rwlock_t *lock)
+{
+    auto&amp; locks = ownedLocks();
+
+    if (hasLock(locks, lock, RDLOCK)  ||  hasLock(locks, lock, WRLOCK)) {
+        _objc_fatal(&quot;rwlock incorrectly not unlocked&quot;);
+    }
+}
+
+
+#endif
+</pre>
+<hr />
+</body></html>

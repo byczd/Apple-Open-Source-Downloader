@@ -1,0 +1,1122 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>llvm-DenseMap.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">llvm-DenseMap.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="llvm-DenseMap.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">//===- llvm/ADT/DenseMap.h - Dense probed hash table ------------*- C++ -*-===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//                     The LLVM Compiler Infrastructure
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file is distributed under the University of Illinois Open Source
+</span><span class="enscript-comment">// License. See LICENSE.TXT for details.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// This file defines the DenseMap class.
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//===----------------------------------------------------------------------===//
+</span>
+<span class="enscript-comment">// Taken from llvmCore-3425.0.31.
+</span>
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">LLVM_ADT_DENSEMAP_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_ADT_DENSEMAP_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;llvm-type_traits.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;llvm-MathExtras.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;llvm-AlignOf.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;llvm-DenseMapInfo.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;algorithm&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;iterator&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;new&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;utility&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;cassert&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;climits&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;cstddef&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;cstring&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;TargetConditionals.h&gt;</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-private.h&quot;</span>
+
+<span class="enscript-comment">// From llvm/Support/Compiler.h
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span> 1
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">llvm_move</span>(value) (::std::move(value))
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">MIN_BUCKETS</span> 4
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">MIN_COMPACT</span> 1024
+
+
+namespace objc {
+
+<span class="enscript-type">template</span>&lt;typename KeyT, typename ValueT,
+         typename KeyInfoT = DenseMapInfo&lt;KeyT&gt;,
+         <span class="enscript-type">bool</span> IsConst = false&gt;
+<span class="enscript-type">class</span> DenseMapIterator;
+
+<span class="enscript-comment">// ZeroValuesArePurgeable=true is used by the refcount table.
+</span><span class="enscript-comment">// A key/value pair with value==0 is not required to be stored 
+</span><span class="enscript-comment">//   in the refcount table; it could correctly be erased instead.
+</span><span class="enscript-comment">// For performance, we do keep zero values in the table when the 
+</span><span class="enscript-comment">//   true refcount decreases to 1: this makes any future retain faster.
+</span><span class="enscript-comment">// For memory size, we allow rehashes and table insertions to 
+</span><span class="enscript-comment">//   remove a zero value as if it were a tombstone.
+</span>
+<span class="enscript-type">template</span>&lt;typename DerivedT, 
+         typename KeyT, typename ValueT, typename KeyInfoT, 
+         <span class="enscript-type">bool</span> ZeroValuesArePurgeable = false&gt;
+<span class="enscript-type">class</span> DenseMapBase {
+<span class="enscript-type">protected</span>:
+  <span class="enscript-type">typedef</span> std::pair&lt;KeyT, ValueT&gt; BucketT;
+
+<span class="enscript-type">public</span>:
+  <span class="enscript-type">typedef</span> KeyT key_type;
+  <span class="enscript-type">typedef</span> ValueT mapped_type;
+  <span class="enscript-type">typedef</span> BucketT value_type;
+
+  <span class="enscript-type">typedef</span> DenseMapIterator&lt;KeyT, ValueT, KeyInfoT&gt; iterator;
+  <span class="enscript-type">typedef</span> DenseMapIterator&lt;KeyT, ValueT,
+                           KeyInfoT, true&gt; const_iterator;
+  <span class="enscript-type">inline</span> iterator begin() {
+    <span class="enscript-comment">// When the map is empty, avoid the overhead of AdvancePastEmptyBuckets().
+</span>    <span class="enscript-keyword">return</span> empty() ? end() : iterator(getBuckets(), getBucketsEnd());
+  }
+  <span class="enscript-type">inline</span> iterator end() {
+    <span class="enscript-keyword">return</span> iterator(getBucketsEnd(), getBucketsEnd(), true);
+  }
+  <span class="enscript-type">inline</span> const_iterator begin() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> empty() ? end() : const_iterator(getBuckets(), getBucketsEnd());
+  }
+  <span class="enscript-type">inline</span> const_iterator end() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> const_iterator(getBucketsEnd(), getBucketsEnd(), true);
+  }
+
+  <span class="enscript-type">bool</span> empty() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> getNumEntries() == 0; }
+  <span class="enscript-type">unsigned</span> size() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> getNumEntries(); }
+
+  <span class="enscript-comment">/// Grow the densemap so that it has at least Size buckets. Does not shrink
+</span>  <span class="enscript-type">void</span> resize(size_t Size) {
+    <span class="enscript-keyword">if</span> (Size &gt; getNumBuckets())
+      grow(Size);
+  }
+
+  <span class="enscript-type">void</span> clear() {
+    <span class="enscript-keyword">if</span> (getNumEntries() == 0 &amp;&amp; getNumTombstones() == 0) <span class="enscript-keyword">return</span>;
+    
+    <span class="enscript-comment">// If the capacity of the array is huge, and the # elements used is small,
+</span>    <span class="enscript-comment">// shrink the array.
+</span>    <span class="enscript-keyword">if</span> (getNumEntries() * 4 &lt; getNumBuckets() &amp;&amp; 
+        getNumBuckets() &gt; MIN_BUCKETS) {
+      shrink_and_clear();
+      <span class="enscript-keyword">return</span>;
+    }
+
+    <span class="enscript-type">const</span> KeyT EmptyKey = getEmptyKey(), TombstoneKey = getTombstoneKey();
+    <span class="enscript-keyword">for</span> (BucketT *P = getBuckets(), *E = getBucketsEnd(); P != E; ++P) {
+      <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(P-&gt;first, EmptyKey)) {
+        <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(P-&gt;first, TombstoneKey)) {
+          P-&gt;second.~ValueT();
+          decrementNumEntries();
+        }
+        P-&gt;first = EmptyKey;
+      }
+    }
+    assert(getNumEntries() == 0 &amp;&amp; <span class="enscript-string">&quot;Node count imbalance!&quot;</span>);
+    setNumTombstones(0);
+  }
+
+  <span class="enscript-comment">/// count - Return true if the specified key is in the map.
+</span>  <span class="enscript-type">bool</span> count(<span class="enscript-type">const</span> KeyT &amp;Val) <span class="enscript-type">const</span> {
+    <span class="enscript-type">const</span> BucketT *TheBucket;
+    <span class="enscript-keyword">return</span> LookupBucketFor(Val, TheBucket);
+  }
+
+  iterator find(<span class="enscript-type">const</span> KeyT &amp;Val) {
+    BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Val, TheBucket))
+      <span class="enscript-keyword">return</span> iterator(TheBucket, getBucketsEnd(), true);
+    <span class="enscript-keyword">return</span> end();
+  }
+  const_iterator find(<span class="enscript-type">const</span> KeyT &amp;Val) <span class="enscript-type">const</span> {
+    <span class="enscript-type">const</span> BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Val, TheBucket))
+      <span class="enscript-keyword">return</span> const_iterator(TheBucket, getBucketsEnd(), true);
+    <span class="enscript-keyword">return</span> end();
+  }
+
+  <span class="enscript-comment">/// Alternate version of find() which allows a different, and possibly
+</span>  <span class="enscript-comment">/// less expensive, key type.
+</span>  <span class="enscript-comment">/// The DenseMapInfo is responsible for supplying methods
+</span>  <span class="enscript-comment">/// getHashValue(LookupKeyT) and isEqual(LookupKeyT, KeyT) for each key
+</span>  <span class="enscript-comment">/// type used.
+</span>  <span class="enscript-type">template</span>&lt;<span class="enscript-type">class</span> LookupKeyT&gt;
+  iterator find_as(<span class="enscript-type">const</span> LookupKeyT &amp;Val) {
+    BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Val, TheBucket))
+      <span class="enscript-keyword">return</span> iterator(TheBucket, getBucketsEnd(), true);
+    <span class="enscript-keyword">return</span> end();
+  }
+  <span class="enscript-type">template</span>&lt;<span class="enscript-type">class</span> LookupKeyT&gt;
+  const_iterator find_as(<span class="enscript-type">const</span> LookupKeyT &amp;Val) <span class="enscript-type">const</span> {
+    <span class="enscript-type">const</span> BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Val, TheBucket))
+      <span class="enscript-keyword">return</span> const_iterator(TheBucket, getBucketsEnd(), true);
+    <span class="enscript-keyword">return</span> end();
+  }
+
+  <span class="enscript-comment">/// lookup - Return the entry for the specified key, or a default
+</span>  <span class="enscript-comment">/// constructed value if no such entry exists.
+</span>  ValueT lookup(<span class="enscript-type">const</span> KeyT &amp;Val) <span class="enscript-type">const</span> {
+    <span class="enscript-type">const</span> BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Val, TheBucket))
+      <span class="enscript-keyword">return</span> TheBucket-&gt;second;
+    <span class="enscript-keyword">return</span> ValueT();
+  }
+
+  <span class="enscript-comment">// Inserts key,value pair into the map if the key isn't already in the map.
+</span>  <span class="enscript-comment">// If the key is already in the map, it returns false and doesn't update the
+</span>  <span class="enscript-comment">// value.
+</span>  <span class="enscript-reference">std</span>::pair&lt;iterator, <span class="enscript-type">bool</span>&gt; insert(<span class="enscript-type">const</span> std::pair&lt;KeyT, ValueT&gt; &amp;KV) {
+    BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(KV.first, TheBucket))
+      <span class="enscript-keyword">return</span> std::make_pair(iterator(TheBucket, getBucketsEnd(), true),
+                            false); <span class="enscript-comment">// Already in map.
+</span>
+    <span class="enscript-comment">// Otherwise, insert the new element.
+</span>    TheBucket = InsertIntoBucket(KV.first, KV.second, TheBucket);
+    <span class="enscript-keyword">return</span> std::make_pair(iterator(TheBucket, getBucketsEnd(), true), true);
+  }
+
+  <span class="enscript-comment">/// insert - Range insertion of pairs.
+</span>  <span class="enscript-type">template</span>&lt;typename InputIt&gt;
+  <span class="enscript-type">void</span> insert(InputIt I, InputIt E) {
+    <span class="enscript-keyword">for</span> (; I != E; ++I)
+      insert(*I);
+  }
+
+  <span class="enscript-comment">// Clear if empty.
+</span>  <span class="enscript-comment">// Shrink if at least 15/16 empty and larger than MIN_COMPACT.
+</span>  <span class="enscript-type">void</span> compact() {
+    <span class="enscript-keyword">if</span> (getNumEntries() == 0) {
+      shrink_and_clear();
+    } 
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (getNumBuckets() / 16 &gt; getNumEntries()  &amp;&amp;  
+             getNumBuckets() &gt; MIN_COMPACT) 
+    {
+      grow(getNumEntries() * 2);
+    }
+  }
+
+  <span class="enscript-type">bool</span> erase(<span class="enscript-type">const</span> KeyT &amp;Val) {
+    BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (!LookupBucketFor(Val, TheBucket))
+      <span class="enscript-keyword">return</span> false; <span class="enscript-comment">// not in map.
+</span>
+    TheBucket-&gt;second.~ValueT();
+    TheBucket-&gt;first = getTombstoneKey();
+    decrementNumEntries();
+    incrementNumTombstones();
+    compact();
+    <span class="enscript-keyword">return</span> true;
+  }
+  <span class="enscript-type">void</span> erase(iterator I) {
+    BucketT *TheBucket = &amp;*I;
+    TheBucket-&gt;second.~ValueT();
+    TheBucket-&gt;first = getTombstoneKey();
+    decrementNumEntries();
+    incrementNumTombstones();
+    compact();
+  }
+
+  value_type&amp; FindAndConstruct(<span class="enscript-type">const</span> KeyT &amp;Key) {
+    BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Key, TheBucket))
+      <span class="enscript-keyword">return</span> *TheBucket;
+
+    <span class="enscript-keyword">return</span> *InsertIntoBucket(Key, ValueT(), TheBucket);
+  }
+
+  ValueT &amp;<span class="enscript-keyword">operator</span>[](<span class="enscript-type">const</span> KeyT &amp;Key) {
+    <span class="enscript-keyword">return</span> FindAndConstruct(Key).second;
+  }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span>
+  value_type&amp; FindAndConstruct(KeyT &amp;&amp;Key) {
+    BucketT *TheBucket;
+    <span class="enscript-keyword">if</span> (LookupBucketFor(Key, TheBucket))
+      <span class="enscript-keyword">return</span> *TheBucket;
+
+    <span class="enscript-keyword">return</span> *InsertIntoBucket(Key, ValueT(), TheBucket);
+  }
+
+  ValueT &amp;<span class="enscript-keyword">operator</span>[](KeyT &amp;&amp;Key) {
+    <span class="enscript-keyword">return</span> FindAndConstruct(Key).second;
+  }
+#<span class="enscript-reference">endif</span>
+
+  <span class="enscript-comment">/// isPointerIntoBucketsArray - Return true if the specified pointer points
+</span>  <span class="enscript-comment">/// somewhere into the DenseMap's array of buckets (i.e. either to a key or
+</span>  <span class="enscript-comment">/// value in the DenseMap).
+</span>  <span class="enscript-type">bool</span> isPointerIntoBucketsArray(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *Ptr) <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Ptr &gt;= getBuckets() &amp;&amp; Ptr &lt; getBucketsEnd();
+  }
+
+  <span class="enscript-comment">/// getPointerIntoBucketsArray() - Return an opaque pointer into the buckets
+</span>  <span class="enscript-comment">/// array.  In conjunction with the previous method, this can be used to
+</span>  <span class="enscript-comment">/// determine whether an insertion caused the DenseMap to reallocate.
+</span>  <span class="enscript-type">const</span> <span class="enscript-type">void</span> *getPointerIntoBucketsArray() <span class="enscript-type">const</span> { <span class="enscript-keyword">return</span> getBuckets(); }
+
+<span class="enscript-type">protected</span>:
+  DenseMapBase() {}
+
+  <span class="enscript-type">void</span> destroyAll() {
+    <span class="enscript-keyword">if</span> (getNumBuckets() == 0) <span class="enscript-comment">// Nothing to do.
+</span>      <span class="enscript-keyword">return</span>;
+
+    <span class="enscript-type">const</span> KeyT EmptyKey = getEmptyKey(), TombstoneKey = getTombstoneKey();
+    <span class="enscript-keyword">for</span> (BucketT *P = getBuckets(), *E = getBucketsEnd(); P != E; ++P) {
+      <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(P-&gt;first, EmptyKey) &amp;&amp;
+          !KeyInfoT::isEqual(P-&gt;first, TombstoneKey))
+        P-&gt;second.~ValueT();
+      P-&gt;first.~KeyT();
+    }
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">NDEBUG</span>
+      memset((<span class="enscript-type">void</span>*)getBuckets(), 0x5a, <span class="enscript-keyword">sizeof</span>(BucketT)*getNumBuckets());
+#<span class="enscript-reference">endif</span>
+    }
+
+  <span class="enscript-type">void</span> initEmpty() {
+    setNumEntries(0);
+    setNumTombstones(0);
+
+    assert((getNumBuckets() &amp; (getNumBuckets()-1)) == 0 &amp;&amp;
+           <span class="enscript-string">&quot;# initial buckets must be a power of two!&quot;</span>);
+    <span class="enscript-type">const</span> KeyT EmptyKey = getEmptyKey();
+    <span class="enscript-keyword">for</span> (BucketT *B = getBuckets(), *E = getBucketsEnd(); B != E; ++B)
+      <span class="enscript-keyword">new</span> (&amp;B-&gt;first) KeyT(EmptyKey);
+  }
+
+  <span class="enscript-type">void</span> moveFromOldBuckets(BucketT *OldBucketsBegin, BucketT *OldBucketsEnd) {
+    initEmpty();
+
+    <span class="enscript-comment">// Insert all the old elements.
+</span>    <span class="enscript-type">const</span> KeyT EmptyKey = getEmptyKey();
+    <span class="enscript-type">const</span> KeyT TombstoneKey = getTombstoneKey();
+    <span class="enscript-keyword">for</span> (BucketT *B = OldBucketsBegin, *E = OldBucketsEnd; B != E; ++B) {
+      <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(B-&gt;first, EmptyKey) &amp;&amp;
+          !KeyInfoT::isEqual(B-&gt;first, TombstoneKey) &amp;&amp; 
+          !(ZeroValuesArePurgeable &amp;&amp; B-&gt;second == 0)) {
+        <span class="enscript-comment">// Insert the key/value into the new table.
+</span>        BucketT *DestBucket;
+        <span class="enscript-type">bool</span> FoundVal = LookupBucketFor(B-&gt;first, DestBucket);
+        (<span class="enscript-type">void</span>)FoundVal; <span class="enscript-comment">// silence warning.
+</span>        assert(!FoundVal &amp;&amp; <span class="enscript-string">&quot;Key already in new map?&quot;</span>);
+        DestBucket-&gt;first = llvm_move(B-&gt;first);
+        <span class="enscript-keyword">new</span> (&amp;DestBucket-&gt;second) ValueT(llvm_move(B-&gt;second));
+        incrementNumEntries();
+        
+        <span class="enscript-comment">// Free the value.
+</span>        B-&gt;second.~ValueT();
+      }
+      B-&gt;first.~KeyT();
+    }
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">NDEBUG</span>
+    <span class="enscript-keyword">if</span> (OldBucketsBegin != OldBucketsEnd)
+      memset((<span class="enscript-type">void</span>*)OldBucketsBegin, 0x5a,
+             <span class="enscript-keyword">sizeof</span>(BucketT) * (OldBucketsEnd - OldBucketsBegin));
+#<span class="enscript-reference">endif</span>
+  }
+
+  <span class="enscript-type">template</span> &lt;typename OtherBaseT&gt;
+  <span class="enscript-type">void</span> copyFrom(<span class="enscript-type">const</span> DenseMapBase&lt;OtherBaseT, KeyT, ValueT, KeyInfoT&gt;&amp; other) {
+    assert(getNumBuckets() == other.getNumBuckets());
+
+    setNumEntries(other.getNumEntries());
+    setNumTombstones(other.getNumTombstones());
+
+    <span class="enscript-keyword">if</span> (isPodLike&lt;KeyT&gt;::value &amp;&amp; isPodLike&lt;ValueT&gt;::value)
+      memcpy(getBuckets(), other.getBuckets(),
+             getNumBuckets() * <span class="enscript-keyword">sizeof</span>(BucketT));
+    <span class="enscript-keyword">else</span>
+      <span class="enscript-keyword">for</span> (size_t i = 0; i &lt; getNumBuckets(); ++i) {
+        <span class="enscript-keyword">new</span> (&amp;getBuckets()[i].first) KeyT(other.getBuckets()[i].first);
+        <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(getBuckets()[i].first, getEmptyKey()) &amp;&amp;
+            !KeyInfoT::isEqual(getBuckets()[i].first, getTombstoneKey()))
+          <span class="enscript-keyword">new</span> (&amp;getBuckets()[i].second) ValueT(other.getBuckets()[i].second);
+      }
+  }
+
+  <span class="enscript-type">void</span> swap(DenseMapBase&amp; RHS) {
+    <span class="enscript-reference">std</span>::swap(getNumEntries(), RHS.getNumEntries());
+    <span class="enscript-reference">std</span>::swap(getNumTombstones(), RHS.getNumTombstones());
+  }
+
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> KeyT &amp;Val) {
+    <span class="enscript-keyword">return</span> KeyInfoT::getHashValue(Val);
+  }
+  <span class="enscript-type">template</span>&lt;typename LookupKeyT&gt;
+  <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> getHashValue(<span class="enscript-type">const</span> LookupKeyT &amp;Val) {
+    <span class="enscript-keyword">return</span> KeyInfoT::getHashValue(Val);
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> KeyT getEmptyKey() {
+    <span class="enscript-keyword">return</span> KeyInfoT::getEmptyKey();
+  }
+  <span class="enscript-type">static</span> <span class="enscript-type">const</span> KeyT getTombstoneKey() {
+    <span class="enscript-keyword">return</span> KeyInfoT::getTombstoneKey();
+  }
+
+<span class="enscript-type">private</span>:
+  <span class="enscript-type">unsigned</span> getNumEntries() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> static_cast&lt;<span class="enscript-type">const</span> DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;getNumEntries();
+  }
+  <span class="enscript-type">void</span> setNumEntries(<span class="enscript-type">unsigned</span> Num) {
+    static_cast&lt;DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;setNumEntries(Num);
+  }
+  <span class="enscript-type">void</span> incrementNumEntries() {
+    setNumEntries(getNumEntries() + 1);
+  }
+  <span class="enscript-type">void</span> decrementNumEntries() {
+    setNumEntries(getNumEntries() - 1);
+  }
+  <span class="enscript-type">unsigned</span> getNumTombstones() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> static_cast&lt;<span class="enscript-type">const</span> DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;getNumTombstones();
+  }
+  <span class="enscript-type">void</span> setNumTombstones(<span class="enscript-type">unsigned</span> Num) {
+    static_cast&lt;DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;setNumTombstones(Num);
+  }
+  <span class="enscript-type">void</span> incrementNumTombstones() {
+    setNumTombstones(getNumTombstones() + 1);
+  }
+  <span class="enscript-type">void</span> decrementNumTombstones() {
+    setNumTombstones(getNumTombstones() - 1);
+  }
+  <span class="enscript-type">const</span> BucketT *getBuckets() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> static_cast&lt;<span class="enscript-type">const</span> DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;getBuckets();
+  }
+  BucketT *getBuckets() {
+    <span class="enscript-keyword">return</span> static_cast&lt;DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;getBuckets();
+  }
+  <span class="enscript-type">unsigned</span> getNumBuckets() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> static_cast&lt;<span class="enscript-type">const</span> DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;getNumBuckets();
+  }
+  BucketT *getBucketsEnd() {
+    <span class="enscript-keyword">return</span> getBuckets() + getNumBuckets();
+  }
+  <span class="enscript-type">const</span> BucketT *getBucketsEnd() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> getBuckets() + getNumBuckets();
+  }
+
+  <span class="enscript-type">void</span> grow(<span class="enscript-type">unsigned</span> AtLeast) {
+    static_cast&lt;DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;grow(AtLeast);
+  }
+
+  <span class="enscript-type">void</span> shrink_and_clear() {
+    static_cast&lt;DerivedT *&gt;(<span class="enscript-keyword">this</span>)-&gt;shrink_and_clear();
+  }
+
+
+  BucketT *InsertIntoBucket(<span class="enscript-type">const</span> KeyT &amp;Key, <span class="enscript-type">const</span> ValueT &amp;Value,
+                            BucketT *TheBucket) {
+    TheBucket = InsertIntoBucketImpl(Key, TheBucket);
+
+    TheBucket-&gt;first = Key;
+    <span class="enscript-keyword">new</span> (&amp;TheBucket-&gt;second) ValueT(Value);
+    <span class="enscript-keyword">return</span> TheBucket;
+  }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span>
+  BucketT *InsertIntoBucket(<span class="enscript-type">const</span> KeyT &amp;Key, ValueT &amp;&amp;Value,
+                            BucketT *TheBucket) {
+    TheBucket = InsertIntoBucketImpl(Key, TheBucket);
+
+    TheBucket-&gt;first = Key;
+    <span class="enscript-keyword">new</span> (&amp;TheBucket-&gt;second) ValueT(std::move(Value));
+    <span class="enscript-keyword">return</span> TheBucket;
+  }
+
+  BucketT *InsertIntoBucket(KeyT &amp;&amp;Key, ValueT &amp;&amp;Value, BucketT *TheBucket) {
+    TheBucket = InsertIntoBucketImpl(Key, TheBucket);
+
+    TheBucket-&gt;first = std::move(Key);
+    <span class="enscript-keyword">new</span> (&amp;TheBucket-&gt;second) ValueT(std::move(Value));
+    <span class="enscript-keyword">return</span> TheBucket;
+  }
+#<span class="enscript-reference">endif</span>
+
+  BucketT *InsertIntoBucketImpl(<span class="enscript-type">const</span> KeyT &amp;Key, BucketT *TheBucket) {
+    <span class="enscript-comment">// If the load of the hash table is more than 3/4, grow the table. 
+</span>    <span class="enscript-comment">// If fewer than 1/8 of the buckets are empty (meaning that many are 
+</span>    <span class="enscript-comment">// filled with tombstones), rehash the table without growing.
+</span>    <span class="enscript-comment">//
+</span>    <span class="enscript-comment">// The later case is tricky.  For example, if we had one empty bucket with
+</span>    <span class="enscript-comment">// tons of tombstones, failing lookups (e.g. for insertion) would have to
+</span>    <span class="enscript-comment">// probe almost the entire table until it found the empty bucket.  If the
+</span>    <span class="enscript-comment">// table completely filled with tombstones, no lookup would ever succeed,
+</span>    <span class="enscript-comment">// causing infinite loops in lookup.
+</span>    <span class="enscript-type">unsigned</span> NewNumEntries = getNumEntries() + 1;
+    <span class="enscript-type">unsigned</span> NumBuckets = getNumBuckets();
+    <span class="enscript-keyword">if</span> (NewNumEntries*4 &gt;= NumBuckets*3) {
+      <span class="enscript-keyword">this</span>-&gt;grow(NumBuckets * 2);
+      LookupBucketFor(Key, TheBucket);
+      NumBuckets = getNumBuckets();
+    }
+    <span class="enscript-keyword">if</span> (NumBuckets-(NewNumEntries+getNumTombstones()) &lt;= NumBuckets/8) {
+      <span class="enscript-keyword">this</span>-&gt;grow(NumBuckets);
+      LookupBucketFor(Key, TheBucket);
+    }
+    assert(TheBucket);
+
+    <span class="enscript-comment">// Only update the state after we've grown our bucket space appropriately
+</span>    <span class="enscript-comment">// so that when growing buckets we have self-consistent entry count.
+</span>    <span class="enscript-comment">// If we are writing over a tombstone or zero value, remember this.
+</span>    <span class="enscript-keyword">if</span> (KeyInfoT::isEqual(TheBucket-&gt;first, getEmptyKey())) {
+      <span class="enscript-comment">// Replacing an empty bucket.
+</span>      incrementNumEntries();      
+    }
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (KeyInfoT::isEqual(TheBucket-&gt;first, getTombstoneKey())) {
+      <span class="enscript-comment">// Replacing a tombstone.
+</span>      incrementNumEntries();
+      decrementNumTombstones();
+    }
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (ZeroValuesArePurgeable  &amp;&amp;  TheBucket-&gt;second == 0) {
+      <span class="enscript-comment">// Purging a zero. No accounting changes.
+</span>      TheBucket-&gt;second.~ValueT();
+    } <span class="enscript-keyword">else</span> {
+      <span class="enscript-comment">// Updating an existing entry. No accounting changes.
+</span>    }
+
+    <span class="enscript-keyword">return</span> TheBucket;
+  }
+
+  <span class="enscript-comment">/// LookupBucketFor - Lookup the appropriate bucket for Val, returning it in
+</span>  <span class="enscript-comment">/// FoundBucket.  If the bucket contains the key and a value, this returns
+</span>  <span class="enscript-comment">/// true, otherwise it returns a bucket with an empty marker or tombstone 
+</span>  <span class="enscript-comment">/// or zero value and returns false.
+</span>  <span class="enscript-type">template</span>&lt;typename LookupKeyT&gt;
+  <span class="enscript-type">bool</span> LookupBucketFor(<span class="enscript-type">const</span> LookupKeyT &amp;Val,
+                       <span class="enscript-type">const</span> BucketT *&amp;FoundBucket) <span class="enscript-type">const</span> {
+    <span class="enscript-type">const</span> BucketT *BucketsPtr = getBuckets();
+    <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> NumBuckets = getNumBuckets();
+
+    <span class="enscript-keyword">if</span> (NumBuckets == 0) {
+      FoundBucket = 0;
+      <span class="enscript-keyword">return</span> false;
+    }
+
+    <span class="enscript-comment">// FoundTombstone - Keep track of whether we find a tombstone or zero value while probing.
+</span>    <span class="enscript-type">const</span> BucketT *FoundTombstone = 0;
+    <span class="enscript-type">const</span> KeyT EmptyKey = getEmptyKey();
+    <span class="enscript-type">const</span> KeyT TombstoneKey = getTombstoneKey();
+    assert(!KeyInfoT::isEqual(Val, EmptyKey) &amp;&amp;
+           !KeyInfoT::isEqual(Val, TombstoneKey) &amp;&amp;
+           <span class="enscript-string">&quot;Empty/Tombstone value shouldn't be inserted into map!&quot;</span>);
+
+    <span class="enscript-type">unsigned</span> BucketNo = getHashValue(Val) &amp; (NumBuckets-1);
+    <span class="enscript-type">unsigned</span> ProbeAmt = 1;
+    <span class="enscript-keyword">while</span> (1) {
+      <span class="enscript-type">const</span> BucketT *ThisBucket = BucketsPtr + BucketNo;
+      <span class="enscript-comment">// Found Val's bucket?  If so, return it.
+</span>      <span class="enscript-keyword">if</span> (KeyInfoT::isEqual(Val, ThisBucket-&gt;first)) {
+        FoundBucket = ThisBucket;
+        <span class="enscript-keyword">return</span> true;
+      }
+
+      <span class="enscript-comment">// If we found an empty bucket, the key doesn't exist in the set.
+</span>      <span class="enscript-comment">// Insert it and return the default value.
+</span>      <span class="enscript-keyword">if</span> (KeyInfoT::isEqual(ThisBucket-&gt;first, EmptyKey)) {
+        <span class="enscript-comment">// If we've already seen a tombstone while probing, fill it in instead
+</span>        <span class="enscript-comment">// of the empty bucket we eventually probed to.
+</span>        <span class="enscript-keyword">if</span> (FoundTombstone) ThisBucket = FoundTombstone;
+        FoundBucket = FoundTombstone ? FoundTombstone : ThisBucket;
+        <span class="enscript-keyword">return</span> false;
+      }
+
+      <span class="enscript-comment">// If this is a tombstone, remember it.  If Val ends up not in the map, we
+</span>      <span class="enscript-comment">// prefer to return it than something that would require more probing.
+</span>      <span class="enscript-comment">// Ditto for zero values.
+</span>      <span class="enscript-keyword">if</span> (KeyInfoT::isEqual(ThisBucket-&gt;first, TombstoneKey) &amp;&amp; !FoundTombstone)
+        FoundTombstone = ThisBucket;  <span class="enscript-comment">// Remember the first tombstone found.
+</span>      <span class="enscript-keyword">if</span> (ZeroValuesArePurgeable  &amp;&amp; 
+          ThisBucket-&gt;second == 0  &amp;&amp;  !FoundTombstone) 
+        FoundTombstone = ThisBucket;
+
+      <span class="enscript-comment">// Otherwise, it's a hash collision or a tombstone, continue quadratic
+</span>      <span class="enscript-comment">// probing.
+</span>      <span class="enscript-keyword">if</span> (ProbeAmt &gt; NumBuckets) {
+          <span class="enscript-comment">// No empty buckets in table. Die.
+</span>          _objc_fatal(<span class="enscript-string">&quot;Hash table corrupted. This is probably a memory error &quot;</span>
+                      <span class="enscript-string">&quot;somewhere. (table at %p, buckets at %p (%zu bytes), &quot;</span>
+                      <span class="enscript-string">&quot;%u buckets, %u entries, %u tombstones, &quot;</span>
+                      <span class="enscript-string">&quot;data %p %p %p %p)&quot;</span>, 
+                      <span class="enscript-keyword">this</span>, BucketsPtr, malloc_size(BucketsPtr), 
+                      NumBuckets, getNumEntries(), getNumTombstones(), 
+                      ((<span class="enscript-type">void</span>**)BucketsPtr)[0], ((<span class="enscript-type">void</span>**)BucketsPtr)[1], 
+                      ((<span class="enscript-type">void</span>**)BucketsPtr)[2], ((<span class="enscript-type">void</span>**)BucketsPtr)[3]);
+      }
+      BucketNo += ProbeAmt++;
+      BucketNo&amp;= (NumBuckets-1);
+    }
+  }
+
+  <span class="enscript-type">template</span> &lt;typename LookupKeyT&gt;
+  <span class="enscript-type">bool</span> LookupBucketFor(<span class="enscript-type">const</span> LookupKeyT &amp;Val, BucketT *&amp;FoundBucket) {
+    <span class="enscript-type">const</span> BucketT *ConstFoundBucket;
+    <span class="enscript-type">bool</span> Result = const_cast&lt;<span class="enscript-type">const</span> DenseMapBase *&gt;(<span class="enscript-keyword">this</span>)
+      -&gt;LookupBucketFor(Val, ConstFoundBucket);
+    FoundBucket = const_cast&lt;BucketT *&gt;(ConstFoundBucket);
+    <span class="enscript-keyword">return</span> Result;
+  }
+
+<span class="enscript-type">public</span>:
+  <span class="enscript-comment">/// Return the approximate size (in bytes) of the actual map.
+</span>  <span class="enscript-comment">/// This is just the raw memory used by DenseMap.
+</span>  <span class="enscript-comment">/// If entries are pointers to objects, the size of the referenced objects
+</span>  <span class="enscript-comment">/// are not included.
+</span>  size_t getMemorySize() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> getNumBuckets() * <span class="enscript-keyword">sizeof</span>(BucketT);
+  }
+};
+
+<span class="enscript-type">template</span>&lt;typename KeyT, typename ValueT,
+         <span class="enscript-type">bool</span> ZeroValuesArePurgeable = false, 
+         typename KeyInfoT = DenseMapInfo&lt;KeyT&gt; &gt;
+<span class="enscript-type">class</span> DenseMap
+    : <span class="enscript-type">public</span> DenseMapBase&lt;DenseMap&lt;KeyT, ValueT, ZeroValuesArePurgeable, KeyInfoT&gt;,
+                          KeyT, ValueT, KeyInfoT, ZeroValuesArePurgeable&gt; {
+  <span class="enscript-comment">// Lift some types from the dependent base class into this class for
+</span>  <span class="enscript-comment">// simplicity of referring to them.
+</span>  <span class="enscript-type">typedef</span> DenseMapBase&lt;DenseMap, KeyT, ValueT, KeyInfoT, ZeroValuesArePurgeable&gt; BaseT;
+  <span class="enscript-type">typedef</span> typename BaseT::BucketT BucketT;
+  <span class="enscript-type">friend</span> <span class="enscript-type">class</span> DenseMapBase&lt;DenseMap, KeyT, ValueT, KeyInfoT, ZeroValuesArePurgeable&gt;;
+
+  BucketT *Buckets;
+  <span class="enscript-type">unsigned</span> NumEntries;
+  <span class="enscript-type">unsigned</span> NumTombstones;
+  <span class="enscript-type">unsigned</span> NumBuckets;
+
+<span class="enscript-type">public</span>:
+  explicit DenseMap(<span class="enscript-type">unsigned</span> NumInitBuckets = 0) {
+    init(NumInitBuckets);
+  }
+
+  DenseMap(<span class="enscript-type">const</span> DenseMap &amp;other) {
+    init(0);
+    copyFrom(other);
+  }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span>
+  DenseMap(DenseMap &amp;&amp;other) {
+    init(0);
+    swap(other);
+  }
+#<span class="enscript-reference">endif</span>
+
+  <span class="enscript-type">template</span>&lt;typename InputIt&gt;
+  DenseMap(<span class="enscript-type">const</span> InputIt &amp;I, <span class="enscript-type">const</span> InputIt &amp;E) {
+    init(NextPowerOf2(std::distance(I, E)));
+    <span class="enscript-keyword">this</span>-&gt;insert(I, E);
+  }
+
+  ~DenseMap() {
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(Buckets);
+  }
+
+  <span class="enscript-type">void</span> swap(DenseMap&amp; RHS) {
+    <span class="enscript-reference">std</span>::swap(Buckets, RHS.Buckets);
+    <span class="enscript-reference">std</span>::swap(NumEntries, RHS.NumEntries);
+    <span class="enscript-reference">std</span>::swap(NumTombstones, RHS.NumTombstones);
+    <span class="enscript-reference">std</span>::swap(NumBuckets, RHS.NumBuckets);
+  }
+
+  DenseMap&amp; <span class="enscript-keyword">operator</span>=(<span class="enscript-type">const</span> DenseMap&amp; other) {
+    copyFrom(other);
+    <span class="enscript-keyword">return</span> *<span class="enscript-keyword">this</span>;
+  }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span>
+  DenseMap&amp; <span class="enscript-keyword">operator</span>=(DenseMap &amp;&amp;other) {
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(Buckets);
+    init(0);
+    swap(other);
+    <span class="enscript-keyword">return</span> *<span class="enscript-keyword">this</span>;
+  }
+#<span class="enscript-reference">endif</span>
+
+  <span class="enscript-type">void</span> copyFrom(<span class="enscript-type">const</span> DenseMap&amp; other) {
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(Buckets);
+    <span class="enscript-keyword">if</span> (allocateBuckets(other.NumBuckets)) {
+      <span class="enscript-keyword">this</span>-&gt;BaseT::copyFrom(other);
+    } <span class="enscript-keyword">else</span> {
+      NumEntries = 0;
+      NumTombstones = 0;
+    }
+  }
+
+  <span class="enscript-type">void</span> init(<span class="enscript-type">unsigned</span> InitBuckets) {
+    <span class="enscript-keyword">if</span> (allocateBuckets(InitBuckets)) {
+      <span class="enscript-keyword">this</span>-&gt;BaseT::initEmpty();
+    } <span class="enscript-keyword">else</span> {
+      NumEntries = 0;
+      NumTombstones = 0;
+    }
+  }
+
+  <span class="enscript-type">void</span> grow(<span class="enscript-type">unsigned</span> AtLeast) {
+    <span class="enscript-type">unsigned</span> OldNumBuckets = NumBuckets;
+    BucketT *OldBuckets = Buckets;
+
+    allocateBuckets(std::max&lt;<span class="enscript-type">unsigned</span>&gt;(MIN_BUCKETS, NextPowerOf2(AtLeast)));
+    assert(Buckets);
+    <span class="enscript-keyword">if</span> (!OldBuckets) {
+      <span class="enscript-keyword">this</span>-&gt;BaseT::initEmpty();
+      <span class="enscript-keyword">return</span>;
+    }
+
+    <span class="enscript-keyword">this</span>-&gt;moveFromOldBuckets(OldBuckets, OldBuckets+OldNumBuckets);
+
+    <span class="enscript-comment">// Free the old table.
+</span>    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(OldBuckets);
+  }
+
+  <span class="enscript-type">void</span> shrink_and_clear() {
+    <span class="enscript-type">unsigned</span> OldNumEntries = NumEntries;
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+
+    <span class="enscript-comment">// Reduce the number of buckets.
+</span>    <span class="enscript-type">unsigned</span> NewNumBuckets = 0;
+    <span class="enscript-keyword">if</span> (OldNumEntries)
+      NewNumBuckets = std::max(MIN_BUCKETS, 1 &lt;&lt; (Log2_32_Ceil(OldNumEntries) + 1));
+    <span class="enscript-keyword">if</span> (NewNumBuckets == NumBuckets) {
+      <span class="enscript-keyword">this</span>-&gt;BaseT::initEmpty();
+      <span class="enscript-keyword">return</span>;
+    }
+
+    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(Buckets);
+    init(NewNumBuckets);
+  }
+
+<span class="enscript-type">private</span>:
+  <span class="enscript-type">unsigned</span> getNumEntries() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> NumEntries;
+  }
+  <span class="enscript-type">void</span> setNumEntries(<span class="enscript-type">unsigned</span> Num) {
+    NumEntries = Num;
+  }
+
+  <span class="enscript-type">unsigned</span> getNumTombstones() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> NumTombstones;
+  }
+  <span class="enscript-type">void</span> setNumTombstones(<span class="enscript-type">unsigned</span> Num) {
+    NumTombstones = Num;
+  }
+
+  BucketT *getBuckets() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Buckets;
+  }
+
+  <span class="enscript-type">unsigned</span> getNumBuckets() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> NumBuckets;
+  }
+
+  <span class="enscript-type">bool</span> allocateBuckets(<span class="enscript-type">unsigned</span> Num) {
+    NumBuckets = Num;
+    <span class="enscript-keyword">if</span> (NumBuckets == 0) {
+      Buckets = 0;
+      <span class="enscript-keyword">return</span> false;
+    }
+
+    Buckets = static_cast&lt;BucketT*&gt;(<span class="enscript-keyword">operator</span> <span class="enscript-keyword">new</span>(<span class="enscript-keyword">sizeof</span>(BucketT)*NumBuckets));
+    <span class="enscript-keyword">return</span> true;
+  }
+};
+
+<span class="enscript-type">template</span>&lt;typename KeyT, typename ValueT,
+         <span class="enscript-type">unsigned</span> InlineBuckets = 4,
+         <span class="enscript-type">bool</span> ZeroValuesArePurgeable = false, 
+         typename KeyInfoT = DenseMapInfo&lt;KeyT&gt; &gt;
+<span class="enscript-type">class</span> SmallDenseMap
+    : <span class="enscript-type">public</span> DenseMapBase&lt;SmallDenseMap&lt;KeyT, ValueT, InlineBuckets, ZeroValuesArePurgeable, KeyInfoT&gt;,
+                          KeyT, ValueT, KeyInfoT, ZeroValuesArePurgeable&gt; {
+  <span class="enscript-comment">// Lift some types from the dependent base class into this class for
+</span>  <span class="enscript-comment">// simplicity of referring to them.
+</span>  <span class="enscript-type">typedef</span> DenseMapBase&lt;SmallDenseMap, KeyT, ValueT, KeyInfoT, ZeroValuesArePurgeable&gt; BaseT;
+  <span class="enscript-type">typedef</span> typename BaseT::BucketT BucketT;
+  <span class="enscript-type">friend</span> <span class="enscript-type">class</span> DenseMapBase&lt;SmallDenseMap, KeyT, ValueT, KeyInfoT, ZeroValuesArePurgeable&gt;;
+
+  <span class="enscript-type">unsigned</span> Small : 1;
+  <span class="enscript-type">unsigned</span> NumEntries : 31;
+  <span class="enscript-type">unsigned</span> NumTombstones;
+
+  <span class="enscript-type">struct</span> LargeRep {
+    BucketT *Buckets;
+    <span class="enscript-type">unsigned</span> NumBuckets;
+  };
+
+  <span class="enscript-comment">/// A &quot;union&quot; of an inline bucket array and the struct representing
+</span>  <span class="enscript-comment">/// a large bucket. This union will be discriminated by the 'Small' bit.
+</span>  AlignedCharArrayUnion&lt;BucketT[InlineBuckets], LargeRep&gt; storage;
+
+<span class="enscript-type">public</span>:
+  explicit SmallDenseMap(<span class="enscript-type">unsigned</span> NumInitBuckets = 0) {
+    init(NumInitBuckets);
+  }
+
+  SmallDenseMap(<span class="enscript-type">const</span> SmallDenseMap &amp;other) {
+    init(0);
+    copyFrom(other);
+  }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span>
+  SmallDenseMap(SmallDenseMap &amp;&amp;other) {
+    init(0);
+    swap(other);
+  }
+#<span class="enscript-reference">endif</span>
+
+  <span class="enscript-type">template</span>&lt;typename InputIt&gt;
+  SmallDenseMap(<span class="enscript-type">const</span> InputIt &amp;I, <span class="enscript-type">const</span> InputIt &amp;E) {
+    init(NextPowerOf2(std::distance(I, E)));
+    <span class="enscript-keyword">this</span>-&gt;insert(I, E);
+  }
+
+  ~SmallDenseMap() {
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+    deallocateBuckets();
+  }
+
+  <span class="enscript-type">void</span> swap(SmallDenseMap&amp; RHS) {
+    <span class="enscript-type">unsigned</span> TmpNumEntries = RHS.NumEntries;
+    RHS.NumEntries = NumEntries;
+    NumEntries = TmpNumEntries;
+    <span class="enscript-reference">std</span>::swap(NumTombstones, RHS.NumTombstones);
+
+    <span class="enscript-type">const</span> KeyT EmptyKey = <span class="enscript-keyword">this</span>-&gt;getEmptyKey();
+    <span class="enscript-type">const</span> KeyT TombstoneKey = <span class="enscript-keyword">this</span>-&gt;getTombstoneKey();
+    <span class="enscript-keyword">if</span> (Small &amp;&amp; RHS.Small) {
+      <span class="enscript-comment">// If we're swapping inline bucket arrays, we have to cope with some of
+</span>      <span class="enscript-comment">// the tricky bits of DenseMap's storage system: the buckets are not
+</span>      <span class="enscript-comment">// fully initialized. Thus we swap every key, but we may have
+</span>      <span class="enscript-comment">// a one-directional move of the value.
+</span>      <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> i = 0, e = InlineBuckets; i != e; ++i) {
+        BucketT *LHSB = &amp;getInlineBuckets()[i],
+                *RHSB = &amp;RHS.getInlineBuckets()[i];
+        <span class="enscript-type">bool</span> hasLHSValue = (!KeyInfoT::isEqual(LHSB-&gt;first, EmptyKey) &amp;&amp;
+                            !KeyInfoT::isEqual(LHSB-&gt;first, TombstoneKey));
+        <span class="enscript-type">bool</span> hasRHSValue = (!KeyInfoT::isEqual(RHSB-&gt;first, EmptyKey) &amp;&amp;
+                            !KeyInfoT::isEqual(RHSB-&gt;first, TombstoneKey));
+        <span class="enscript-keyword">if</span> (hasLHSValue &amp;&amp; hasRHSValue) {
+          <span class="enscript-comment">// Swap together if we can...
+</span>          <span class="enscript-reference">std</span>::swap(*LHSB, *RHSB);
+          <span class="enscript-keyword">continue</span>;
+        }
+        <span class="enscript-comment">// Swap separately and handle any assymetry.
+</span>        <span class="enscript-reference">std</span>::swap(LHSB-&gt;first, RHSB-&gt;first);
+        <span class="enscript-keyword">if</span> (hasLHSValue) {
+          <span class="enscript-keyword">new</span> (&amp;RHSB-&gt;second) ValueT(llvm_move(LHSB-&gt;second));
+          LHSB-&gt;second.~ValueT();
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (hasRHSValue) {
+          <span class="enscript-keyword">new</span> (&amp;LHSB-&gt;second) ValueT(llvm_move(RHSB-&gt;second));
+          RHSB-&gt;second.~ValueT();
+        }
+      }
+      <span class="enscript-keyword">return</span>;
+    }
+    <span class="enscript-keyword">if</span> (!Small &amp;&amp; !RHS.Small) {
+      <span class="enscript-reference">std</span>::swap(getLargeRep()-&gt;Buckets, RHS.getLargeRep()-&gt;Buckets);
+      <span class="enscript-reference">std</span>::swap(getLargeRep()-&gt;NumBuckets, RHS.getLargeRep()-&gt;NumBuckets);
+      <span class="enscript-keyword">return</span>;
+    }
+
+    SmallDenseMap &amp;SmallSide = Small ? *<span class="enscript-keyword">this</span> : RHS;
+    SmallDenseMap &amp;LargeSide = Small ? RHS : *<span class="enscript-keyword">this</span>;
+
+    <span class="enscript-comment">// First stash the large side's rep and move the small side across.
+</span>    LargeRep TmpRep = llvm_move(*LargeSide.getLargeRep());
+    LargeSide.getLargeRep()-&gt;~LargeRep();
+    LargeSide.Small = true;
+    <span class="enscript-comment">// This is similar to the standard move-from-old-buckets, but the bucket
+</span>    <span class="enscript-comment">// count hasn't actually rotated in this case. So we have to carefully
+</span>    <span class="enscript-comment">// move construct the keys and values into their new locations, but there
+</span>    <span class="enscript-comment">// is no need to re-hash things.
+</span>    <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> i = 0, e = InlineBuckets; i != e; ++i) {
+      BucketT *NewB = &amp;LargeSide.getInlineBuckets()[i],
+              *OldB = &amp;SmallSide.getInlineBuckets()[i];
+      <span class="enscript-keyword">new</span> (&amp;NewB-&gt;first) KeyT(llvm_move(OldB-&gt;first));
+      OldB-&gt;first.~KeyT();
+      <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(NewB-&gt;first, EmptyKey) &amp;&amp;
+          !KeyInfoT::isEqual(NewB-&gt;first, TombstoneKey)) {
+        <span class="enscript-keyword">new</span> (&amp;NewB-&gt;second) ValueT(llvm_move(OldB-&gt;second));
+        OldB-&gt;second.~ValueT();
+      }
+    }
+
+    <span class="enscript-comment">// The hard part of moving the small buckets across is done, just move
+</span>    <span class="enscript-comment">// the TmpRep into its new home.
+</span>    SmallSide.Small = false;
+    <span class="enscript-keyword">new</span> (SmallSide.getLargeRep()) LargeRep(llvm_move(TmpRep));
+  }
+
+  SmallDenseMap&amp; <span class="enscript-keyword">operator</span>=(<span class="enscript-type">const</span> SmallDenseMap&amp; other) {
+    copyFrom(other);
+    <span class="enscript-keyword">return</span> *<span class="enscript-keyword">this</span>;
+  }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">LLVM_USE_RVALUE_REFERENCES</span>
+  SmallDenseMap&amp; <span class="enscript-keyword">operator</span>=(SmallDenseMap &amp;&amp;other) {
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+    deallocateBuckets();
+    init(0);
+    swap(other);
+    <span class="enscript-keyword">return</span> *<span class="enscript-keyword">this</span>;
+  }
+#<span class="enscript-reference">endif</span>
+
+  <span class="enscript-type">void</span> copyFrom(<span class="enscript-type">const</span> SmallDenseMap&amp; other) {
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+    deallocateBuckets();
+    Small = true;
+    <span class="enscript-keyword">if</span> (other.getNumBuckets() &gt; InlineBuckets) {
+      Small = false;
+      allocateBuckets(other.getNumBuckets());
+    }
+    <span class="enscript-keyword">this</span>-&gt;BaseT::copyFrom(other);
+  }
+
+  <span class="enscript-type">void</span> init(<span class="enscript-type">unsigned</span> InitBuckets) {
+    Small = true;
+    <span class="enscript-keyword">if</span> (InitBuckets &gt; InlineBuckets) {
+      Small = false;
+      <span class="enscript-keyword">new</span> (getLargeRep()) LargeRep(allocateBuckets(InitBuckets));
+    }
+    <span class="enscript-keyword">this</span>-&gt;BaseT::initEmpty();
+  }
+
+  <span class="enscript-type">void</span> grow(<span class="enscript-type">unsigned</span> AtLeast) {
+    <span class="enscript-keyword">if</span> (AtLeast &gt; InlineBuckets)
+      AtLeast = std::max&lt;<span class="enscript-type">unsigned</span>&gt;(MIN_BUCKETS, NextPowerOf2(AtLeast));
+
+    <span class="enscript-keyword">if</span> (Small) {
+      <span class="enscript-keyword">if</span> (AtLeast &lt;= InlineBuckets)
+        <span class="enscript-keyword">return</span>; <span class="enscript-comment">// Nothing to do.
+</span>
+      <span class="enscript-comment">// First move the inline buckets into a temporary storage.
+</span>      AlignedCharArrayUnion&lt;BucketT[InlineBuckets]&gt; TmpStorage;
+      BucketT *TmpBegin = reinterpret_cast&lt;BucketT *&gt;(TmpStorage.buffer);
+      BucketT *TmpEnd = TmpBegin;
+
+      <span class="enscript-comment">// Loop over the buckets, moving non-empty, non-tombstones into the
+</span>      <span class="enscript-comment">// temporary storage. Have the loop move the TmpEnd forward as it goes.
+</span>      <span class="enscript-type">const</span> KeyT EmptyKey = <span class="enscript-keyword">this</span>-&gt;getEmptyKey();
+      <span class="enscript-type">const</span> KeyT TombstoneKey = <span class="enscript-keyword">this</span>-&gt;getTombstoneKey();
+      <span class="enscript-keyword">for</span> (BucketT *P = getBuckets(), *E = P + InlineBuckets; P != E; ++P) {
+        <span class="enscript-keyword">if</span> (!KeyInfoT::isEqual(P-&gt;first, EmptyKey) &amp;&amp;
+            !KeyInfoT::isEqual(P-&gt;first, TombstoneKey)) {
+          assert(size_t(TmpEnd - TmpBegin) &lt; InlineBuckets &amp;&amp;
+                 <span class="enscript-string">&quot;Too many inline buckets!&quot;</span>);
+          <span class="enscript-keyword">new</span> (&amp;TmpEnd-&gt;first) KeyT(llvm_move(P-&gt;first));
+          <span class="enscript-keyword">new</span> (&amp;TmpEnd-&gt;second) ValueT(llvm_move(P-&gt;second));
+          ++TmpEnd;
+          P-&gt;second.~ValueT();
+        }
+        P-&gt;first.~KeyT();
+      }
+
+      <span class="enscript-comment">// Now make this map use the large rep, and move all the entries back
+</span>      <span class="enscript-comment">// into it.
+</span>      Small = false;
+      <span class="enscript-keyword">new</span> (getLargeRep()) LargeRep(allocateBuckets(AtLeast));
+      <span class="enscript-keyword">this</span>-&gt;moveFromOldBuckets(TmpBegin, TmpEnd);
+      <span class="enscript-keyword">return</span>;
+    }
+
+    LargeRep OldRep = llvm_move(*getLargeRep());
+    getLargeRep()-&gt;~LargeRep();
+    <span class="enscript-keyword">if</span> (AtLeast &lt;= InlineBuckets) {
+      Small = true;
+    } <span class="enscript-keyword">else</span> {
+      <span class="enscript-keyword">new</span> (getLargeRep()) LargeRep(allocateBuckets(AtLeast));
+    }
+
+    <span class="enscript-keyword">this</span>-&gt;moveFromOldBuckets(OldRep.Buckets, OldRep.Buckets+OldRep.NumBuckets);
+
+    <span class="enscript-comment">// Free the old table.
+</span>    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(OldRep.Buckets);
+  }
+
+  <span class="enscript-type">void</span> shrink_and_clear() {
+    <span class="enscript-type">unsigned</span> OldSize = <span class="enscript-keyword">this</span>-&gt;size();
+    <span class="enscript-keyword">this</span>-&gt;destroyAll();
+
+    <span class="enscript-comment">// Reduce the number of buckets.
+</span>    <span class="enscript-type">unsigned</span> NewNumBuckets = 0;
+    <span class="enscript-keyword">if</span> (OldSize) {
+      NewNumBuckets = 1 &lt;&lt; (Log2_32_Ceil(OldSize) + 1);
+      <span class="enscript-keyword">if</span> (NewNumBuckets &gt; InlineBuckets &amp;&amp; NewNumBuckets &lt; MIN_BUCKETS)
+        NewNumBuckets = MIN_BUCKETS;
+    }
+    <span class="enscript-keyword">if</span> ((Small &amp;&amp; NewNumBuckets &lt;= InlineBuckets) ||
+        (!Small &amp;&amp; NewNumBuckets == getLargeRep()-&gt;NumBuckets)) {
+      <span class="enscript-keyword">this</span>-&gt;BaseT::initEmpty();
+      <span class="enscript-keyword">return</span>;
+    }
+
+    deallocateBuckets();
+    init(NewNumBuckets);
+  }
+
+<span class="enscript-type">private</span>:
+  <span class="enscript-type">unsigned</span> getNumEntries() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> NumEntries;
+  }
+  <span class="enscript-type">void</span> setNumEntries(<span class="enscript-type">unsigned</span> Num) {
+    assert(Num &lt; INT_MAX &amp;&amp; <span class="enscript-string">&quot;Cannot support more than INT_MAX entries&quot;</span>);
+    NumEntries = Num;
+  }
+
+  <span class="enscript-type">unsigned</span> getNumTombstones() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> NumTombstones;
+  }
+  <span class="enscript-type">void</span> setNumTombstones(<span class="enscript-type">unsigned</span> Num) {
+    NumTombstones = Num;
+  }
+
+  <span class="enscript-type">const</span> BucketT *getInlineBuckets() <span class="enscript-type">const</span> {
+    assert(Small);
+    <span class="enscript-comment">// Note that this cast does not violate aliasing rules as we assert that
+</span>    <span class="enscript-comment">// the memory's dynamic type is the small, inline bucket buffer, and the
+</span>    <span class="enscript-comment">// 'storage.buffer' static type is 'char *'.
+</span>    <span class="enscript-keyword">return</span> reinterpret_cast&lt;<span class="enscript-type">const</span> BucketT *&gt;(storage.buffer);
+  }
+  BucketT *getInlineBuckets() {
+    <span class="enscript-keyword">return</span> const_cast&lt;BucketT *&gt;(
+      const_cast&lt;<span class="enscript-type">const</span> SmallDenseMap *&gt;(<span class="enscript-keyword">this</span>)-&gt;getInlineBuckets());
+  }
+  <span class="enscript-type">const</span> LargeRep *getLargeRep() <span class="enscript-type">const</span> {
+    assert(!Small);
+    <span class="enscript-comment">// Note, same rule about aliasing as with getInlineBuckets.
+</span>    <span class="enscript-keyword">return</span> reinterpret_cast&lt;<span class="enscript-type">const</span> LargeRep *&gt;(storage.buffer);
+  }
+  LargeRep *getLargeRep() {
+    <span class="enscript-keyword">return</span> const_cast&lt;LargeRep *&gt;(
+      const_cast&lt;<span class="enscript-type">const</span> SmallDenseMap *&gt;(<span class="enscript-keyword">this</span>)-&gt;getLargeRep());
+  }
+
+  <span class="enscript-type">const</span> BucketT *getBuckets() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Small ? getInlineBuckets() : getLargeRep()-&gt;Buckets;
+  }
+  BucketT *getBuckets() {
+    <span class="enscript-keyword">return</span> const_cast&lt;BucketT *&gt;(
+      const_cast&lt;<span class="enscript-type">const</span> SmallDenseMap *&gt;(<span class="enscript-keyword">this</span>)-&gt;getBuckets());
+  }
+  <span class="enscript-type">unsigned</span> getNumBuckets() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Small ? InlineBuckets : getLargeRep()-&gt;NumBuckets;
+  }
+
+  <span class="enscript-type">void</span> deallocateBuckets() {
+    <span class="enscript-keyword">if</span> (Small)
+      <span class="enscript-keyword">return</span>;
+
+    <span class="enscript-keyword">operator</span> <span class="enscript-keyword">delete</span>(getLargeRep()-&gt;Buckets);
+    getLargeRep()-&gt;~LargeRep();
+  }
+
+  LargeRep allocateBuckets(<span class="enscript-type">unsigned</span> Num) {
+    assert(Num &gt; InlineBuckets &amp;&amp; <span class="enscript-string">&quot;Must allocate more buckets than are inline&quot;</span>);
+    LargeRep Rep = {
+      static_cast&lt;BucketT*&gt;(<span class="enscript-keyword">operator</span> <span class="enscript-keyword">new</span>(<span class="enscript-keyword">sizeof</span>(BucketT) * Num)), Num
+};
+    <span class="enscript-keyword">return</span> Rep;
+  }
+};
+
+<span class="enscript-type">template</span>&lt;typename KeyT, typename ValueT,
+         typename KeyInfoT, <span class="enscript-type">bool</span> IsConst&gt;
+<span class="enscript-type">class</span> DenseMapIterator {
+  <span class="enscript-type">typedef</span> std::pair&lt;KeyT, ValueT&gt; Bucket;
+  <span class="enscript-type">typedef</span> DenseMapIterator&lt;KeyT, ValueT,
+                           KeyInfoT, true&gt; ConstIterator;
+  <span class="enscript-type">friend</span> <span class="enscript-type">class</span> DenseMapIterator&lt;KeyT, ValueT, KeyInfoT, true&gt;;
+<span class="enscript-type">public</span>:
+  <span class="enscript-type">typedef</span> ptrdiff_t difference_type;
+  <span class="enscript-type">typedef</span> typename conditional&lt;IsConst, <span class="enscript-type">const</span> Bucket, Bucket&gt;::type value_type;
+  <span class="enscript-type">typedef</span> value_type *pointer;
+  <span class="enscript-type">typedef</span> value_type &amp;reference;
+  <span class="enscript-type">typedef</span> std::forward_iterator_tag iterator_category;
+<span class="enscript-type">private</span>:
+  pointer Ptr, End;
+<span class="enscript-type">public</span>:
+  DenseMapIterator() : Ptr(0), End(0) {}
+
+  DenseMapIterator(pointer Pos, pointer E, <span class="enscript-type">bool</span> NoAdvance = false)
+    : Ptr(Pos), End(E) {
+    <span class="enscript-keyword">if</span> (!NoAdvance) AdvancePastEmptyBuckets();
+  }
+
+  <span class="enscript-comment">// If IsConst is true this is a converting constructor from iterator to
+</span>  <span class="enscript-comment">// const_iterator and the default copy constructor is used.
+</span>  <span class="enscript-comment">// Otherwise this is a copy constructor for iterator.
+</span>  DenseMapIterator(<span class="enscript-type">const</span> DenseMapIterator&lt;KeyT, ValueT,
+                                          KeyInfoT, false&gt;&amp; I)
+    : Ptr(I.Ptr), End(I.End) {}
+
+  reference <span class="enscript-keyword">operator</span>*() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> *Ptr;
+  }
+  pointer <span class="enscript-keyword">operator</span>-&gt;() <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Ptr;
+  }
+
+  <span class="enscript-type">bool</span> <span class="enscript-keyword">operator</span>==(<span class="enscript-type">const</span> ConstIterator &amp;RHS) <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Ptr == RHS.<span class="enscript-keyword">operator</span>-&gt;();
+  }
+  <span class="enscript-type">bool</span> <span class="enscript-keyword">operator</span>!=(<span class="enscript-type">const</span> ConstIterator &amp;RHS) <span class="enscript-type">const</span> {
+    <span class="enscript-keyword">return</span> Ptr != RHS.<span class="enscript-keyword">operator</span>-&gt;();
+  }
+
+  <span class="enscript-type">inline</span> DenseMapIterator&amp; <span class="enscript-keyword">operator</span>++() {  <span class="enscript-comment">// Preincrement
+</span>    ++Ptr;
+    AdvancePastEmptyBuckets();
+    <span class="enscript-keyword">return</span> *<span class="enscript-keyword">this</span>;
+  }
+  DenseMapIterator <span class="enscript-keyword">operator</span>++(<span class="enscript-type">int</span>) {  <span class="enscript-comment">// Postincrement
+</span>    DenseMapIterator tmp = *<span class="enscript-keyword">this</span>; ++*<span class="enscript-keyword">this</span>; <span class="enscript-keyword">return</span> tmp;
+  }
+
+<span class="enscript-type">private</span>:
+  <span class="enscript-type">void</span> AdvancePastEmptyBuckets() {
+    <span class="enscript-type">const</span> KeyT Empty = KeyInfoT::getEmptyKey();
+    <span class="enscript-type">const</span> KeyT Tombstone = KeyInfoT::getTombstoneKey();
+
+    <span class="enscript-keyword">while</span> (Ptr != End &amp;&amp;
+           (KeyInfoT::isEqual(Ptr-&gt;first, Empty) ||
+            <span class="enscript-reference">KeyInfoT</span>::isEqual(Ptr-&gt;first, Tombstone)))
+      ++Ptr;
+  }
+};
+
+} <span class="enscript-comment">// end namespace objc
+</span>
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

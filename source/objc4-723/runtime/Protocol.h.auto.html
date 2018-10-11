@@ -1,0 +1,115 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Protocol.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Protocol.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Protocol.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2003, 2006-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+<span class="enscript-comment">/*
+	Protocol.h
+	Copyright 1991-1996 NeXT Software, Inc.
+*/</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_PROTOCOL_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_PROTOCOL_H_</span>
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC__</span>
+
+<span class="enscript-comment">// typedef Protocol is here:
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/runtime.h&gt;</span>
+
+
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">__OBJC2__</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/NSObject.h&gt;</span>
+
+<span class="enscript-comment">// All methods of class Protocol are unavailable. 
+</span><span class="enscript-comment">// Use the functions in objc/runtime.h instead.
+</span>
+<span class="enscript-function-name">OBJC_AVAILABLE</span>(10.0, 2.0, 9.0, 1.0, 2.0)
+@interface Protocol : NSObject
+@end
+
+
+#<span class="enscript-reference">else</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/Object.h&gt;</span>
+
+<span class="enscript-function-name">OBJC_AVAILABLE</span>(10.0, 2.0, 9.0, 1.0, 2.0)
+@interface Protocol : Object
+{
+@private
+    <span class="enscript-type">char</span> *protocol_name OBJC2_UNAVAILABLE;
+    <span class="enscript-type">struct</span> objc_protocol_list *protocol_list OBJC2_UNAVAILABLE;
+    <span class="enscript-type">struct</span> objc_method_description_list *instance_methods OBJC2_UNAVAILABLE;
+    <span class="enscript-type">struct</span> objc_method_description_list *class_methods OBJC2_UNAVAILABLE;
+}
+
+<span class="enscript-comment">/* Obtaining attributes intrinsic to the protocol */</span>
+
+- (<span class="enscript-type">const</span> <span class="enscript-type">char</span> *)name OBJC2_UNAVAILABLE;
+
+<span class="enscript-comment">/* Testing protocol conformance */</span>
+
+- (BOOL) conformsTo: (Protocol *)aProtocolObject OBJC2_UNAVAILABLE;
+
+<span class="enscript-comment">/* Looking up information specific to a protocol */</span>
+
+- (<span class="enscript-type">struct</span> objc_method_description *) descriptionForInstanceMethod:(SEL)aSel
+    __OSX_DEPRECATED(10.0, 10.5, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>) 
+    __IOS_DEPRECATED(2.0, 2.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>) 
+    __TVOS_DEPRECATED(9.0, 9.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>) 
+    __WATCHOS_DEPRECATED(1.0, 1.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>)
+    __BRIDGEOS_DEPRECATED(2.0, 2.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>);
+- (<span class="enscript-type">struct</span> objc_method_description *) descriptionForClassMethod:(SEL)aSel 
+    __OSX_DEPRECATED(10.0, 10.5, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>) 
+    __IOS_DEPRECATED(2.0, 2.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>) 
+    __TVOS_DEPRECATED(9.0, 9.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>) 
+    __WATCHOS_DEPRECATED(1.0, 1.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>)
+    __BRIDGEOS_DEPRECATED(2.0, 2.0, <span class="enscript-string">&quot;use protocol_getMethodDescription instead&quot;</span>);
+
+@end
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span> <span class="enscript-comment">/* _OBJC_PROTOCOL_H_ */</span>
+</pre>
+<hr />
+</body></html>

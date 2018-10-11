@@ -1,0 +1,128 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50Serial.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50Serial.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50Serial.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2002 Apple Computer, Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * Apple16X50Serial.h
+ * Common types, macros, and helpers used by all compilation units in the Apple16X50Serial project.
+ *
+ * 2002-02-15	dreece	created.
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_APPLEPCI16X50SERIAL_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_APPLEPCI16X50SERIAL_H</span>
+
+<span class="enscript-comment">// Use the &quot;Build Styles&quot; picker under the &quot;Targets&quot; tab to select DEBUG or ASSERT builds,
+</span><span class="enscript-comment">// or uncomment one or both of the following lines:
+</span><span class="enscript-comment">//#define DEBUG
+</span><span class="enscript-comment">//#define ASSERT
+</span>
+<span class="enscript-type">extern</span> <span class="enscript-string">&quot;C&quot;</span> <span class="enscript-type">void</span> conslog_putc(<span class="enscript-type">char</span>);
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">IO_putc</span>(c) conslog_putc(c)
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">DEBUG</span>
+ #define DEBUG_IOLog(args...)	IOLog (args)
+ #define DEBUG_putc(c)		conslog_putc(c)
+ #ifdef ASSERT
+  #warning DEBUG and ASSERT are defined - resulting kexts are not suitable <span class="enscript-keyword">for</span> deployment
+ #<span class="enscript-keyword">else</span>
+  #warning DEBUG is defined - resulting kexts are not suitable <span class="enscript-keyword">for</span> deployment
+ #endif
+#<span class="enscript-reference">else</span>
+ #define DEBUG_IOLog(args...)
+ #define DEBUG_putc(c)
+ #ifdef ASSERT
+  #warning ASSERT is defined - resulting kexts are not suitable <span class="enscript-keyword">for</span> deployment
+ #endif
+#<span class="enscript-reference">endif</span>
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">ASSERT</span>
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">assert</span>(ex)				\
+{						\
+    <span class="enscript-keyword">if</span> (!(ex)) {				\
+        IOLog( __FILE__ <span class="enscript-string">&quot;:%d :&quot;</span>, __LINE__ );	\
+        Debugger(<span class="enscript-string">&quot;assert(&quot;</span> #ex <span class="enscript-string">&quot;) failed&quot;</span>);	\
+    }						\
+}
+#<span class="enscript-reference">define</span>	<span class="enscript-variable-name">_KERN_ASSERT_H_</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOLib.h&gt;</span>
+
+<span class="enscript-comment">// selects between bits of a and b.  if a bit in m is set, then take the corresponding
+</span><span class="enscript-comment">// bit of b; otherwise, take the corresponding bit of a.
+</span>UInt32 <span class="enscript-type">static</span> inline <span class="enscript-function-name">maskMux</span>(UInt32 a, UInt32 b, UInt32 m) { <span class="enscript-keyword">return</span> (a&amp;(~m)) | (b&amp;m); }
+
+<span class="enscript-comment">// if b is true, then return a with all m's bits set; otherwise return a with all m's
+</span><span class="enscript-comment">// bits cleared.
+</span>UInt32 <span class="enscript-type">static</span> inline <span class="enscript-function-name">boolBit</span>(UInt32 a, bool b, UInt32 m) { <span class="enscript-keyword">return</span> b ? (a|m) : (a&amp;(~m)); }
+
+<span class="enscript-comment">// force an ordinal to conform to exact boolean values
+</span>#<span class="enscript-reference">define</span> <span class="enscript-function-name">BOOLVAL</span>(x)	((bool) (x) ? (true) : (false))
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">BOOLSTR</span>(x)	((x) ? <span class="enscript-string">&quot;true&quot;</span> : <span class="enscript-string">&quot;false&quot;</span>)
+
+<span class="enscript-comment">// return new value of (val) constrained such that min ≤ val ≤ max
+</span>#<span class="enscript-reference">define</span> <span class="enscript-function-name">CONSTRAIN</span>(min,val,max)	( ((val)&lt;(min)) ? (min) : (((val)&gt;(max)) ? (max) : (val)) )
+
+<span class="enscript-comment">// release an object iff it is not null, set the refernce to null after release
+</span>#<span class="enscript-reference">define</span> <span class="enscript-function-name">RELEASE</span>(obj) do { if(obj) { (obj)-&gt;release(); (obj)=NULL; } } while (0)
+
+<span class="enscript-comment">// log a capabilities byte - each bit that is set in 'byte' will cause the
+</span><span class="enscript-comment">// corresponding string to be IOLog'd.  'lab' specifies a label to log first.
+</span>#<span class="enscript-reference">define</span> <span class="enscript-function-name">IOLogByte</span>(byte, lab, s7, s6, s5, s4, s3, s2, s1, s0)		\
+<span class="enscript-function-name">if</span> (byte) {								\
+    <span class="enscript-type">int</span> i, any=0; <span class="enscript-type">char</span> *str[8]={ s0, s1, s2, s3, s4, s5, s6, s7 };	\
+        IOLog(<span class="enscript-string">&quot;%s=&lt;&quot;</span>, (lab));						\
+            <span class="enscript-keyword">for</span> (i=0;i&lt;8;i++)							\
+                <span class="enscript-keyword">if</span> (byte&amp;(1&lt;&lt;i)) {						\
+                    <span class="enscript-keyword">if</span> (any++) IO_putc(<span class="enscript-string">','</span>);					\
+                        <span class="enscript-keyword">if</span> (str[i]) IOLog(str[i]); <span class="enscript-keyword">else</span> IOLog(<span class="enscript-string">&quot;%d?&quot;</span>,i);		\
+                }								\
+                IO_putc(<span class="enscript-string">'&gt;'</span>);							\
+}
+
+<span class="enscript-comment">// OSString property commonly used in kexts, but no define is otherwise available
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kCFBundleIdentifierKey</span>	<span class="enscript-string">&quot;CFBundleIdentifier&quot;</span>
+
+<span class="enscript-comment">// OSString property used by the Network Preference panel to display the name of a port
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kNPProductNameKey</span>	<span class="enscript-string">&quot;Product Name&quot;</span>
+
+<span class="enscript-comment">// OSString property used by the Network Preference panel to display the name of a port
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kLocationKey</span>	<span class="enscript-string">&quot;Location&quot;</span>
+
+<span class="enscript-comment">// OSNumber Property that describes the master clock frequency of each UART
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">kMasterClock</span>	<span class="enscript-string">&quot;Master Clock&quot;</span>
+
+#<span class="enscript-reference">endif</span> //<span class="enscript-variable-name">_APPLEPCI16X50SERIAL_H</span></pre>
+<hr />
+</body></html>

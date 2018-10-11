@@ -1,0 +1,137 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>NSObject.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">NSObject.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="NSObject.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*	NSObject.h
+	Copyright (c) 1994-2012, Apple Inc. All rights reserved.
+*/</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_NSOBJECT_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_NSOBJECT_H_</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC__</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/NSObjCRuntime.h&gt;</span>
+
+@class NSString, NSMethodSignature, NSInvocation;
+
+@protocol NSObject
+
+- (BOOL)isEqual:(id)object;
+@property (readonly) NSUInteger hash;
+
+@property (readonly) Class superclass;
+- (Class)class OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;use 'type(of: anObject)' instead&quot;</span>);
+- (instancetype)self;
+
+- (id)performSelector:(SEL)aSelector;
+- (id)performSelector:(SEL)aSelector withObject:(id)object;
+- (id)performSelector:(SEL)aSelector withObject:(id)object1 withObject:(id)object2;
+
+- (BOOL)isProxy;
+
+- (BOOL)isKindOfClass:(Class)aClass;
+- (BOOL)isMemberOfClass:(Class)aClass;
+- (BOOL)conformsToProtocol:(Protocol *)aProtocol;
+
+- (BOOL)respondsToSelector:(SEL)aSelector;
+
+- (instancetype)retain OBJC_ARC_UNAVAILABLE;
+- (oneway <span class="enscript-type">void</span>)release OBJC_ARC_UNAVAILABLE;
+- (instancetype)autorelease OBJC_ARC_UNAVAILABLE;
+- (NSUInteger)retainCount OBJC_ARC_UNAVAILABLE;
+
+- (<span class="enscript-type">struct</span> _NSZone *)zone OBJC_ARC_UNAVAILABLE;
+
+@property (readonly, copy) NSString *description;
+@optional
+@property (readonly, copy) NSString *debugDescription;
+
+@end
+
+
+<span class="enscript-function-name">OBJC_AVAILABLE</span>(10.0, 2.0, 9.0, 1.0, 2.0)
+OBJC_ROOT_CLASS
+OBJC_EXPORT
+@interface NSObject &lt;NSObject&gt; {
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">clang</span> <span class="enscript-variable-name">diagnostic</span> <span class="enscript-variable-name">push</span>
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">clang</span> <span class="enscript-variable-name">diagnostic</span> <span class="enscript-variable-name">ignored</span> <span class="enscript-string">&quot;-Wobjc-interface-ivars&quot;</span>
+    Class isa  OBJC_ISA_AVAILABILITY;
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">clang</span> <span class="enscript-variable-name">diagnostic</span> <span class="enscript-variable-name">pop</span>
+}
+
++ (<span class="enscript-type">void</span>)load;
+
++ (<span class="enscript-type">void</span>)initialize;
+- (instancetype)init
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">NS_ENFORCE_NSOBJECT_DESIGNATED_INITIALIZER</span>
+    NS_DESIGNATED_INITIALIZER
+#<span class="enscript-reference">endif</span>
+    ;
+
++ (instancetype)new OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;use object initializers instead&quot;</span>);
++ (instancetype)allocWithZone:(<span class="enscript-type">struct</span> _NSZone *)zone OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;use object initializers instead&quot;</span>);
++ (instancetype)alloc OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;use object initializers instead&quot;</span>);
+- (<span class="enscript-type">void</span>)dealloc OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;use 'deinit' to define a de-initializer&quot;</span>);
+
+- (<span class="enscript-type">void</span>)finalize OBJC_DEPRECATED(<span class="enscript-string">&quot;Objective-C garbage collection is no longer supported&quot;</span>);
+
+- (id)copy;
+- (id)mutableCopy;
+
++ (id)copyWithZone:(<span class="enscript-type">struct</span> _NSZone *)zone OBJC_ARC_UNAVAILABLE;
++ (id)mutableCopyWithZone:(<span class="enscript-type">struct</span> _NSZone *)zone OBJC_ARC_UNAVAILABLE;
+
++ (BOOL)instancesRespondToSelector:(SEL)aSelector;
++ (BOOL)conformsToProtocol:(Protocol *)protocol;
+- (IMP)methodForSelector:(SEL)aSelector;
++ (IMP)instanceMethodForSelector:(SEL)aSelector;
+- (<span class="enscript-type">void</span>)doesNotRecognizeSelector:(SEL)aSelector;
+
+- (id)forwardingTargetForSelector:(SEL)aSelector OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+- (<span class="enscript-type">void</span>)forwardInvocation:(NSInvocation *)anInvocation OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;&quot;</span>);
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;&quot;</span>);
+
++ (NSMethodSignature *)instanceMethodSignatureForSelector:(SEL)aSelector OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;&quot;</span>);
+
+- (BOOL)allowsWeakReference UNAVAILABLE_ATTRIBUTE;
+- (BOOL)retainWeakReference UNAVAILABLE_ATTRIBUTE;
+
++ (BOOL)isSubclassOfClass:(Class)aClass;
+
++ (BOOL)resolveClassMethod:(SEL)sel OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
++ (BOOL)resolveInstanceMethod:(SEL)sel OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
++ (NSUInteger)hash;
++ (Class)superclass;
++ (Class)class OBJC_SWIFT_UNAVAILABLE(<span class="enscript-string">&quot;use 'aClass.self' instead&quot;</span>);
++ (NSString *)description;
++ (NSString *)debugDescription;
+
+@end
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

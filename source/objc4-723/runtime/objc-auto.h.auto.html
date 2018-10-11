@@ -1,0 +1,278 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-auto.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-auto.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-auto.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2004-2007 Apple Inc. All rights reserved.
+ *
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_AUTO_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_AUTO_H_</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;malloc/malloc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdint.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stddef.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;string.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;Availability.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;TargetConditionals.h&gt;</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;sys/types.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;libkern/OSAtomic.h&gt;</span>
+
+
+<span class="enscript-comment">// Define OBJC_SILENCE_GC_DEPRECATIONS=1 to temporarily 
+</span><span class="enscript-comment">// silence deprecation warnings for GC functions.
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">OBJC_SILENCE_GC_DEPRECATIONS</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(message)
+#<span class="enscript-reference">elif</span> <span class="enscript-variable-name">__has_extension</span>(<span class="enscript-variable-name">attribute_deprecated_with_message</span>)
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(message) __attribute__((deprecated(message <span class="enscript-string">&quot;. Define OBJC_SILENCE_GC_DEPRECATIONS=1 to temporarily silence this diagnostic.&quot;</span>)))
+#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(message) __attribute__((deprecated))
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">enum</span> {
+    OBJC_RATIO_COLLECTION        = (0 &lt;&lt; 0),
+    OBJC_GENERATIONAL_COLLECTION = (1 &lt;&lt; 0),
+    OBJC_FULL_COLLECTION         = (2 &lt;&lt; 0),
+    OBJC_EXHAUSTIVE_COLLECTION   = (3 &lt;&lt; 0),
+    
+    OBJC_COLLECT_IF_NEEDED       = (1 &lt;&lt; 3),
+    OBJC_WAIT_UNTIL_DONE         = (1 &lt;&lt; 4)
+};
+
+<span class="enscript-type">enum</span> {
+    OBJC_CLEAR_RESIDENT_STACK = (1 &lt;&lt; 0)
+};
+
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">OBJC_NO_GC</span>
+
+
+<span class="enscript-comment">/* Out-of-line declarations */</span>
+
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_collect</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> options)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_collectingEnabled</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;it always returns NO&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT malloc_zone_t *<span class="enscript-function-name">objc_collectableZone</span>(<span class="enscript-type">void</span>) 
+    __OSX_DEPRECATED(10.7, 10.8, <span class="enscript-string">&quot;it always returns nil&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_setCollectionThreshold</span>(size_t threshold)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_setCollectionRatio</span>(size_t ratio)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapPtr</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtr instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE OBJC_ARC_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapPtrBarrier</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtrBarrier instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE OBJC_ARC_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapGlobal</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtr instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE OBJC_ARC_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapGlobalBarrier</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtrBarrier instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE OBJC_ARC_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapInstanceVariable</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtr instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE OBJC_ARC_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapInstanceVariableBarrier</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtrBarrier instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE OBJC_ARC_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_assign_strongCast</span>(id val, id *dest)
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;use a simple assignment instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_assign_global</span>(id val, id *dest)
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;use a simple assignment instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_assign_threadlocal</span>(id val, id *dest)
+    __OSX_DEPRECATED(10.7, 10.8, <span class="enscript-string">&quot;use a simple assignment instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_assign_ivar</span>(id value, id dest, ptrdiff_t offset)
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;use a simple assignment instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> *<span class="enscript-function-name">objc_memmove_collectable</span>(<span class="enscript-type">void</span> *dst, <span class="enscript-type">const</span> <span class="enscript-type">void</span> *src, size_t size)
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;use memmove instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_read_weak</span>(id *location)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;use a simple read instead, or convert to zeroing __weak&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_assign_weak</span>(id value, id *location)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;use a simple assignment instead, or convert to zeroing __weak&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_registerThreadWithCollector</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_unregisterThreadWithCollector</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_assertRegisteredThreadWithCollector</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.6, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_clear_stack</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> options)
+    __OSX_DEPRECATED(10.5, 10.8, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_is_finalized</span>(<span class="enscript-type">void</span> *ptr)
+    __OSX_DEPRECATED(10.4, 10.8, <span class="enscript-string">&quot;it always returns NO&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_finalizeOnMainThread</span>(Class cls)
+    __OSX_DEPRECATED(10.5, 10.5, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT BOOL <span class="enscript-function-name">objc_collecting_enabled</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.4, 10.5, <span class="enscript-string">&quot;it always returns NO&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_set_collection_threshold</span>(size_t threshold)
+    __OSX_DEPRECATED(10.4, 10.5, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_set_collection_ratio</span>(size_t ratio)
+    __OSX_DEPRECATED(10.4, 10.5, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_start_collector_thread</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.4, 10.5, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_startCollectorThread</span>(<span class="enscript-type">void</span>)
+    __OSX_DEPRECATED(10.5, 10.7, <span class="enscript-string">&quot;it does nothing&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+OBJC_EXPORT id <span class="enscript-function-name">objc_allocate_object</span>(Class cls, <span class="enscript-type">int</span> extra)
+    __OSX_DEPRECATED(10.4, 10.4, <span class="enscript-string">&quot;use class_createInstance instead&quot;</span>) __IOS_UNAVAILABLE __TVOS_UNAVAILABLE __WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE;
+
+
+<span class="enscript-comment">/* !defined(OBJC_NO_GC) */</span>
+#<span class="enscript-reference">else</span>
+<span class="enscript-comment">/* defined(OBJC_NO_GC) */</span>
+
+
+<span class="enscript-comment">/* Inline declarations */</span>
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_collect</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> options __unused) { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it always returns NO&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_collectingEnabled</span>(<span class="enscript-type">void</span>) { <span class="enscript-keyword">return</span> NO; }
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_OSX</span>
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it always returns nil&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE malloc_zone_t *<span class="enscript-function-name">objc_collectableZone</span>(<span class="enscript-type">void</span>) { <span class="enscript-keyword">return</span> nil; }
+#<span class="enscript-reference">endif</span>
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_setCollectionThreshold</span>(size_t threshold __unused) { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_setCollectionRatio</span>(size_t ratio __unused) { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_startCollectorThread</span>(<span class="enscript-type">void</span>) { }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_arc</span>)
+
+<span class="enscript-comment">/* Covers for GC memory operations are unavailable in ARC */</span>
+
+#<span class="enscript-reference">else</span>
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtr instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapPtr</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    { <span class="enscript-keyword">return</span> OSAtomicCompareAndSwapPtr((<span class="enscript-type">void</span> *)predicate, (<span class="enscript-type">void</span> *)replacement, (<span class="enscript-type">void</span> * <span class="enscript-type">volatile</span> *)objectLocation); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtrBarrier instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapPtrBarrier</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    { <span class="enscript-keyword">return</span> OSAtomicCompareAndSwapPtrBarrier((<span class="enscript-type">void</span> *)predicate, (<span class="enscript-type">void</span> *)replacement, (<span class="enscript-type">void</span> * <span class="enscript-type">volatile</span> *)objectLocation); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtr instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapGlobal</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    { <span class="enscript-keyword">return</span> objc_atomicCompareAndSwapPtr(predicate, replacement, objectLocation); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtrBarrier instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapGlobalBarrier</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    { <span class="enscript-keyword">return</span> objc_atomicCompareAndSwapPtrBarrier(predicate, replacement, objectLocation); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtr instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapInstanceVariable</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    { <span class="enscript-keyword">return</span> objc_atomicCompareAndSwapPtr(predicate, replacement, objectLocation); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use OSAtomicCompareAndSwapPtrBarrier instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_atomicCompareAndSwapInstanceVariableBarrier</span>(id predicate, id replacement, <span class="enscript-type">volatile</span> id *objectLocation) 
+    { <span class="enscript-keyword">return</span> objc_atomicCompareAndSwapPtrBarrier(predicate, replacement, objectLocation); }
+
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use a simple assignment instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_assign_strongCast</span>(id val, id *dest) 
+    { <span class="enscript-keyword">return</span> (*dest = val); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use a simple assignment instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_assign_global</span>(id val, id *dest) 
+    { <span class="enscript-keyword">return</span> (*dest = val); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use a simple assignment instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_assign_threadlocal</span>(id val, id *dest) 
+    { <span class="enscript-keyword">return</span> (*dest = val); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use a simple assignment instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_assign_ivar</span>(id val, id dest, ptrdiff_t offset) 
+    { <span class="enscript-keyword">return</span> (*(id*)((intptr_t)(<span class="enscript-type">char</span> *)dest+offset) = val); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use a simple read instead, or convert to zeroing __weak&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_read_weak</span>(id *location) 
+    { <span class="enscript-keyword">return</span> *location; }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use a simple assignment instead, or convert to zeroing __weak&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_assign_weak</span>(id value, id *location) 
+    { <span class="enscript-keyword">return</span> (*location = value); }
+
+<span class="enscript-comment">/* MRC */</span>
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use memmove instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> *<span class="enscript-function-name">objc_memmove_collectable</span>(<span class="enscript-type">void</span> *dst, <span class="enscript-type">const</span> <span class="enscript-type">void</span> *src, size_t size) 
+    { <span class="enscript-keyword">return</span> memmove(dst, src, size); }
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_finalizeOnMainThread</span>(Class cls __unused) { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it always returns NO&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_is_finalized</span>(<span class="enscript-type">void</span> *ptr __unused) { <span class="enscript-keyword">return</span> NO; }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_clear_stack</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> options __unused) { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it always returns NO&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE BOOL <span class="enscript-function-name">objc_collecting_enabled</span>(<span class="enscript-type">void</span>) { <span class="enscript-keyword">return</span> NO; }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_set_collection_threshold</span>(size_t threshold __unused) { } 
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_set_collection_ratio</span>(size_t ratio __unused) { } 
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_start_collector_thread</span>(<span class="enscript-type">void</span>) { }
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_arc</span>)
+<span class="enscript-type">extern</span> id <span class="enscript-function-name">objc_allocate_object</span>(Class cls, <span class="enscript-type">int</span> extra) UNAVAILABLE_ATTRIBUTE;
+#<span class="enscript-reference">else</span>
+OBJC_EXPORT id <span class="enscript-function-name">class_createInstance</span>(Class cls, size_t extraBytes)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;use class_createInstance instead&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE id <span class="enscript-function-name">objc_allocate_object</span>(Class cls, <span class="enscript-type">int</span> extra) 
+    { <span class="enscript-keyword">return</span> class_createInstance(cls, (size_t)extra); }
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_registerThreadWithCollector</span>() { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_unregisterThreadWithCollector</span>() { }
+<span class="enscript-function-name">OBJC_GC_DEPRECATED</span>(<span class="enscript-string">&quot;it does nothing&quot;</span>)
+<span class="enscript-type">static</span> OBJC_INLINE <span class="enscript-type">void</span> <span class="enscript-function-name">objc_assertRegisteredThreadWithCollector</span>() { }
+
+<span class="enscript-comment">/* defined(OBJC_NO_GC) */</span>
+#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

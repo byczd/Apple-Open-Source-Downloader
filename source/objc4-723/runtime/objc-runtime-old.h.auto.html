@@ -1,0 +1,432 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-runtime-old.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-runtime-old.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-runtime-old.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_RUNTIME_OLD_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_RUNTIME_OLD_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-private.h&quot;</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_CLASS</span>		0x1
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_META</span>		0x2
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_INITIALIZED</span>		0x4
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_POSING</span>		0x8
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_MAPPED</span>		0x10
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_FLUSH_CACHE</span>		0x20
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_GROW_CACHE</span>		0x40
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_NEED_BIND</span>		0x80
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_METHOD_ARRAY</span>        0x100
+<span class="enscript-comment">// the JavaBridge constructs classes with these markers
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_JAVA_HYBRID</span>		0x200
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_JAVA_CLASS</span>		0x400
+<span class="enscript-comment">// thread-safe +initialize
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_INITIALIZING</span>	0x800
+<span class="enscript-comment">// bundle unloading
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_FROM_BUNDLE</span>		0x1000
+<span class="enscript-comment">// C++ ivar support
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_HAS_CXX_STRUCTORS</span>	0x2000
+<span class="enscript-comment">// Lazy method list arrays
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_NO_METHOD_ARRAY</span>	0x4000
+<span class="enscript-comment">// +load implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_HAS_LOAD_METHOD</span>     0x8000
+<span class="enscript-comment">// objc_allocateClassPair API
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_CONSTRUCTING</span>        0x10000
+<span class="enscript-comment">// visibility=hidden
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_HIDDEN</span>              0x20000
+<span class="enscript-comment">// available for use; was CLS_FINALIZE_ON_MAIN_THREAD
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_40000</span>               0x40000
+<span class="enscript-comment">// Lazy property list arrays
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_NO_PROPERTY_ARRAY</span>	0x80000
+<span class="enscript-comment">// +load implementation
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_CONNECTED</span>           0x100000
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_LOADED</span>              0x200000
+<span class="enscript-comment">// objc_allocateClassPair API
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_CONSTRUCTED</span>         0x400000
+<span class="enscript-comment">// class is leaf for cache flushing
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_LEAF</span>                0x800000
+<span class="enscript-comment">// class instances may have associative references
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_INSTANCES_HAVE_ASSOCIATED_OBJECTS</span> 0x1000000
+<span class="enscript-comment">// class has instance-specific GC layout
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_HAS_INSTANCE_SPECIFIC_LAYOUT</span> 0x2000000
+<span class="enscript-comment">// class compiled with ARC
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_IS_ARC</span>              0x4000000
+<span class="enscript-comment">// class is not ARC but has ARC-style weak ivar layout
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">CLS_HAS_WEAK_WITHOUT_ARC</span> 0x8000000
+
+
+<span class="enscript-comment">// Terminator for array of method lists
+</span>#<span class="enscript-reference">define</span> <span class="enscript-variable-name">END_OF_METHODS_LIST</span> ((struct old_method_list*)-1)
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">ISCLASS</span>(cls)		(((cls)-&gt;info &amp; CLS_CLASS) != 0)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">ISMETA</span>(cls)		(((cls)-&gt;info &amp; CLS_META) != 0)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">GETMETA</span>(cls)		(ISMETA(cls) ? (cls) : (cls)-&gt;ISA())
+
+
+<span class="enscript-type">struct</span> old_class_ext {
+    uint32_t size;
+    <span class="enscript-type">const</span> uint8_t *weak_ivar_layout;
+    <span class="enscript-type">struct</span> old_property_list **propertyLists;
+};
+
+<span class="enscript-type">struct</span> old_category {
+    <span class="enscript-type">char</span> *category_name;
+    <span class="enscript-type">char</span> *class_name;
+    <span class="enscript-type">struct</span> old_method_list *instance_methods;
+    <span class="enscript-type">struct</span> old_method_list *class_methods;
+    <span class="enscript-type">struct</span> old_protocol_list *protocols;
+    <span class="enscript-comment">// Fields below this point are in version 7 or later only.
+</span>    uint32_t size;
+    <span class="enscript-type">struct</span> old_property_list *instance_properties;
+    <span class="enscript-comment">// Check size for fields below this point.
+</span>    <span class="enscript-type">struct</span> old_property_list *class_properties;
+
+    bool hasClassPropertiesField() <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> size &gt;= offsetof(old_category, class_properties) + <span class="enscript-keyword">sizeof</span>(class_properties);
+    }
+};
+
+<span class="enscript-type">struct</span> old_ivar {
+    <span class="enscript-type">char</span> *ivar_name;
+    <span class="enscript-type">char</span> *ivar_type;
+    <span class="enscript-type">int</span> ivar_offset;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__LP64__</span>
+    <span class="enscript-type">int</span> space;
+#<span class="enscript-reference">endif</span>
+};
+
+<span class="enscript-type">struct</span> old_ivar_list {
+    <span class="enscript-type">int</span> ivar_count;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__LP64__</span>
+    <span class="enscript-type">int</span> space;
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-comment">/* variable length structure */</span>
+    <span class="enscript-type">struct</span> old_ivar ivar_list[1];
+};
+
+
+<span class="enscript-type">struct</span> old_method {
+    SEL method_name;
+    <span class="enscript-type">char</span> *method_types;
+    IMP method_imp;
+};
+
+<span class="enscript-type">struct</span> old_method_list {
+    <span class="enscript-type">void</span> *obsolete;
+
+    <span class="enscript-type">int</span> method_count;
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__LP64__</span>
+    <span class="enscript-type">int</span> space;
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-comment">/* variable length structure */</span>
+    <span class="enscript-type">struct</span> old_method method_list[1];
+};
+
+<span class="enscript-type">struct</span> old_protocol {
+    Class isa;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *protocol_name;
+    <span class="enscript-type">struct</span> old_protocol_list *protocol_list;
+    <span class="enscript-type">struct</span> objc_method_description_list *instance_methods;
+    <span class="enscript-type">struct</span> objc_method_description_list *class_methods;
+};
+
+<span class="enscript-type">struct</span> old_protocol_list {
+    <span class="enscript-type">struct</span> old_protocol_list *next;
+    <span class="enscript-type">long</span> count;
+    <span class="enscript-type">struct</span> old_protocol *list[1];
+};
+
+<span class="enscript-type">struct</span> old_protocol_ext {
+    uint32_t size;
+    <span class="enscript-type">struct</span> objc_method_description_list *optional_instance_methods;
+    <span class="enscript-type">struct</span> objc_method_description_list *optional_class_methods;
+    <span class="enscript-type">struct</span> old_property_list *instance_properties;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> **extendedMethodTypes;
+    <span class="enscript-type">struct</span> old_property_list *class_properties;
+
+    bool hasClassPropertiesField() <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> size &gt;= offsetof(old_protocol_ext, class_properties) + <span class="enscript-keyword">sizeof</span>(class_properties);
+    }
+};
+
+
+<span class="enscript-type">struct</span> old_property {
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *attributes;
+};
+
+<span class="enscript-type">struct</span> old_property_list {
+    uint32_t entsize;
+    uint32_t count;
+    <span class="enscript-type">struct</span> old_property first;
+};
+
+
+<span class="enscript-type">struct</span> objc_class : objc_object {
+    Class superclass;
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name;
+    uint32_t version;
+    uint32_t info;
+    uint32_t instance_size;
+    <span class="enscript-type">struct</span> old_ivar_list *ivars;
+    <span class="enscript-type">struct</span> old_method_list **methodLists;
+    Cache cache;
+    <span class="enscript-type">struct</span> old_protocol_list *protocols;
+    <span class="enscript-comment">// CLS_EXT only
+</span>    <span class="enscript-type">const</span> uint8_t *ivar_layout;
+    <span class="enscript-type">struct</span> old_class_ext *ext;
+
+    <span class="enscript-type">void</span> setInfo(uint32_t set) {
+        OSAtomicOr32Barrier(set, (<span class="enscript-type">volatile</span> uint32_t *)&amp;info);
+    }
+
+    <span class="enscript-type">void</span> clearInfo(uint32_t clear) {
+        OSAtomicXor32Barrier(clear, (<span class="enscript-type">volatile</span> uint32_t *)&amp;info);
+    }
+
+
+    <span class="enscript-comment">// set and clear must not overlap
+</span>    <span class="enscript-type">void</span> changeInfo(uint32_t set, uint32_t clear) {
+        assert((set &amp; clear) == 0);
+
+        uint32_t oldf, newf;
+        <span class="enscript-keyword">do</span> {
+            oldf = this-&gt;info;
+            newf = (oldf | set) &amp; ~clear;
+        } <span class="enscript-keyword">while</span> (!OSAtomicCompareAndSwap32Barrier(oldf, newf, (<span class="enscript-type">volatile</span> int32_t *)&amp;info));
+    }
+
+    bool hasCxxCtor() {
+        <span class="enscript-comment">// set_superclass propagates the flag from the superclass.
+</span>        <span class="enscript-keyword">return</span> info &amp; CLS_HAS_CXX_STRUCTORS;
+    }
+
+    bool hasCxxDtor() {
+        <span class="enscript-keyword">return</span> hasCxxCtor();  <span class="enscript-comment">// one bit for both ctor and dtor
+</span>    }
+
+    <span class="enscript-comment">// Return YES if the class's ivars are managed by ARC, 
+</span>    <span class="enscript-comment">// or the class is MRC but has ARC-style weak ivars.
+</span>    bool hasAutomaticIvars() {
+        <span class="enscript-keyword">return</span> info &amp; (CLS_IS_ARC | CLS_HAS_WEAK_WITHOUT_ARC);
+    }
+
+    <span class="enscript-comment">// Return YES if the class's ivars are managed by ARC.
+</span>    bool isARC() {
+        <span class="enscript-keyword">return</span> info &amp; CLS_IS_ARC;
+    }
+
+    bool hasCustomRR() { 
+        <span class="enscript-keyword">return</span> true;
+    }
+    <span class="enscript-type">void</span> setHasCustomRR(bool = false) { }
+    <span class="enscript-type">void</span> setHasDefaultRR() { }
+    <span class="enscript-type">void</span> printCustomRR(bool) { }
+
+    bool hasCustomAWZ() { 
+        <span class="enscript-keyword">return</span> true;
+    }
+    <span class="enscript-type">void</span> setHasCustomAWZ(bool = false) { }
+    <span class="enscript-type">void</span> setHasDefaultAWZ() { }
+    <span class="enscript-type">void</span> printCustomAWZ(bool) { }
+
+    bool instancesHaveAssociatedObjects() {
+        <span class="enscript-keyword">return</span> info &amp; CLS_INSTANCES_HAVE_ASSOCIATED_OBJECTS;
+    }
+
+    <span class="enscript-type">void</span> setInstancesHaveAssociatedObjects() {
+        setInfo(CLS_INSTANCES_HAVE_ASSOCIATED_OBJECTS);
+    }
+
+    bool shouldGrowCache() {
+        <span class="enscript-keyword">return</span> info &amp; CLS_GROW_CACHE;
+    }
+
+    <span class="enscript-type">void</span> setShouldGrowCache(bool grow) {
+        <span class="enscript-keyword">if</span> (grow) setInfo(CLS_GROW_CACHE);
+        <span class="enscript-keyword">else</span> clearInfo(CLS_GROW_CACHE);
+    }
+
+    <span class="enscript-comment">// +initialize bits are stored on the metaclass only
+</span>    bool isInitializing() {
+        <span class="enscript-keyword">return</span> getMeta()-&gt;info &amp; CLS_INITIALIZING;
+    }
+
+    <span class="enscript-comment">// +initialize bits are stored on the metaclass only
+</span>    <span class="enscript-type">void</span> setInitializing() {
+        getMeta()-&gt;setInfo(CLS_INITIALIZING);
+    }
+
+    <span class="enscript-comment">// +initialize bits are stored on the metaclass only
+</span>    bool isInitialized() {
+        <span class="enscript-keyword">return</span> getMeta()-&gt;info &amp; CLS_INITIALIZED;
+    }
+
+    <span class="enscript-comment">// +initialize bits are stored on the metaclass only
+</span>    <span class="enscript-type">void</span> setInitialized() {
+        getMeta()-&gt;changeInfo(CLS_INITIALIZED, CLS_INITIALIZING);
+    }
+
+    bool isLoadable() {
+        <span class="enscript-comment">// A class registered for +load is ready for +load to be called
+</span>        <span class="enscript-comment">// if it is connected.
+</span>        <span class="enscript-keyword">return</span> isConnected();
+    }
+
+    IMP getLoadMethod();
+
+    bool isFuture();
+
+    bool isConnected();
+
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *mangledName() { <span class="enscript-keyword">return</span> name; }
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *demangledName() { <span class="enscript-keyword">return</span> name; }
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *nameForLogging() { <span class="enscript-keyword">return</span> name; }
+    
+    bool isRootClass() {
+        <span class="enscript-keyword">return</span> superclass == nil;
+    }
+
+    bool isRootMetaclass() {
+        <span class="enscript-keyword">return</span> ISA() == (Class)this;
+    }
+
+    bool isMetaClass() {
+        <span class="enscript-keyword">return</span> info &amp; CLS_META;
+    }
+
+    <span class="enscript-comment">// NOT identical to this-&gt;ISA() when this is a metaclass
+</span>    Class getMeta() {
+        <span class="enscript-keyword">if</span> (isMetaClass()) <span class="enscript-keyword">return</span> (Class)this;
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> this-&gt;ISA();
+    }
+
+    <span class="enscript-comment">// May be unaligned depending on class's ivars.
+</span>    uint32_t unalignedInstanceStart() {
+        <span class="enscript-comment">// This is not simply superclass-&gt;instance_size.
+</span>        <span class="enscript-comment">// superclass-&gt;instance_size is padded to its sizeof() boundary, 
+</span>        <span class="enscript-comment">// which may envelop one of this class's ivars. 
+</span>        <span class="enscript-comment">// That in turn would break ARC-style ivar layouts.
+</span>        <span class="enscript-comment">// Instead, we use the address of this class's first ivar when possible.
+</span>        <span class="enscript-keyword">if</span> (!superclass) <span class="enscript-keyword">return</span> 0;
+        <span class="enscript-keyword">if</span> (!ivars || ivars-&gt;ivar_count == 0) <span class="enscript-keyword">return</span> superclass-&gt;instance_size;
+        <span class="enscript-keyword">return</span> ivars-&gt;ivar_list[0].ivar_offset;
+    }
+
+    <span class="enscript-comment">// Class's instance start rounded up to a pointer-size boundary.
+</span>    <span class="enscript-comment">// This is used for ARC layout bitmaps.
+</span>    uint32_t alignedInstanceStart() {
+        <span class="enscript-keyword">return</span> word_align(unalignedInstanceStart());
+    }
+
+
+    <span class="enscript-comment">// May be unaligned depending on class's ivars.
+</span>    uint32_t unalignedInstanceSize() {
+        <span class="enscript-keyword">return</span> instance_size;
+    }
+
+    <span class="enscript-comment">// Class's ivar size rounded up to a pointer-size boundary.
+</span>    uint32_t alignedInstanceSize() {
+        <span class="enscript-keyword">return</span> word_align(unalignedInstanceSize());
+    }
+
+    size_t instanceSize(size_t extraBytes) {
+        size_t size = alignedInstanceSize() + extraBytes;
+        <span class="enscript-comment">// CF requires all objects be at least 16 bytes.
+</span>        <span class="enscript-keyword">if</span> (size &lt; 16) size = 16;
+        <span class="enscript-keyword">return</span> size;
+    }
+
+};
+
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;hashtable2.h&quot;</span>
+
+__BEGIN_DECLS
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">oldprotocol</span>(proto) ((struct old_protocol *)proto)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">oldmethod</span>(meth) ((struct old_method *)meth)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">oldcategory</span>(cat) ((struct old_category *)cat)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">oldivar</span>(ivar) ((struct old_ivar *)ivar)
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">oldproperty</span>(prop) ((struct old_property *)prop)
+
+<span class="enscript-type">extern</span> NXHashTable *class_hash;
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">unload_class</span>(Class cls);
+
+<span class="enscript-type">extern</span> IMP <span class="enscript-function-name">lookupNamedMethodInMethodList</span>(<span class="enscript-type">struct</span> old_method_list *mlist, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *meth_name);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_insertMethods</span>(Class cls, <span class="enscript-type">struct</span> old_method_list *mlist, <span class="enscript-type">struct</span> old_category *cat);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_removeMethods</span>(Class cls, <span class="enscript-type">struct</span> old_method_list *mlist);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_flush_caches</span> (Class cls);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">_class_addProperties</span>(Class cls, <span class="enscript-type">struct</span> old_property_list *additions);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">_class_hasLoadMethod</span>(Class cls);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">change_class_references</span>(Class imposter, Class original, Class copy, bool changeSuperRefs);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">flush_marked_caches</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">set_superclass</span>(Class cls, Class supercls, bool cls_is_new);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">try_free</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *p);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">struct</span> old_property *<span class="enscript-function-name">property_list_nth</span>(<span class="enscript-type">const</span> <span class="enscript-type">struct</span> old_property_list *plist, uint32_t i);
+<span class="enscript-type">extern</span> <span class="enscript-type">struct</span> old_property **<span class="enscript-function-name">copyPropertyList</span>(<span class="enscript-type">struct</span> old_property_list *plist, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> *outCount);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">struct</span> objc_method_description * <span class="enscript-function-name">lookup_protocol_method</span>(<span class="enscript-type">struct</span> old_protocol *proto, SEL aSel, bool isRequiredMethod, bool isInstanceMethod, bool recursive);
+
+<span class="enscript-comment">// used by flush_caches outside objc-cache.m
+</span><span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_cache_flush</span>(Class cls);
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">OBJC_INSTRUMENTED</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> LinearFlushCachesCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> LinearFlushCachesVisitedCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> MaxLinearFlushCachesVisitedCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> NonlinearFlushCachesCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> NonlinearFlushCachesClassCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> NonlinearFlushCachesVisitedCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> MaxNonlinearFlushCachesVisitedCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> IdealFlushCachesCount;
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> MaxIdealFlushCachesCount;
+#<span class="enscript-reference">endif</span>
+
+__END_DECLS
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

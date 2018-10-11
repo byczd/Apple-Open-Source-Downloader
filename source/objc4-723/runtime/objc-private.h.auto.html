@@ -1,0 +1,1077 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-private.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-private.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-private.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+<span class="enscript-comment">/*
+ *	objc-private.h
+ *	Copyright 1988-1996, NeXT Software, Inc.
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_PRIVATE_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_PRIVATE_H_</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-config.h&quot;</span>
+
+<span class="enscript-comment">/* Isolate ourselves from the definitions of id and Class in the compiler 
+ * and public headers.
+ */</span>
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">_OBJC_OBJC_H_</span>
+#<span class="enscript-reference">error</span> <span class="enscript-variable-name">include</span> <span class="enscript-variable-name">objc</span>-<span class="enscript-variable-name">private</span>.<span class="enscript-variable-name">h</span> <span class="enscript-variable-name">before</span> <span class="enscript-variable-name">other</span> <span class="enscript-variable-name">headers</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_TYPES_DEFINED</span> 1
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span> 0
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;cstddef&gt;</span>  // for nullptr_t
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;stdint.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;assert.h&gt;</span>
+
+<span class="enscript-type">struct</span> objc_class;
+<span class="enscript-type">struct</span> objc_object;
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> objc_class *Class;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> objc_object *id;
+
+namespace {
+    <span class="enscript-type">struct</span> SideTable;
+};
+
+
+#<span class="enscript-reference">if</span> (!<span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span> &amp;&amp; !<span class="enscript-variable-name">SUPPORT_PACKED_ISA</span> &amp;&amp; !<span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>) ||\
+    ( SUPPORT_NONPOINTER_ISA &amp;&amp;  SUPPORT_PACKED_ISA &amp;&amp; !SUPPORT_INDEXED_ISA) ||\
+    ( SUPPORT_NONPOINTER_ISA &amp;&amp; !SUPPORT_PACKED_ISA &amp;&amp;  SUPPORT_INDEXED_ISA)
+    <span class="enscript-comment">// good config
+</span>#<span class="enscript-reference">else</span>
+#   <span class="enscript-reference">error</span> <span class="enscript-variable-name">bad</span> <span class="enscript-variable-name">config</span>
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">union</span> isa_t 
+{
+    isa_t() { }
+    isa_t(uintptr_t value) : bits(value) { }
+
+    Class cls;
+    uintptr_t bits;
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_PACKED_ISA</span>
+
+    <span class="enscript-comment">// extra_rc must be the MSB-most field (so it matches carry/overflow flags)
+</span>    <span class="enscript-comment">// nonpointer must be the LSB (fixme or get rid of it)
+</span>    <span class="enscript-comment">// shiftcls must occupy the same bits that a real class pointer would
+</span>    <span class="enscript-comment">// bits + RC_ONE is equivalent to extra_rc + 1
+</span>    <span class="enscript-comment">// RC_HALF is the high bit of extra_rc (i.e. half of its range)
+</span>
+    <span class="enscript-comment">// future expansion:
+</span>    <span class="enscript-comment">// uintptr_t fast_rr : 1;     // no r/r overrides
+</span>    <span class="enscript-comment">// uintptr_t lock : 2;        // lock for atomic property, @synch
+</span>    <span class="enscript-comment">// uintptr_t extraBytes : 1;  // allocated with extra bytes
+</span>
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">__arm64__</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_MASK</span>        0x0000000ffffffff8ULL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_MAGIC_MASK</span>  0x000003f000000001ULL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_MAGIC_VALUE</span> 0x000001a000000001ULL
+    <span class="enscript-type">struct</span> {
+        uintptr_t nonpointer        : 1;
+        uintptr_t has_assoc         : 1;
+        uintptr_t has_cxx_dtor      : 1;
+        uintptr_t shiftcls          : 33; <span class="enscript-comment">// MACH_VM_MAX_ADDRESS 0x1000000000
+</span>        uintptr_t magic             : 6;
+        uintptr_t weakly_referenced : 1;
+        uintptr_t deallocating      : 1;
+        uintptr_t has_sidetable_rc  : 1;
+        uintptr_t extra_rc          : 19;
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">RC_ONE</span>   (1ULL&lt;&lt;45)
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">RC_HALF</span>  (1ULL&lt;&lt;18)
+    };
+
+# <span class="enscript-reference">elif</span> <span class="enscript-variable-name">__x86_64__</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_MASK</span>        0x00007ffffffffff8ULL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_MAGIC_MASK</span>  0x001f800000000001ULL
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_MAGIC_VALUE</span> 0x001d800000000001ULL
+    <span class="enscript-type">struct</span> {
+        uintptr_t nonpointer        : 1;
+        uintptr_t has_assoc         : 1;
+        uintptr_t has_cxx_dtor      : 1;
+        uintptr_t shiftcls          : 44; <span class="enscript-comment">// MACH_VM_MAX_ADDRESS 0x7fffffe00000
+</span>        uintptr_t magic             : 6;
+        uintptr_t weakly_referenced : 1;
+        uintptr_t deallocating      : 1;
+        uintptr_t has_sidetable_rc  : 1;
+        uintptr_t extra_rc          : 8;
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">RC_ONE</span>   (1ULL&lt;&lt;56)
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">RC_HALF</span>  (1ULL&lt;&lt;7)
+    };
+
+# <span class="enscript-reference">else</span>
+#   <span class="enscript-reference">error</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">architecture</span> <span class="enscript-variable-name">for</span> <span class="enscript-variable-name">packed</span> <span class="enscript-variable-name">isa</span>
+# <span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// SUPPORT_PACKED_ISA
+</span>#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+
+# <span class="enscript-reference">if</span>  <span class="enscript-variable-name">__ARM_ARCH_7K__</span> &gt;= 2
+
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_IS_NPI</span>      1
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_MASK</span>        0x0001FFFC
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_SHIFT</span>       2
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_BITS</span>        15
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_COUNT</span>       (1 &lt;&lt; ISA_INDEX_BITS)
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_MAGIC_MASK</span>  0x001E0001
+#   <span class="enscript-reference">define</span> <span class="enscript-variable-name">ISA_INDEX_MAGIC_VALUE</span> 0x001C0001
+    <span class="enscript-type">struct</span> {
+        uintptr_t nonpointer        : 1;
+        uintptr_t has_assoc         : 1;
+        uintptr_t indexcls          : 15;
+        uintptr_t magic             : 4;
+        uintptr_t has_cxx_dtor      : 1;
+        uintptr_t weakly_referenced : 1;
+        uintptr_t deallocating      : 1;
+        uintptr_t has_sidetable_rc  : 1;
+        uintptr_t extra_rc          : 7;
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">RC_ONE</span>   (1ULL&lt;&lt;25)
+#       <span class="enscript-reference">define</span> <span class="enscript-variable-name">RC_HALF</span>  (1ULL&lt;&lt;6)
+    };
+
+# <span class="enscript-reference">else</span>
+#   <span class="enscript-reference">error</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">architecture</span> <span class="enscript-variable-name">for</span> <span class="enscript-variable-name">indexed</span> <span class="enscript-variable-name">isa</span>
+# <span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// SUPPORT_INDEXED_ISA
+</span>#<span class="enscript-reference">endif</span>
+
+};
+
+
+<span class="enscript-type">struct</span> objc_object {
+<span class="enscript-reference">private</span>:
+    isa_t isa;
+
+<span class="enscript-reference">public</span>:
+
+    <span class="enscript-comment">// ISA() assumes this is NOT a tagged pointer object
+</span>    Class ISA();
+
+    <span class="enscript-comment">// getIsa() allows this to be a tagged pointer object
+</span>    Class getIsa();
+
+    <span class="enscript-comment">// initIsa() should be used to init the isa of new objects only.
+</span>    <span class="enscript-comment">// If this object already has an isa, use changeIsa() for correctness.
+</span>    <span class="enscript-comment">// initInstanceIsa(): objects with no custom RR/AWZ
+</span>    <span class="enscript-comment">// initClassIsa(): class objects
+</span>    <span class="enscript-comment">// initProtocolIsa(): protocol objects
+</span>    <span class="enscript-comment">// initIsa(): other objects
+</span>    <span class="enscript-type">void</span> initIsa(Class cls <span class="enscript-comment">/*nonpointer=false*/</span>);
+    <span class="enscript-type">void</span> initClassIsa(Class cls <span class="enscript-comment">/*nonpointer=maybe*/</span>);
+    <span class="enscript-type">void</span> initProtocolIsa(Class cls <span class="enscript-comment">/*nonpointer=maybe*/</span>);
+    <span class="enscript-type">void</span> initInstanceIsa(Class cls, bool hasCxxDtor);
+
+    <span class="enscript-comment">// changeIsa() should be used to change the isa of existing objects.
+</span>    <span class="enscript-comment">// If this is a new object, use initIsa() for performance.
+</span>    Class changeIsa(Class newCls);
+
+    bool hasNonpointerIsa();
+    bool isTaggedPointer();
+    bool isBasicTaggedPointer();
+    bool isExtTaggedPointer();
+    bool isClass();
+
+    <span class="enscript-comment">// object may have associated objects?
+</span>    bool hasAssociatedObjects();
+    <span class="enscript-type">void</span> setHasAssociatedObjects();
+
+    <span class="enscript-comment">// object may be weakly referenced?
+</span>    bool isWeaklyReferenced();
+    <span class="enscript-type">void</span> setWeaklyReferenced_nolock();
+
+    <span class="enscript-comment">// object may have -.cxx_destruct implementation?
+</span>    bool hasCxxDtor();
+
+    <span class="enscript-comment">// Optimized calls to retain/release methods
+</span>    id retain();
+    <span class="enscript-type">void</span> release();
+    id autorelease();
+
+    <span class="enscript-comment">// Implementations of retain/release methods
+</span>    id rootRetain();
+    bool rootRelease();
+    id rootAutorelease();
+    bool rootTryRetain();
+    bool rootReleaseShouldDealloc();
+    uintptr_t rootRetainCount();
+
+    <span class="enscript-comment">// Implementation of dealloc methods
+</span>    bool rootIsDeallocating();
+    <span class="enscript-type">void</span> clearDeallocating();
+    <span class="enscript-type">void</span> rootDealloc();
+
+<span class="enscript-reference">private</span>:
+    <span class="enscript-type">void</span> initIsa(Class newCls, bool nonpointer, bool hasCxxDtor);
+
+    <span class="enscript-comment">// Slow paths for inline control
+</span>    id rootAutorelease2();
+    bool overrelease_error();
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span>
+    <span class="enscript-comment">// Unified retain count manipulation for nonpointer isa
+</span>    id rootRetain(bool tryRetain, bool handleOverflow);
+    bool rootRelease(bool performDealloc, bool handleUnderflow);
+    id rootRetain_overflow(bool tryRetain);
+    bool rootRelease_underflow(bool performDealloc);
+
+    <span class="enscript-type">void</span> clearDeallocating_slow();
+
+    <span class="enscript-comment">// Side table retain count overflow for nonpointer isa
+</span>    <span class="enscript-type">void</span> sidetable_lock();
+    <span class="enscript-type">void</span> sidetable_unlock();
+
+    <span class="enscript-type">void</span> sidetable_moveExtraRC_nolock(size_t extra_rc, bool isDeallocating, bool weaklyReferenced);
+    bool sidetable_addExtraRC_nolock(size_t delta_rc);
+    size_t sidetable_subExtraRC_nolock(size_t delta_rc);
+    size_t sidetable_getExtraRC_nolock();
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-comment">// Side-table-only retain count
+</span>    bool sidetable_isDeallocating();
+    <span class="enscript-type">void</span> sidetable_clearDeallocating();
+
+    bool sidetable_isWeaklyReferenced();
+    <span class="enscript-type">void</span> sidetable_setWeaklyReferenced_nolock();
+
+    id sidetable_retain();
+    id sidetable_retain_slow(SideTable&amp; table);
+
+    uintptr_t sidetable_release(bool performDealloc = true);
+    uintptr_t sidetable_release_slow(SideTable&amp; table, bool performDealloc = true);
+
+    bool sidetable_tryRetain();
+
+    uintptr_t sidetable_retainCount();
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">DEBUG</span>
+    bool sidetable_present();
+#<span class="enscript-reference">endif</span>
+};
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> method_t *Method;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> ivar_t *Ivar;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> category_t *Category;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> property_t *objc_property_t;
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> old_method *Method;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> old_ivar *Ivar;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> old_category *Category;
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> old_property *objc_property_t;
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Public headers
+</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;runtime.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-os.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-abi.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-api.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-config.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-internal.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;maptable.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;hashtable2.h&quot;</span>
+
+<span class="enscript-comment">/* Do not include message.h here. */</span>
+<span class="enscript-comment">/* #include &quot;message.h&quot; */</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">__APPLE_API_PRIVATE</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-gdb.h&quot;</span>
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">__APPLE_API_PRIVATE</span>
+
+
+<span class="enscript-comment">// Private headers
+</span>
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC2__</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-runtime-new.h&quot;</span>
+#<span class="enscript-reference">else</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-runtime-old.h&quot;</span>
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-references.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-initialize.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-loadmethod.h&quot;</span>
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_PREOPT</span>  &amp;&amp;  <span class="enscript-variable-name">__cplusplus</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc-shared-cache.h&gt;</span>
+using objc_selopt_t = <span class="enscript-type">const</span> objc_opt::objc_selopt_t;
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">struct</span> objc_selopt_t;
+#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">STRINGIFY</span>(x) #x
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">STRINGIFY2</span>(x) STRINGIFY(x)
+
+__BEGIN_DECLS
+
+<span class="enscript-type">struct</span> header_info;
+
+<span class="enscript-comment">// Split out the rw data from header info.  For now put it in a huge array
+</span><span class="enscript-comment">// that more than exceeds the space needed.  In future we'll just allocate
+</span><span class="enscript-comment">// this in the shared cache builder.
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> header_info_rw {
+
+    bool getLoaded() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> isLoaded;
+    }
+
+    <span class="enscript-type">void</span> setLoaded(bool v) {
+        isLoaded = v ? 1: 0;
+    }
+
+    bool getAllClassesRealized() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> allClassesRealized;
+    }
+
+    <span class="enscript-type">void</span> setAllClassesRealized(bool v) {
+        allClassesRealized = v ? 1: 0;
+    }
+
+    header_info *getNext() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> (header_info *)(next &lt;&lt; 2);
+    }
+
+    <span class="enscript-type">void</span> setNext(header_info *v) {
+        next = ((uintptr_t)v) &gt;&gt; 2;
+    }
+
+<span class="enscript-reference">private</span>:
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">__LP64__</span>
+    uintptr_t isLoaded              : 1;
+    uintptr_t allClassesRealized    : 1;
+    uintptr_t next                  : 62;
+#<span class="enscript-reference">else</span>
+    uintptr_t isLoaded              : 1;
+    uintptr_t allClassesRealized    : 1;
+    uintptr_t next                  : 30;
+#<span class="enscript-reference">endif</span>
+} header_info_rw;
+
+<span class="enscript-type">struct</span> header_info_rw* <span class="enscript-function-name">getPreoptimizedHeaderRW</span>(<span class="enscript-type">const</span> <span class="enscript-type">struct</span> header_info *<span class="enscript-type">const</span> hdr);
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> header_info {
+<span class="enscript-reference">private</span>:
+    <span class="enscript-comment">// Note, this is no longer a pointer, but instead an offset to a pointer
+</span>    <span class="enscript-comment">// from this location.
+</span>    intptr_t mhdr_offset;
+
+    <span class="enscript-comment">// Note, this is no longer a pointer, but instead an offset to a pointer
+</span>    <span class="enscript-comment">// from this location.
+</span>    intptr_t info_offset;
+
+    <span class="enscript-comment">// Do not add fields without editing ObjCModernAbstraction.hpp
+</span><span class="enscript-reference">public</span>:
+
+    header_info_rw *getHeaderInfoRW() {
+        header_info_rw *preopt =
+            isPreoptimized() ? getPreoptimizedHeaderRW(this) : nil;
+        <span class="enscript-keyword">if</span> (preopt) <span class="enscript-keyword">return</span> preopt;
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> &amp;rw_data[0];
+    }
+
+    <span class="enscript-type">const</span> headerType *mhdr() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> (<span class="enscript-type">const</span> headerType *)(((intptr_t)&amp;mhdr_offset) + mhdr_offset);
+    }
+
+    <span class="enscript-type">void</span> setmhdr(<span class="enscript-type">const</span> headerType *mhdr) {
+        mhdr_offset = (intptr_t)mhdr - (intptr_t)&amp;mhdr_offset;
+    }
+
+    <span class="enscript-type">const</span> objc_image_info *info() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> (<span class="enscript-type">const</span> objc_image_info *)(((intptr_t)&amp;info_offset) + info_offset);
+    }
+
+    <span class="enscript-type">void</span> setinfo(<span class="enscript-type">const</span> objc_image_info *info) {
+        info_offset = (intptr_t)info - (intptr_t)&amp;info_offset;
+    }
+
+    bool isLoaded() {
+        <span class="enscript-keyword">return</span> getHeaderInfoRW()-&gt;getLoaded();
+    }
+
+    <span class="enscript-type">void</span> setLoaded(bool v) {
+        getHeaderInfoRW()-&gt;setLoaded(v);
+    }
+
+    bool areAllClassesRealized() {
+        <span class="enscript-keyword">return</span> getHeaderInfoRW()-&gt;getAllClassesRealized();
+    }
+
+    <span class="enscript-type">void</span> setAllClassesRealized(bool v) {
+        getHeaderInfoRW()-&gt;setAllClassesRealized(v);
+    }
+
+    header_info *getNext() {
+        <span class="enscript-keyword">return</span> getHeaderInfoRW()-&gt;getNext();
+    }
+
+    <span class="enscript-type">void</span> setNext(header_info *v) {
+        getHeaderInfoRW()-&gt;setNext(v);
+    }
+
+    bool isBundle() {
+        <span class="enscript-keyword">return</span> mhdr()-&gt;filetype == MH_BUNDLE;
+    }
+
+    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *fname() <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> dyld_image_path_containing_address(mhdr());
+    }
+
+    bool isPreoptimized() <span class="enscript-type">const</span>;
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>
+    <span class="enscript-type">struct</span> old_protocol **proto_refs;
+    <span class="enscript-type">struct</span> objc_module *mod_ptr;
+    size_t              mod_count;
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_WIN32</span>
+    <span class="enscript-type">struct</span> objc_module **modules;
+    size_t moduleCount;
+    <span class="enscript-type">struct</span> old_protocol **protocols;
+    size_t protocolCount;
+    <span class="enscript-type">void</span> *imageinfo;
+    size_t imageinfoBytes;
+    SEL *selrefs;
+    size_t selrefCount;
+    <span class="enscript-type">struct</span> objc_class **clsrefs;
+    size_t clsrefCount;    
+    TCHAR *moduleName;
+# <span class="enscript-reference">endif</span>
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-reference">private</span>:
+    <span class="enscript-comment">// Images in the shared cache will have an empty array here while those
+</span>    <span class="enscript-comment">// allocated at run time will allocate a single entry.
+</span>    header_info_rw rw_data[];
+} header_info;
+
+<span class="enscript-type">extern</span> header_info *FirstHeader;
+<span class="enscript-type">extern</span> header_info *LastHeader;
+<span class="enscript-type">extern</span> <span class="enscript-type">int</span> HeaderCount;
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">appendHeader</span>(header_info *hi);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">removeHeader</span>(header_info *hi);
+
+<span class="enscript-type">extern</span> objc_image_info *<span class="enscript-function-name">_getObjcImageInfo</span>(<span class="enscript-type">const</span> headerType *head, size_t *size);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">_hasObjcContents</span>(<span class="enscript-type">const</span> header_info *hi);
+
+
+<span class="enscript-comment">// Mach-O segment and section names are 16 bytes and may be un-terminated.
+</span>
+<span class="enscript-type">static</span> inline bool <span class="enscript-function-name">segnameEquals</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *lhs, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *rhs) {
+    <span class="enscript-keyword">return</span> 0 == strncmp(lhs, rhs, 16);
+}
+
+<span class="enscript-type">static</span> inline bool <span class="enscript-function-name">segnameStartsWith</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *segname, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *prefix) {
+    <span class="enscript-keyword">return</span> 0 == strncmp(segname, prefix, strlen(prefix));
+}
+
+<span class="enscript-type">static</span> inline bool <span class="enscript-function-name">sectnameEquals</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *lhs, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *rhs) {
+    <span class="enscript-keyword">return</span> segnameEquals(lhs, rhs);
+}
+
+<span class="enscript-type">static</span> inline bool <span class="enscript-function-name">sectnameStartsWith</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *sectname, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *prefix){
+    <span class="enscript-keyword">return</span> segnameStartsWith(sectname, prefix);
+}
+
+
+<span class="enscript-comment">/* selectors */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">sel_init</span>(size_t selrefCount);
+<span class="enscript-type">extern</span> SEL <span class="enscript-function-name">sel_registerNameNoLock</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *str, bool copy);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">sel_lock</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">sel_unlock</span>(<span class="enscript-type">void</span>);
+
+<span class="enscript-type">extern</span> SEL SEL_load;
+<span class="enscript-type">extern</span> SEL SEL_initialize;
+<span class="enscript-type">extern</span> SEL SEL_resolveClassMethod;
+<span class="enscript-type">extern</span> SEL SEL_resolveInstanceMethod;
+<span class="enscript-type">extern</span> SEL SEL_cxx_construct;
+<span class="enscript-type">extern</span> SEL SEL_cxx_destruct;
+<span class="enscript-type">extern</span> SEL SEL_retain;
+<span class="enscript-type">extern</span> SEL SEL_release;
+<span class="enscript-type">extern</span> SEL SEL_autorelease;
+<span class="enscript-type">extern</span> SEL SEL_retainCount;
+<span class="enscript-type">extern</span> SEL SEL_alloc;
+<span class="enscript-type">extern</span> SEL SEL_allocWithZone;
+<span class="enscript-type">extern</span> SEL SEL_dealloc;
+<span class="enscript-type">extern</span> SEL SEL_copy;
+<span class="enscript-type">extern</span> SEL SEL_new;
+<span class="enscript-type">extern</span> SEL SEL_forwardInvocation;
+<span class="enscript-type">extern</span> SEL SEL_tryRetain;
+<span class="enscript-type">extern</span> SEL SEL_isDeallocating;
+<span class="enscript-type">extern</span> SEL SEL_retainWeakReference;
+<span class="enscript-type">extern</span> SEL SEL_allowsWeakReference;
+
+<span class="enscript-comment">/* preoptimization */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">preopt_init</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">disableSharedCacheOptimizations</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">isPreoptimized</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">noMissingWeakSuperclasses</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> header_info *<span class="enscript-function-name">preoptimizedHinfoForHeader</span>(<span class="enscript-type">const</span> headerType *mhdr);
+
+<span class="enscript-type">extern</span> objc_selopt_t *<span class="enscript-function-name">preoptimizedSelectors</span>(<span class="enscript-type">void</span>);
+
+<span class="enscript-type">extern</span> Protocol *<span class="enscript-function-name">getPreoptimizedProtocol</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *name);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">getPreoptimizedClassUnreasonableCount</span>();
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">getPreoptimizedClass</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *name);
+<span class="enscript-type">extern</span> Class* <span class="enscript-function-name">copyPreoptimizedClasses</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *name, <span class="enscript-type">int</span> *outCount);
+
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">_calloc_class</span>(size_t size);
+
+<span class="enscript-comment">/* method lookup */</span>
+<span class="enscript-type">extern</span> IMP <span class="enscript-function-name">lookUpImpOrNil</span>(Class, SEL, id obj, bool initialize, bool cache, bool resolver);
+<span class="enscript-type">extern</span> IMP <span class="enscript-function-name">lookUpImpOrForward</span>(Class, SEL, id obj, bool initialize, bool cache, bool resolver);
+
+<span class="enscript-type">extern</span> IMP <span class="enscript-function-name">lookupMethodInClassAndLoadCache</span>(Class cls, SEL sel);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">class_respondsToSelector_inst</span>(Class cls, SEL sel, id inst);
+
+<span class="enscript-type">extern</span> bool objcMsgLogEnabled;
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">logMessageSend</span>(bool isClassMethod,
+                    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *objectsClass,
+                    <span class="enscript-type">const</span> <span class="enscript-type">char</span> *implementingClass,
+                    SEL selector);
+
+<span class="enscript-comment">/* message dispatcher */</span>
+<span class="enscript-type">extern</span> IMP <span class="enscript-function-name">_class_lookupMethodAndLoadCache3</span>(id, SEL, Class);
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_msgForward_impcache</span>(<span class="enscript-type">void</span>);
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">extern</span> id <span class="enscript-function-name">_objc_msgForward_impcache</span>(id, SEL, ...);
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/* errors */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">__objc_error</span>(id, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *, ...) __attribute__((format (printf, 2, 3), noreturn));
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_inform</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...) __attribute__((format (printf, 1, 2)));
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_inform_on_crash</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...) __attribute__((format (printf, 1, 2)));
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_inform_now_and_on_crash</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *fmt, ...) __attribute__((format (printf, 1, 2)));
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_objc_inform_deprecated</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *oldname, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *newname) __attribute__((noinline));
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">inform_duplicate</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *name, Class oldCls, Class cls);
+
+<span class="enscript-comment">/* magic */</span>
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">_objc_getFreedObjectClass</span> (<span class="enscript-type">void</span>);
+
+<span class="enscript-comment">/* map table additions */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> *<span class="enscript-function-name">NXMapKeyCopyingInsert</span>(NXMapTable *table, <span class="enscript-type">const</span> <span class="enscript-type">void</span> *key, <span class="enscript-type">const</span> <span class="enscript-type">void</span> *value);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> *<span class="enscript-function-name">NXMapKeyFreeingRemove</span>(NXMapTable *table, <span class="enscript-type">const</span> <span class="enscript-type">void</span> *key);
+
+<span class="enscript-comment">/* hash table additions */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">_NXHashCapacity</span>(NXHashTable *table);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_NXHashRehashToCapacity</span>(NXHashTable *table, <span class="enscript-type">unsigned</span> newCapacity);
+
+<span class="enscript-comment">/* property attribute parsing */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> *<span class="enscript-function-name">copyPropertyAttributeString</span>(<span class="enscript-type">const</span> objc_property_attribute_t *attrs, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> count);
+<span class="enscript-type">extern</span> objc_property_attribute_t *<span class="enscript-function-name">copyPropertyAttributeList</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *attrs, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> *outCount);
+<span class="enscript-type">extern</span> <span class="enscript-type">char</span> *<span class="enscript-function-name">copyPropertyAttributeValue</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *attrs, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name);
+
+<span class="enscript-comment">/* locking */</span>
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">lock_init</span>(<span class="enscript-type">void</span>);
+
+class monitor_locker_t : nocopy_t {
+    monitor_t&amp; lock;
+  <span class="enscript-reference">public</span>:
+    monitor_locker_t(monitor_t&amp; newLock) : lock(newLock) { lock.enter(); }
+    ~monitor_locker_t() { lock.leave(); }
+};
+
+class recursive_mutex_locker_t : nocopy_t {
+    recursive_mutex_t&amp; lock;
+  <span class="enscript-reference">public</span>:
+    recursive_mutex_locker_t(recursive_mutex_t&amp; newLock) 
+        : lock(newLock) { lock.lock(); }
+    ~recursive_mutex_locker_t() { lock.unlock(); }
+};
+
+class rwlock_reader_t : nocopy_t {
+    rwlock_t&amp; lock;
+  <span class="enscript-reference">public</span>:
+    rwlock_reader_t(rwlock_t&amp; newLock) : lock(newLock) { lock.read(); }
+    ~rwlock_reader_t() { lock.unlockRead(); }
+};
+
+class rwlock_writer_t : nocopy_t {
+    rwlock_t&amp; lock;
+  <span class="enscript-reference">public</span>:
+    rwlock_writer_t(rwlock_t&amp; newLock) : lock(newLock) { lock.write(); }
+    ~rwlock_writer_t() { lock.unlockWrite(); }
+};
+
+
+<span class="enscript-comment">/* Exceptions */</span>
+<span class="enscript-type">struct</span> alt_handler_list;
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">exception_init</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_destroyAltHandlerList</span>(<span class="enscript-type">struct</span> alt_handler_list *list);
+
+<span class="enscript-comment">/* Class change notifications (gdb only for now) */</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_CLASS_ADDED</span> (1&lt;&lt;0)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_CLASS_REMOVED</span> (1&lt;&lt;1)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_CLASS_IVARS_CHANGED</span> (1&lt;&lt;2)
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_CLASS_METHODS_CHANGED</span> (1&lt;&lt;3)
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">gdb_objc_class_changed</span>(Class cls, <span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> changes, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *classname)
+    __attribute__((noinline));
+
+
+<span class="enscript-comment">// Settings from environment variables
+</span>#<span class="enscript-reference">define</span> <span class="enscript-function-name">OPTION</span>(var, env, help) extern bool var;
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-env.h&quot;</span>
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">OPTION</span>
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">environ_init</span>(<span class="enscript-type">void</span>);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">logReplacedMethod</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *className, SEL s, bool isMeta, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *catName, IMP oldImp, IMP newImp);
+
+
+<span class="enscript-comment">// objc per-thread storage
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    <span class="enscript-type">struct</span> _objc_initializing_classes *initializingClasses; <span class="enscript-comment">// for +initialize
+</span>    <span class="enscript-type">struct</span> SyncCache *syncCache;  <span class="enscript-comment">// for @synchronize
+</span>    <span class="enscript-type">struct</span> alt_handler_list *handlerList;  <span class="enscript-comment">// for exception alt handlers
+</span>    <span class="enscript-type">char</span> *printableNames[4];  <span class="enscript-comment">// temporary demangled names for logging
+</span>
+    <span class="enscript-comment">// If you add new fields here, don't forget to update 
+</span>    <span class="enscript-comment">// _objc_pthread_destroyspecific()
+</span>
+} _objc_pthread_data;
+
+<span class="enscript-type">extern</span> _objc_pthread_data *<span class="enscript-function-name">_objc_fetch_pthread_data</span>(bool create);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">tls_init</span>(<span class="enscript-type">void</span>);
+
+<span class="enscript-comment">// encoding.h
+</span><span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> <span class="enscript-function-name">encoding_getNumberOfArguments</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *typedesc);
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> <span class="enscript-function-name">encoding_getSizeOfArguments</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *typedesc);
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> <span class="enscript-function-name">encoding_getArgumentInfo</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *typedesc, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> arg, <span class="enscript-type">const</span> <span class="enscript-type">char</span> **type, <span class="enscript-type">int</span> *offset);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">encoding_getReturnType</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *t, <span class="enscript-type">char</span> *dst, size_t dst_len);
+<span class="enscript-type">extern</span> <span class="enscript-type">char</span> * <span class="enscript-function-name">encoding_copyReturnType</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *t);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">encoding_getArgumentType</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *t, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> index, <span class="enscript-type">char</span> *dst, size_t dst_len);
+<span class="enscript-type">extern</span> <span class="enscript-type">char</span> *<span class="enscript-function-name">encoding_copyArgumentType</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *t, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> index);
+
+<span class="enscript-comment">// sync.h
+</span><span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_destroySyncCache</span>(<span class="enscript-type">struct</span> SyncCache *cache);
+
+<span class="enscript-comment">// arr
+</span><span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">arr_init</span>(<span class="enscript-type">void</span>);
+<span class="enscript-type">extern</span> id <span class="enscript-function-name">objc_autoreleaseReturnValue</span>(id obj);
+
+<span class="enscript-comment">// block trampolines
+</span><span class="enscript-type">extern</span> IMP <span class="enscript-function-name">_imp_implementationWithBlockNoCopy</span>(id block);
+
+<span class="enscript-comment">// layout.h
+</span><span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    uint8_t *bits;
+    size_t bitCount;
+    size_t bitsAllocated;
+    bool weak;
+} layout_bitmap;
+<span class="enscript-type">extern</span> layout_bitmap <span class="enscript-function-name">layout_bitmap_create</span>(<span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *layout_string, size_t layoutStringInstanceSize, size_t instanceSize, bool weak);
+<span class="enscript-type">extern</span> layout_bitmap <span class="enscript-function-name">layout_bitmap_create_empty</span>(size_t instanceSize, bool weak);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">layout_bitmap_free</span>(layout_bitmap bits);
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">char</span> *<span class="enscript-function-name">layout_string_create</span>(layout_bitmap bits);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">layout_bitmap_set_ivar</span>(layout_bitmap bits, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *type, size_t offset);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">layout_bitmap_grow</span>(layout_bitmap *bits, size_t newCount);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">layout_bitmap_slide</span>(layout_bitmap *bits, size_t oldPos, size_t newPos);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">layout_bitmap_slide_anywhere</span>(layout_bitmap *bits, size_t oldPos, size_t newPos);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">layout_bitmap_splat</span>(layout_bitmap dst, layout_bitmap src, 
+                                size_t oldSrcInstanceSize);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">layout_bitmap_or</span>(layout_bitmap dst, layout_bitmap src, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *msg);
+<span class="enscript-type">extern</span> bool <span class="enscript-function-name">layout_bitmap_clear</span>(layout_bitmap dst, layout_bitmap src, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *msg);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">layout_bitmap_print</span>(layout_bitmap bits);
+
+
+<span class="enscript-comment">// fixme runtime
+</span><span class="enscript-type">extern</span> bool MultithreadedForkChild;
+<span class="enscript-type">extern</span> id <span class="enscript-function-name">objc_noop_imp</span>(id self, SEL _cmd);
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">look_up_class</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *aClassName, bool includeUnconnected, bool includeClassHandler);
+<span class="enscript-type">extern</span> <span class="enscript-string">&quot;C&quot;</span> <span class="enscript-type">void</span> map_images(<span class="enscript-type">unsigned</span> count, <span class="enscript-type">const</span> <span class="enscript-type">char</span> * <span class="enscript-type">const</span> paths[],
+                           <span class="enscript-type">const</span> <span class="enscript-type">struct</span> mach_header * <span class="enscript-type">const</span> mhdrs[]);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">map_images_nolock</span>(<span class="enscript-type">unsigned</span> count, <span class="enscript-type">const</span> <span class="enscript-type">char</span> * <span class="enscript-type">const</span> paths[],
+                              <span class="enscript-type">const</span> <span class="enscript-type">struct</span> mach_header * <span class="enscript-type">const</span> mhdrs[]);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">load_images</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *path, <span class="enscript-type">const</span> <span class="enscript-type">struct</span> mach_header *mh);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">unmap_image</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *path, <span class="enscript-type">const</span> <span class="enscript-type">struct</span> mach_header *mh);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">unmap_image_nolock</span>(<span class="enscript-type">const</span> <span class="enscript-type">struct</span> mach_header *mh);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_read_images</span>(header_info **hList, uint32_t hCount, <span class="enscript-type">int</span> totalClasses, <span class="enscript-type">int</span> unoptimizedTotalClass);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_unload_image</span>(header_info *hi);
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> ** <span class="enscript-function-name">_objc_copyClassNamesForImage</span>(header_info *hi, <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> *outCount);
+
+
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> header_info *<span class="enscript-function-name">_headerForClass</span>(Class cls);
+
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">_class_remap</span>(Class cls);
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">_class_getNonMetaClass</span>(Class cls, id obj);
+<span class="enscript-type">extern</span> Ivar <span class="enscript-function-name">_class_getVariable</span>(Class cls, <span class="enscript-type">const</span> <span class="enscript-type">char</span> *name);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">unsigned</span> <span class="enscript-function-name">_class_createInstancesFromZone</span>(Class cls, size_t extraBytes, <span class="enscript-type">void</span> *zone, id *results, <span class="enscript-type">unsigned</span> num_requested);
+<span class="enscript-type">extern</span> id <span class="enscript-function-name">_objc_constructOrFree</span>(id bytes, Class cls);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> *<span class="enscript-function-name">_category_getName</span>(Category cat);
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> <span class="enscript-type">char</span> *<span class="enscript-function-name">_category_getClassName</span>(Category cat);
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">_category_getClass</span>(Category cat);
+<span class="enscript-type">extern</span> IMP <span class="enscript-function-name">_category_getLoadMethod</span>(Category cat);
+
+<span class="enscript-type">extern</span> id <span class="enscript-function-name">object_cxxConstructFromClass</span>(id obj, Class cls);
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">object_cxxDestruct</span>(id obj);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">_class_resolveMethod</span>(Class cls, SEL sel, id inst);
+
+<span class="enscript-type">extern</span> <span class="enscript-type">void</span> <span class="enscript-function-name">fixupCopiedIvars</span>(id newObject, id oldObject);
+<span class="enscript-type">extern</span> Class <span class="enscript-function-name">_class_getClassForIvar</span>(Class cls, Ivar ivar);
+
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_WARN_DEPRECATED</span> \
+    <span class="enscript-keyword">do</span> { \
+        <span class="enscript-type">static</span> <span class="enscript-type">int</span> warned = 0; \
+        <span class="enscript-keyword">if</span> (!warned) { \
+            warned = 1; \
+            _objc_inform_deprecated(__FUNCTION__, NULL); \
+        } \
+    } <span class="enscript-keyword">while</span> (0) \
+
+__END_DECLS
+
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">STATIC_ASSERT</span>
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">STATIC_ASSERT</span>(x) _STATIC_ASSERT2(x, __LINE__)
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">_STATIC_ASSERT2</span>(x, line) _STATIC_ASSERT3(x, line)
+#   <span class="enscript-reference">define</span> <span class="enscript-function-name">_STATIC_ASSERT3</span>(x, line)                                     \
+        <span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {                                                \
+            <span class="enscript-type">int</span> _static_assert[(x) ? 0 : -1];                           \
+        } _static_assert_ ## line __attribute__((unavailable)) 
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">countof</span>(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+
+<span class="enscript-type">static</span> __inline uint32_t <span class="enscript-function-name">_objc_strhash</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *s) {
+    uint32_t hash = 0;
+    <span class="enscript-keyword">for</span> (;;) {
+	<span class="enscript-type">int</span> a = *s++;
+	<span class="enscript-keyword">if</span> (0 == a) <span class="enscript-keyword">break</span>;
+	hash += (hash &lt;&lt; 8) + a;
+    }
+    <span class="enscript-keyword">return</span> hash;
+}
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__cplusplus</span>
+
+template &lt;typename T&gt;
+<span class="enscript-type">static</span> inline T <span class="enscript-function-name">log2u</span>(T x) {
+    <span class="enscript-keyword">return</span> (x&lt;2) ? 0 : log2u(x&gt;&gt;1)+1;
+}
+
+template &lt;typename T&gt;
+<span class="enscript-type">static</span> inline T <span class="enscript-function-name">exp2u</span>(T x) {
+    <span class="enscript-keyword">return</span> (1 &lt;&lt; x);
+}
+
+template &lt;typename T&gt;
+<span class="enscript-type">static</span> T <span class="enscript-function-name">exp2m1u</span>(T x) { 
+    <span class="enscript-keyword">return</span> (1 &lt;&lt; x) - 1; 
+}
+
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// Misalignment-safe integer types
+</span><span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span> uintptr_t unaligned_uintptr_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>  intptr_t unaligned_intptr_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>  uint64_t unaligned_uint64_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>   int64_t unaligned_int64_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>  uint32_t unaligned_uint32_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>   int32_t unaligned_int32_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>  uint16_t unaligned_uint16_t;
+<span class="enscript-function-name">__attribute__</span>((aligned(1))) <span class="enscript-type">typedef</span>   int16_t unaligned_int16_t;
+
+
+<span class="enscript-comment">// Global operator new and delete. We must not use any app overrides.
+</span><span class="enscript-comment">// This ALSO REQUIRES each of these be in libobjc's unexported symbol list.
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__cplusplus</span>
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">clang</span> <span class="enscript-variable-name">diagnostic</span> <span class="enscript-variable-name">push</span>
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">clang</span> <span class="enscript-variable-name">diagnostic</span> <span class="enscript-variable-name">ignored</span> <span class="enscript-string">&quot;-Winline-new-delete&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;new&gt;</span>
+inline <span class="enscript-type">void</span>* operator <span class="enscript-function-name">new</span>(std::size_t size) throw (std::bad_alloc) { <span class="enscript-keyword">return</span> malloc(size); }
+inline <span class="enscript-type">void</span>* operator new[](std::size_t size) throw (std::bad_alloc) { <span class="enscript-keyword">return</span> malloc(size); }
+inline <span class="enscript-type">void</span>* operator <span class="enscript-function-name">new</span>(std::size_t size, <span class="enscript-type">const</span> std::nothrow_t&amp;) throw() { <span class="enscript-keyword">return</span> malloc(size); }
+inline <span class="enscript-type">void</span>* operator new[](std::size_t size, <span class="enscript-type">const</span> std::nothrow_t&amp;) throw() { <span class="enscript-keyword">return</span> malloc(size); }
+inline <span class="enscript-type">void</span> operator <span class="enscript-function-name">delete</span>(<span class="enscript-type">void</span>* p) throw() { free(p); }
+inline <span class="enscript-type">void</span> operator delete[](<span class="enscript-type">void</span>* p) throw() { free(p); }
+inline <span class="enscript-type">void</span> operator <span class="enscript-function-name">delete</span>(<span class="enscript-type">void</span>* p, <span class="enscript-type">const</span> std::nothrow_t&amp;) throw() { free(p); }
+inline <span class="enscript-type">void</span> operator delete[](<span class="enscript-type">void</span>* p, <span class="enscript-type">const</span> std::nothrow_t&amp;) throw() { free(p); }
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">clang</span> <span class="enscript-variable-name">diagnostic</span> <span class="enscript-variable-name">pop</span>
+#<span class="enscript-reference">endif</span>
+
+
+class TimeLogger {
+    uint64_t mStart;
+    bool mRecord;
+ <span class="enscript-reference">public</span>:
+    TimeLogger(bool record = true) 
+     : mStart(nanoseconds())
+     , mRecord(record) 
+    { }
+
+    <span class="enscript-type">void</span> log(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *msg) {
+        <span class="enscript-keyword">if</span> (mRecord) {
+            uint64_t end = nanoseconds();
+            _objc_inform(<span class="enscript-string">&quot;%.2f ms: %s&quot;</span>, (end - mStart) / 1000000.0, msg);
+            mStart = nanoseconds();
+        }
+    }
+};
+
+
+<span class="enscript-comment">// StripedMap&lt;T&gt; is a map of void* -&gt; T, sized appropriately 
+</span><span class="enscript-comment">// for cache-friendly lock striping. 
+</span><span class="enscript-comment">// For example, this may be used as StripedMap&lt;spinlock_t&gt;
+</span><span class="enscript-comment">// or as StripedMap&lt;SomeStruct&gt; where SomeStruct stores a spin lock.
+</span>template&lt;typename T&gt;
+class StripedMap {
+
+    <span class="enscript-type">enum</span> { CacheLineSize = 64 };
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">TARGET_OS_EMBEDDED</span>
+    <span class="enscript-type">enum</span> { StripeCount = 8 };
+#<span class="enscript-reference">else</span>
+    <span class="enscript-type">enum</span> { StripeCount = 64 };
+#<span class="enscript-reference">endif</span>
+
+    <span class="enscript-type">struct</span> PaddedT {
+        T value alignas(CacheLineSize);
+    };
+
+    PaddedT array[StripeCount];
+
+    <span class="enscript-type">static</span> <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> indexForPointer(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *p) {
+        uintptr_t addr = reinterpret_cast&lt;uintptr_t&gt;(p);
+        <span class="enscript-keyword">return</span> ((addr &gt;&gt; 4) ^ (addr &gt;&gt; 9)) % StripeCount;
+    }
+
+ <span class="enscript-reference">public</span>:
+    T&amp; operator[] (<span class="enscript-type">const</span> <span class="enscript-type">void</span> *p) { 
+        <span class="enscript-keyword">return</span> array[indexForPointer(p)].value; 
+    }
+    <span class="enscript-type">const</span> T&amp; operator[] (<span class="enscript-type">const</span> <span class="enscript-type">void</span> *p) <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> const_cast&lt;StripedMap&lt;T&gt;&gt;(this)[p]; 
+    }
+
+    <span class="enscript-comment">// Shortcuts for StripedMaps of locks.
+</span>    <span class="enscript-type">void</span> lockAll() {
+        <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> i = 0; i &lt; StripeCount; i++) {
+            array[i].value.lock();
+        }
+    }
+
+    <span class="enscript-type">void</span> unlockAll() {
+        <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> i = 0; i &lt; StripeCount; i++) {
+            array[i].value.unlock();
+        }
+    }
+
+    <span class="enscript-type">void</span> forceResetAll() {
+        <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> i = 0; i &lt; StripeCount; i++) {
+            array[i].value.forceReset();
+        }
+    }
+
+    <span class="enscript-type">void</span> defineLockOrder() {
+        <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> i = 1; i &lt; StripeCount; i++) {
+            lockdebug_lock_precedes_lock(&amp;array[i-1].value, &amp;array[i].value);
+        }
+    }
+
+    <span class="enscript-type">void</span> precedeLock(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *newlock) {
+        <span class="enscript-comment">// assumes defineLockOrder is also called
+</span>        lockdebug_lock_precedes_lock(&amp;array[StripeCount-1].value, newlock);
+    }
+
+    <span class="enscript-type">void</span> succeedLock(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *oldlock) {
+        <span class="enscript-comment">// assumes defineLockOrder is also called
+</span>        lockdebug_lock_precedes_lock(oldlock, &amp;array[0].value);
+    }
+
+    <span class="enscript-type">const</span> <span class="enscript-type">void</span> *getLock(<span class="enscript-type">int</span> i) {
+        <span class="enscript-keyword">if</span> (i &lt; StripeCount) <span class="enscript-keyword">return</span> &amp;array[i].value;
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> nil;
+    }
+    
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">DEBUG</span>
+    StripedMap() {
+        <span class="enscript-comment">// Verify alignment expectations.
+</span>        uintptr_t base = (uintptr_t)&amp;array[0].value;
+        uintptr_t delta = (uintptr_t)&amp;array[1].value - base;
+        assert(delta % CacheLineSize == 0);
+        assert(base % CacheLineSize == 0);
+    }
+#<span class="enscript-reference">endif</span>
+};
+
+
+<span class="enscript-comment">// DisguisedPtr&lt;T&gt; acts like pointer type T*, except the 
+</span><span class="enscript-comment">// stored value is disguised to hide it from tools like `leaks`.
+</span><span class="enscript-comment">// nil is disguised as itself so zero-filled memory works as expected, 
+</span><span class="enscript-comment">// which means 0x80..00 is also disguised as itself but we don't care.
+</span><span class="enscript-comment">// Note that weak_entry_t knows about this encoding.
+</span>template &lt;typename T&gt;
+class DisguisedPtr {
+    uintptr_t value;
+
+    <span class="enscript-type">static</span> uintptr_t disguise(T* ptr) {
+        <span class="enscript-keyword">return</span> -(uintptr_t)ptr;
+    }
+
+    <span class="enscript-type">static</span> T* undisguise(uintptr_t val) {
+        <span class="enscript-keyword">return</span> (T*)-val;
+    }
+
+ <span class="enscript-reference">public</span>:
+    DisguisedPtr() { }
+    DisguisedPtr(T* ptr) 
+        : value(disguise(ptr)) { }
+    DisguisedPtr(<span class="enscript-type">const</span> DisguisedPtr&lt;T&gt;&amp; ptr) 
+        : value(ptr.value) { }
+
+    DisguisedPtr&lt;T&gt;&amp; operator = (T* rhs) {
+        value = disguise(rhs);
+        <span class="enscript-keyword">return</span> *this;
+    }
+    DisguisedPtr&lt;T&gt;&amp; operator = (<span class="enscript-type">const</span> DisguisedPtr&lt;T&gt;&amp; rhs) {
+        value = rhs.value;
+        <span class="enscript-keyword">return</span> *this;
+    }
+
+    operator T* () <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> undisguise(value);
+    }
+    T* operator -&gt; () <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> undisguise(value);
+    }
+    T&amp; operator * () <span class="enscript-type">const</span> { 
+        <span class="enscript-keyword">return</span> *undisguise(value);
+    }
+    T&amp; operator [] (size_t i) <span class="enscript-type">const</span> {
+        <span class="enscript-keyword">return</span> undisguise(value)[i];
+    }
+
+    <span class="enscript-comment">// pointer arithmetic operators omitted 
+</span>    <span class="enscript-comment">// because we don't currently use them anywhere
+</span>};
+
+<span class="enscript-comment">// fixme type id is weird and not identical to objc_object*
+</span><span class="enscript-type">static</span> inline bool operator == (DisguisedPtr&lt;objc_object&gt; lhs, id rhs) {
+    <span class="enscript-keyword">return</span> lhs == (objc_object *)rhs;
+}
+<span class="enscript-type">static</span> inline bool operator != (DisguisedPtr&lt;objc_object&gt; lhs, id rhs) {
+    <span class="enscript-keyword">return</span> lhs != (objc_object *)rhs;
+}
+
+
+<span class="enscript-comment">// Pointer hash function.
+</span><span class="enscript-comment">// This is not a terrific hash, but it is fast 
+</span><span class="enscript-comment">// and not outrageously flawed for our purposes.
+</span>
+<span class="enscript-comment">// Based on principles from <a href="http://locklessinc.com/articles/fast_hash/">http://locklessinc.com/articles/fast_hash/</a>
+</span><span class="enscript-comment">// and evaluation ideas from <a href="http://floodyberry.com/noncryptohashzoo/">http://floodyberry.com/noncryptohashzoo/</a>
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__LP64__</span>
+<span class="enscript-type">static</span> inline uint32_t <span class="enscript-function-name">ptr_hash</span>(uint64_t key)
+{
+    key ^= key &gt;&gt; 4;
+    key *= 0x8a970be7488fda55;
+    key ^= __builtin_bswap64(key);
+    <span class="enscript-keyword">return</span> (uint32_t)key;
+}
+#<span class="enscript-reference">else</span>
+<span class="enscript-type">static</span> inline uint32_t <span class="enscript-function-name">ptr_hash</span>(uint32_t key)
+{
+    key ^= key &gt;&gt; 4;
+    key *= 0x5052acdb;
+    key ^= __builtin_bswap32(key);
+    <span class="enscript-keyword">return</span> key;
+}
+#<span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/*
+  Higher-quality hash function. This is measurably slower in some workloads.
+#if __LP64__
+ uint32_t ptr_hash(uint64_t key)
+{
+    key -= __builtin_bswap64(key);
+    key *= 0x8a970be7488fda55;
+    key ^= __builtin_bswap64(key);
+    key *= 0x8a970be7488fda55;
+    key ^= __builtin_bswap64(key);
+    return (uint32_t)key;
+}
+#else
+static uint32_t ptr_hash(uint32_t key)
+{
+    key -= __builtin_bswap32(key);
+    key *= 0x5052acdb;
+    key ^= __builtin_bswap32(key);
+    key *= 0x5052acdb;
+    key ^= __builtin_bswap32(key);
+    return key;
+}
+#endif
+*/</span>
+
+
+
+<span class="enscript-comment">// Lock declarations
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-locks.h&quot;</span>
+
+<span class="enscript-comment">// Inlined parts of objc_object's implementation
+</span>#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-object.h&quot;</span>
+
+#<span class="enscript-reference">endif</span> <span class="enscript-comment">/* _OBJC_PRIVATE_H_ */</span>
+
+</pre>
+<hr />
+</body></html>

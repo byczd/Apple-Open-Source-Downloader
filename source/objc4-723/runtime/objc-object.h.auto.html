@@ -1,0 +1,1242 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-object.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-object.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-object.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2010-2012 Apple Inc. All rights reserved.
+ *
+ * @APPLE_LICENSE_HEADER_START@
+ *
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ *
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ *
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+
+<span class="enscript-comment">/***********************************************************************
+* Inlineable parts of NSObject / objc_object implementation
+**********************************************************************/</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_OBJCOBJECT_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_OBJCOBJECT_H_</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;objc-private.h&quot;</span>
+
+
+<span class="enscript-type">enum</span> ReturnDisposition : bool {
+    ReturnAtPlus0 = false, ReturnAtPlus1 = true
+};
+
+<span class="enscript-type">static</span> ALWAYS_INLINE 
+bool <span class="enscript-function-name">prepareOptimizedReturn</span>(ReturnDisposition disposition);
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_TAGGED_POINTERS</span>
+
+<span class="enscript-type">extern</span> <span class="enscript-string">&quot;C&quot;</span> { 
+    <span class="enscript-type">extern</span> Class objc_debug_taggedpointer_classes[_OBJC_TAG_SLOT_COUNT*2];
+    <span class="enscript-type">extern</span> Class objc_debug_taggedpointer_ext_classes[_OBJC_TAG_EXT_SLOT_COUNT];
+}
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">objc_tag_classes</span> objc_debug_taggedpointer_classes
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">objc_tag_ext_classes</span> objc_debug_taggedpointer_ext_classes
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+
+ALWAYS_INLINE Class &amp;
+<span class="enscript-function-name">classForIndex</span>(uintptr_t index) {
+    assert(index &gt; 0);
+    assert(index &lt; (uintptr_t)objc_indexed_classes_count);
+    <span class="enscript-keyword">return</span> objc_indexed_classes[index];
+}
+
+#<span class="enscript-reference">endif</span>
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::isClass()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> false;
+    <span class="enscript-keyword">return</span> ISA()-&gt;isMetaClass();
+}
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_TAGGED_POINTERS</span>
+
+inline Class 
+<span class="enscript-reference">objc_object</span>::getIsa() 
+{
+    <span class="enscript-keyword">if</span> (!isTaggedPointer()) <span class="enscript-keyword">return</span> ISA();
+
+    uintptr_t ptr = (uintptr_t)this;
+    <span class="enscript-keyword">if</span> (isExtTaggedPointer()) {
+        uintptr_t slot = 
+            (ptr &gt;&gt; _OBJC_TAG_EXT_SLOT_SHIFT) &amp; _OBJC_TAG_EXT_SLOT_MASK;
+        <span class="enscript-keyword">return</span> objc_tag_ext_classes[slot];
+    } <span class="enscript-keyword">else</span> {
+        uintptr_t slot = 
+            (ptr &gt;&gt; _OBJC_TAG_SLOT_SHIFT) &amp; _OBJC_TAG_SLOT_MASK;
+        <span class="enscript-keyword">return</span> objc_tag_classes[slot];
+    }
+}
+
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::isTaggedPointer() 
+{
+    <span class="enscript-keyword">return</span> _objc_isTaggedPointer(this);
+}
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::isBasicTaggedPointer() 
+{
+    <span class="enscript-keyword">return</span> isTaggedPointer()  &amp;&amp;  !isExtTaggedPointer();
+}
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::isExtTaggedPointer() 
+{
+    <span class="enscript-keyword">return</span> ((uintptr_t)this &amp; _OBJC_TAG_EXT_MASK) == _OBJC_TAG_EXT_MASK;
+}
+
+
+<span class="enscript-comment">// SUPPORT_TAGGED_POINTERS
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// not SUPPORT_TAGGED_POINTERS
+</span>
+
+inline Class 
+<span class="enscript-reference">objc_object</span>::getIsa() 
+{
+    <span class="enscript-keyword">return</span> ISA();
+}
+
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::isTaggedPointer() 
+{
+    <span class="enscript-keyword">return</span> false;
+}
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::isBasicTaggedPointer() 
+{
+    <span class="enscript-keyword">return</span> false;
+}
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::isExtTaggedPointer() 
+{
+    <span class="enscript-keyword">return</span> false;
+}
+
+
+<span class="enscript-comment">// not SUPPORT_TAGGED_POINTERS
+</span>#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_NONPOINTER_ISA</span>
+
+inline Class 
+<span class="enscript-reference">objc_object</span>::ISA() 
+{
+    assert(!isTaggedPointer()); 
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+    <span class="enscript-keyword">if</span> (isa.nonpointer) {
+        uintptr_t slot = isa.indexcls;
+        <span class="enscript-keyword">return</span> classForIndex((<span class="enscript-type">unsigned</span>)slot);
+    }
+    <span class="enscript-keyword">return</span> (Class)isa.bits;
+#<span class="enscript-reference">else</span>
+    <span class="enscript-keyword">return</span> (Class)(isa.bits &amp; ISA_MASK);
+#<span class="enscript-reference">endif</span>
+}
+
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::hasNonpointerIsa()
+{
+    <span class="enscript-keyword">return</span> isa.nonpointer;
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initIsa(Class cls)
+{
+    initIsa(cls, false, false);
+}
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initClassIsa(Class cls)
+{
+    <span class="enscript-keyword">if</span> (DisableNonpointerIsa  ||  cls-&gt;instancesRequireRawIsa()) {
+        initIsa(cls, false<span class="enscript-comment">/*not nonpointer*/</span>, false);
+    } <span class="enscript-keyword">else</span> {
+        initIsa(cls, true<span class="enscript-comment">/*nonpointer*/</span>, false);
+    }
+}
+
+inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::initProtocolIsa(Class cls)
+{
+    <span class="enscript-keyword">return</span> initClassIsa(cls);
+}
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initInstanceIsa(Class cls, bool hasCxxDtor)
+{
+    assert(!cls-&gt;instancesRequireRawIsa());
+    assert(hasCxxDtor == cls-&gt;hasCxxDtor());
+
+    initIsa(cls, true, hasCxxDtor);
+}
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initIsa(Class cls, bool nonpointer, bool hasCxxDtor) 
+{ 
+    assert(!isTaggedPointer()); 
+    
+    <span class="enscript-keyword">if</span> (!nonpointer) {
+        isa.cls = cls;
+    } <span class="enscript-keyword">else</span> {
+        assert(!DisableNonpointerIsa);
+        assert(!cls-&gt;instancesRequireRawIsa());
+
+        isa_t newisa(0);
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+        assert(cls-&gt;classArrayIndex() &gt; 0);
+        newisa.bits = ISA_INDEX_MAGIC_VALUE;
+        <span class="enscript-comment">// isa.magic is part of ISA_MAGIC_VALUE
+</span>        <span class="enscript-comment">// isa.nonpointer is part of ISA_MAGIC_VALUE
+</span>        newisa.has_cxx_dtor = hasCxxDtor;
+        newisa.indexcls = (uintptr_t)cls-&gt;classArrayIndex();
+#<span class="enscript-reference">else</span>
+        newisa.bits = ISA_MAGIC_VALUE;
+        <span class="enscript-comment">// isa.magic is part of ISA_MAGIC_VALUE
+</span>        <span class="enscript-comment">// isa.nonpointer is part of ISA_MAGIC_VALUE
+</span>        newisa.has_cxx_dtor = hasCxxDtor;
+        newisa.shiftcls = (uintptr_t)cls &gt;&gt; 3;
+#<span class="enscript-reference">endif</span>
+
+        <span class="enscript-comment">// This write must be performed in a single store in some cases
+</span>        <span class="enscript-comment">// (for example when realizing a class because other threads
+</span>        <span class="enscript-comment">// may simultaneously try to use the class).
+</span>        <span class="enscript-comment">// fixme use atomics here to guarantee single-store and to
+</span>        <span class="enscript-comment">// guarantee memory order w.r.t. the class index table
+</span>        <span class="enscript-comment">// ...but not too atomic because we don't want to hurt instantiation
+</span>        isa = newisa;
+    }
+}
+
+
+inline Class 
+<span class="enscript-reference">objc_object</span>::changeIsa(Class newCls)
+{
+    <span class="enscript-comment">// This is almost always true but there are 
+</span>    <span class="enscript-comment">// enough edge cases that we can't assert it.
+</span>    <span class="enscript-comment">// assert(newCls-&gt;isFuture()  || 
+</span>    <span class="enscript-comment">//        newCls-&gt;isInitializing()  ||  newCls-&gt;isInitialized());
+</span>
+    assert(!isTaggedPointer()); 
+
+    isa_t oldisa;
+    isa_t newisa;
+
+    bool sideTableLocked = false;
+    bool transcribeToSideTable = false;
+
+    <span class="enscript-keyword">do</span> {
+        transcribeToSideTable = false;
+        oldisa = LoadExclusive(&amp;isa.bits);
+        <span class="enscript-keyword">if</span> ((oldisa.bits == 0  ||  oldisa.nonpointer)  &amp;&amp;
+            !newCls-&gt;isFuture()  &amp;&amp;  newCls-&gt;canAllocNonpointer())
+        {
+            <span class="enscript-comment">// 0 -&gt; nonpointer
+</span>            <span class="enscript-comment">// nonpointer -&gt; nonpointer
+</span>#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+            <span class="enscript-keyword">if</span> (oldisa.bits == 0) newisa.bits = ISA_INDEX_MAGIC_VALUE;
+            <span class="enscript-keyword">else</span> newisa = oldisa;
+            <span class="enscript-comment">// isa.magic is part of ISA_MAGIC_VALUE
+</span>            <span class="enscript-comment">// isa.nonpointer is part of ISA_MAGIC_VALUE
+</span>            newisa.has_cxx_dtor = newCls-&gt;hasCxxDtor();
+            assert(newCls-&gt;classArrayIndex() &gt; 0);
+            newisa.indexcls = (uintptr_t)newCls-&gt;classArrayIndex();
+#<span class="enscript-reference">else</span>
+            <span class="enscript-keyword">if</span> (oldisa.bits == 0) newisa.bits = ISA_MAGIC_VALUE;
+            <span class="enscript-keyword">else</span> newisa = oldisa;
+            <span class="enscript-comment">// isa.magic is part of ISA_MAGIC_VALUE
+</span>            <span class="enscript-comment">// isa.nonpointer is part of ISA_MAGIC_VALUE
+</span>            newisa.has_cxx_dtor = newCls-&gt;hasCxxDtor();
+            newisa.shiftcls = (uintptr_t)newCls &gt;&gt; 3;
+#<span class="enscript-reference">endif</span>
+        }
+        <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (oldisa.nonpointer) {
+            <span class="enscript-comment">// nonpointer -&gt; raw pointer
+</span>            <span class="enscript-comment">// Need to copy retain count et al to side table.
+</span>            <span class="enscript-comment">// Acquire side table lock before setting isa to 
+</span>            <span class="enscript-comment">// prevent races such as concurrent -release.
+</span>            <span class="enscript-keyword">if</span> (!sideTableLocked) sidetable_lock();
+            sideTableLocked = true;
+            transcribeToSideTable = true;
+            newisa.cls = newCls;
+        }
+        <span class="enscript-keyword">else</span> {
+            <span class="enscript-comment">// raw pointer -&gt; raw pointer
+</span>            newisa.cls = newCls;
+        }
+    } <span class="enscript-keyword">while</span> (!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits));
+
+    <span class="enscript-keyword">if</span> (transcribeToSideTable) {
+        <span class="enscript-comment">// Copy oldisa's retain count et al to side table.
+</span>        <span class="enscript-comment">// oldisa.has_assoc: nothing to do
+</span>        <span class="enscript-comment">// oldisa.has_cxx_dtor: nothing to do
+</span>        sidetable_moveExtraRC_nolock(oldisa.extra_rc, 
+                                     oldisa.deallocating, 
+                                     oldisa.weakly_referenced);
+    }
+
+    <span class="enscript-keyword">if</span> (sideTableLocked) sidetable_unlock();
+
+    <span class="enscript-keyword">if</span> (oldisa.nonpointer) {
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_INDEXED_ISA</span>
+        <span class="enscript-keyword">return</span> classForIndex(oldisa.indexcls);
+#<span class="enscript-reference">else</span>
+        <span class="enscript-keyword">return</span> (Class)((uintptr_t)oldisa.shiftcls &lt;&lt; 3);
+#<span class="enscript-reference">endif</span>
+    }
+    <span class="enscript-keyword">else</span> {
+        <span class="enscript-keyword">return</span> oldisa.cls;
+    }
+}
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::hasAssociatedObjects()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> true;
+    <span class="enscript-keyword">if</span> (isa.nonpointer) <span class="enscript-keyword">return</span> isa.has_assoc;
+    <span class="enscript-keyword">return</span> true;
+}
+
+
+inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::setHasAssociatedObjects()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span>;
+
+ <span class="enscript-reference">retry</span>:
+    isa_t oldisa = LoadExclusive(&amp;isa.bits);
+    isa_t newisa = oldisa;
+    <span class="enscript-keyword">if</span> (!newisa.nonpointer  ||  newisa.has_assoc) {
+        ClearExclusive(&amp;isa.bits);
+        <span class="enscript-keyword">return</span>;
+    }
+    newisa.has_assoc = true;
+    <span class="enscript-keyword">if</span> (!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">retry</span>;
+}
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::isWeaklyReferenced()
+{
+    assert(!isTaggedPointer());
+    <span class="enscript-keyword">if</span> (isa.nonpointer) <span class="enscript-keyword">return</span> isa.weakly_referenced;
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> sidetable_isWeaklyReferenced();
+}
+
+
+inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::setWeaklyReferenced_nolock()
+{
+ <span class="enscript-reference">retry</span>:
+    isa_t oldisa = LoadExclusive(&amp;isa.bits);
+    isa_t newisa = oldisa;
+    <span class="enscript-keyword">if</span> (slowpath(!newisa.nonpointer)) {
+        ClearExclusive(&amp;isa.bits);
+        sidetable_setWeaklyReferenced_nolock();
+        <span class="enscript-keyword">return</span>;
+    }
+    <span class="enscript-keyword">if</span> (newisa.weakly_referenced) {
+        ClearExclusive(&amp;isa.bits);
+        <span class="enscript-keyword">return</span>;
+    }
+    newisa.weakly_referenced = true;
+    <span class="enscript-keyword">if</span> (!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">retry</span>;
+}
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::hasCxxDtor()
+{
+    assert(!isTaggedPointer());
+    <span class="enscript-keyword">if</span> (isa.nonpointer) <span class="enscript-keyword">return</span> isa.has_cxx_dtor;
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> isa.cls-&gt;hasCxxDtor();
+}
+
+
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::rootIsDeallocating()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> false;
+    <span class="enscript-keyword">if</span> (isa.nonpointer) <span class="enscript-keyword">return</span> isa.deallocating;
+    <span class="enscript-keyword">return</span> sidetable_isDeallocating();
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::clearDeallocating()
+{
+    <span class="enscript-keyword">if</span> (slowpath(!isa.nonpointer)) {
+        <span class="enscript-comment">// Slow path for raw pointer isa.
+</span>        sidetable_clearDeallocating();
+    }
+    <span class="enscript-keyword">else</span> <span class="enscript-keyword">if</span> (slowpath(isa.weakly_referenced  ||  isa.has_sidetable_rc)) {
+        <span class="enscript-comment">// Slow path for non-pointer isa with weak refs and/or side table data.
+</span>        clearDeallocating_slow();
+    }
+
+    assert(!sidetable_present());
+}
+
+
+inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::rootDealloc()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span>;  <span class="enscript-comment">// fixme necessary?
+</span>
+    <span class="enscript-keyword">if</span> (fastpath(isa.nonpointer  &amp;&amp;  
+                 !isa.weakly_referenced  &amp;&amp;  
+                 !isa.has_assoc  &amp;&amp;  
+                 !isa.has_cxx_dtor  &amp;&amp;  
+                 !isa.has_sidetable_rc))
+    {
+        assert(!sidetable_present());
+        free(this);
+    } 
+    <span class="enscript-keyword">else</span> {
+        object_dispose((id)this);
+    }
+}
+
+
+<span class="enscript-comment">// Equivalent to calling [this retain], with shortcuts if there is no override
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::retain()
+{
+    assert(!isTaggedPointer());
+
+    <span class="enscript-keyword">if</span> (fastpath(!ISA()-&gt;hasCustomRR())) {
+        <span class="enscript-keyword">return</span> rootRetain();
+    }
+
+    <span class="enscript-keyword">return</span> ((id(*)(objc_object *, SEL))objc_msgSend)(this, SEL_retain);
+}
+
+
+<span class="enscript-comment">// Base retain implementation, ignoring overrides.
+</span><span class="enscript-comment">// This does not check isa.fast_rr; if there is an RR override then 
+</span><span class="enscript-comment">// it was already called and it chose to call [super retain].
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// tryRetain=true is the -_tryRetain path.
+</span><span class="enscript-comment">// handleOverflow=false is the frameless fast path.
+</span><span class="enscript-comment">// handleOverflow=true is the framed slow path including overflow to side table
+</span><span class="enscript-comment">// The code is structured this way to prevent duplication.
+</span>
+ALWAYS_INLINE id 
+<span class="enscript-reference">objc_object</span>::rootRetain()
+{
+    <span class="enscript-keyword">return</span> rootRetain(false, false);
+}
+
+ALWAYS_INLINE bool 
+<span class="enscript-reference">objc_object</span>::rootTryRetain()
+{
+    <span class="enscript-keyword">return</span> rootRetain(true, false) ? true : false;
+}
+
+ALWAYS_INLINE id 
+<span class="enscript-reference">objc_object</span>::rootRetain(bool tryRetain, bool handleOverflow)
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (id)this;
+
+    bool sideTableLocked = false;
+    bool transcribeToSideTable = false;
+
+    isa_t oldisa;
+    isa_t newisa;
+
+    <span class="enscript-keyword">do</span> {
+        transcribeToSideTable = false;
+        oldisa = LoadExclusive(&amp;isa.bits);
+        newisa = oldisa;
+        <span class="enscript-keyword">if</span> (slowpath(!newisa.nonpointer)) {
+            ClearExclusive(&amp;isa.bits);
+            <span class="enscript-keyword">if</span> (!tryRetain &amp;&amp; sideTableLocked) sidetable_unlock();
+            <span class="enscript-keyword">if</span> (tryRetain) <span class="enscript-keyword">return</span> sidetable_tryRetain() ? (id)this : nil;
+            <span class="enscript-keyword">else</span> <span class="enscript-keyword">return</span> sidetable_retain();
+        }
+        <span class="enscript-comment">// don't check newisa.fast_rr; we already called any RR overrides
+</span>        <span class="enscript-keyword">if</span> (slowpath(tryRetain &amp;&amp; newisa.deallocating)) {
+            ClearExclusive(&amp;isa.bits);
+            <span class="enscript-keyword">if</span> (!tryRetain &amp;&amp; sideTableLocked) sidetable_unlock();
+            <span class="enscript-keyword">return</span> nil;
+        }
+        uintptr_t carry;
+        newisa.bits = addc(newisa.bits, RC_ONE, 0, &amp;carry);  <span class="enscript-comment">// extra_rc++
+</span>
+        <span class="enscript-keyword">if</span> (slowpath(carry)) {
+            <span class="enscript-comment">// newisa.extra_rc++ overflowed
+</span>            <span class="enscript-keyword">if</span> (!handleOverflow) {
+                ClearExclusive(&amp;isa.bits);
+                <span class="enscript-keyword">return</span> rootRetain_overflow(tryRetain);
+            }
+            <span class="enscript-comment">// Leave half of the retain counts inline and 
+</span>            <span class="enscript-comment">// prepare to copy the other half to the side table.
+</span>            <span class="enscript-keyword">if</span> (!tryRetain &amp;&amp; !sideTableLocked) sidetable_lock();
+            sideTableLocked = true;
+            transcribeToSideTable = true;
+            newisa.extra_rc = RC_HALF;
+            newisa.has_sidetable_rc = true;
+        }
+    } <span class="enscript-keyword">while</span> (slowpath(!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits)));
+
+    <span class="enscript-keyword">if</span> (slowpath(transcribeToSideTable)) {
+        <span class="enscript-comment">// Copy the other half of the retain counts to the side table.
+</span>        sidetable_addExtraRC_nolock(RC_HALF);
+    }
+
+    <span class="enscript-keyword">if</span> (slowpath(!tryRetain &amp;&amp; sideTableLocked)) sidetable_unlock();
+    <span class="enscript-keyword">return</span> (id)this;
+}
+
+
+<span class="enscript-comment">// Equivalent to calling [this release], with shortcuts if there is no override
+</span>inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::release()
+{
+    assert(!isTaggedPointer());
+
+    <span class="enscript-keyword">if</span> (fastpath(!ISA()-&gt;hasCustomRR())) {
+        rootRelease();
+        <span class="enscript-keyword">return</span>;
+    }
+
+    ((<span class="enscript-type">void</span>(*)(objc_object *, SEL))objc_msgSend)(this, SEL_release);
+}
+
+
+<span class="enscript-comment">// Base release implementation, ignoring overrides.
+</span><span class="enscript-comment">// Does not call -dealloc.
+</span><span class="enscript-comment">// Returns true if the object should now be deallocated.
+</span><span class="enscript-comment">// This does not check isa.fast_rr; if there is an RR override then 
+</span><span class="enscript-comment">// it was already called and it chose to call [super release].
+</span><span class="enscript-comment">// 
+</span><span class="enscript-comment">// handleUnderflow=false is the frameless fast path.
+</span><span class="enscript-comment">// handleUnderflow=true is the framed slow path including side table borrow
+</span><span class="enscript-comment">// The code is structured this way to prevent duplication.
+</span>
+ALWAYS_INLINE bool 
+<span class="enscript-reference">objc_object</span>::rootRelease()
+{
+    <span class="enscript-keyword">return</span> rootRelease(true, false);
+}
+
+ALWAYS_INLINE bool 
+<span class="enscript-reference">objc_object</span>::rootReleaseShouldDealloc()
+{
+    <span class="enscript-keyword">return</span> rootRelease(false, false);
+}
+
+ALWAYS_INLINE bool 
+<span class="enscript-reference">objc_object</span>::rootRelease(bool performDealloc, bool handleUnderflow)
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> false;
+
+    bool sideTableLocked = false;
+
+    isa_t oldisa;
+    isa_t newisa;
+
+ <span class="enscript-reference">retry</span>:
+    <span class="enscript-keyword">do</span> {
+        oldisa = LoadExclusive(&amp;isa.bits);
+        newisa = oldisa;
+        <span class="enscript-keyword">if</span> (slowpath(!newisa.nonpointer)) {
+            ClearExclusive(&amp;isa.bits);
+            <span class="enscript-keyword">if</span> (sideTableLocked) sidetable_unlock();
+            <span class="enscript-keyword">return</span> sidetable_release(performDealloc);
+        }
+        <span class="enscript-comment">// don't check newisa.fast_rr; we already called any RR overrides
+</span>        uintptr_t carry;
+        newisa.bits = subc(newisa.bits, RC_ONE, 0, &amp;carry);  <span class="enscript-comment">// extra_rc--
+</span>        <span class="enscript-keyword">if</span> (slowpath(carry)) {
+            <span class="enscript-comment">// don't ClearExclusive()
+</span>            <span class="enscript-keyword">goto</span> <span class="enscript-reference">underflow</span>;
+        }
+    } <span class="enscript-keyword">while</span> (slowpath(!StoreReleaseExclusive(&amp;isa.bits, 
+                                             oldisa.bits, newisa.bits)));
+
+    <span class="enscript-keyword">if</span> (slowpath(sideTableLocked)) sidetable_unlock();
+    <span class="enscript-keyword">return</span> false;
+
+ <span class="enscript-reference">underflow</span>:
+    <span class="enscript-comment">// newisa.extra_rc-- underflowed: borrow from side table or deallocate
+</span>
+    <span class="enscript-comment">// abandon newisa to undo the decrement
+</span>    newisa = oldisa;
+
+    <span class="enscript-keyword">if</span> (slowpath(newisa.has_sidetable_rc)) {
+        <span class="enscript-keyword">if</span> (!handleUnderflow) {
+            ClearExclusive(&amp;isa.bits);
+            <span class="enscript-keyword">return</span> rootRelease_underflow(performDealloc);
+        }
+
+        <span class="enscript-comment">// Transfer retain count from side table to inline storage.
+</span>
+        <span class="enscript-keyword">if</span> (!sideTableLocked) {
+            ClearExclusive(&amp;isa.bits);
+            sidetable_lock();
+            sideTableLocked = true;
+            <span class="enscript-comment">// Need to start over to avoid a race against 
+</span>            <span class="enscript-comment">// the nonpointer -&gt; raw pointer transition.
+</span>            <span class="enscript-keyword">goto</span> <span class="enscript-reference">retry</span>;
+        }
+
+        <span class="enscript-comment">// Try to remove some retain counts from the side table.        
+</span>        size_t borrowed = sidetable_subExtraRC_nolock(RC_HALF);
+
+        <span class="enscript-comment">// To avoid races, has_sidetable_rc must remain set 
+</span>        <span class="enscript-comment">// even if the side table count is now zero.
+</span>
+        <span class="enscript-keyword">if</span> (borrowed &gt; 0) {
+            <span class="enscript-comment">// Side table retain count decreased.
+</span>            <span class="enscript-comment">// Try to add them to the inline count.
+</span>            newisa.extra_rc = borrowed - 1;  <span class="enscript-comment">// redo the original decrement too
+</span>            bool stored = StoreReleaseExclusive(&amp;isa.bits, 
+                                                oldisa.bits, newisa.bits);
+            <span class="enscript-keyword">if</span> (!stored) {
+                <span class="enscript-comment">// Inline update failed. 
+</span>                <span class="enscript-comment">// Try it again right now. This prevents livelock on LL/SC 
+</span>                <span class="enscript-comment">// architectures where the side table access itself may have 
+</span>                <span class="enscript-comment">// dropped the reservation.
+</span>                isa_t oldisa2 = LoadExclusive(&amp;isa.bits);
+                isa_t newisa2 = oldisa2;
+                <span class="enscript-keyword">if</span> (newisa2.nonpointer) {
+                    uintptr_t overflow;
+                    newisa2.bits = 
+                        addc(newisa2.bits, RC_ONE * (borrowed-1), 0, &amp;overflow);
+                    <span class="enscript-keyword">if</span> (!overflow) {
+                        stored = StoreReleaseExclusive(&amp;isa.bits, oldisa2.bits, 
+                                                       newisa2.bits);
+                    }
+                }
+            }
+
+            <span class="enscript-keyword">if</span> (!stored) {
+                <span class="enscript-comment">// Inline update failed.
+</span>                <span class="enscript-comment">// Put the retains back in the side table.
+</span>                sidetable_addExtraRC_nolock(borrowed);
+                <span class="enscript-keyword">goto</span> <span class="enscript-reference">retry</span>;
+            }
+
+            <span class="enscript-comment">// Decrement successful after borrowing from side table.
+</span>            <span class="enscript-comment">// This decrement cannot be the deallocating decrement - the side 
+</span>            <span class="enscript-comment">// table lock and has_sidetable_rc bit ensure that if everyone 
+</span>            <span class="enscript-comment">// else tried to -release while we worked, the last one would block.
+</span>            sidetable_unlock();
+            <span class="enscript-keyword">return</span> false;
+        }
+        <span class="enscript-keyword">else</span> {
+            <span class="enscript-comment">// Side table is empty after all. Fall-through to the dealloc path.
+</span>        }
+    }
+
+    <span class="enscript-comment">// Really deallocate.
+</span>
+    <span class="enscript-keyword">if</span> (slowpath(newisa.deallocating)) {
+        ClearExclusive(&amp;isa.bits);
+        <span class="enscript-keyword">if</span> (sideTableLocked) sidetable_unlock();
+        <span class="enscript-keyword">return</span> overrelease_error();
+        <span class="enscript-comment">// does not actually return
+</span>    }
+    newisa.deallocating = true;
+    <span class="enscript-keyword">if</span> (!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">retry</span>;
+
+    <span class="enscript-keyword">if</span> (slowpath(sideTableLocked)) sidetable_unlock();
+
+    __sync_synchronize();
+    <span class="enscript-keyword">if</span> (performDealloc) {
+        ((<span class="enscript-type">void</span>(*)(objc_object *, SEL))objc_msgSend)(this, SEL_dealloc);
+    }
+    <span class="enscript-keyword">return</span> true;
+}
+
+
+<span class="enscript-comment">// Equivalent to [this autorelease], with shortcuts if there is no override
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::autorelease()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (id)this;
+    <span class="enscript-keyword">if</span> (fastpath(!ISA()-&gt;hasCustomRR())) <span class="enscript-keyword">return</span> rootAutorelease();
+
+    <span class="enscript-keyword">return</span> ((id(*)(objc_object *, SEL))objc_msgSend)(this, SEL_autorelease);
+}
+
+
+<span class="enscript-comment">// Base autorelease implementation, ignoring overrides.
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::rootAutorelease()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (id)this;
+    <span class="enscript-keyword">if</span> (prepareOptimizedReturn(ReturnAtPlus1)) <span class="enscript-keyword">return</span> (id)this;
+
+    <span class="enscript-keyword">return</span> rootAutorelease2();
+}
+
+
+inline uintptr_t 
+<span class="enscript-reference">objc_object</span>::rootRetainCount()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (uintptr_t)this;
+
+    sidetable_lock();
+    isa_t bits = LoadExclusive(&amp;isa.bits);
+    ClearExclusive(&amp;isa.bits);
+    <span class="enscript-keyword">if</span> (bits.nonpointer) {
+        uintptr_t rc = 1 + bits.extra_rc;
+        <span class="enscript-keyword">if</span> (bits.has_sidetable_rc) {
+            rc += sidetable_getExtraRC_nolock();
+        }
+        sidetable_unlock();
+        <span class="enscript-keyword">return</span> rc;
+    }
+
+    sidetable_unlock();
+    <span class="enscript-keyword">return</span> sidetable_retainCount();
+}
+
+
+<span class="enscript-comment">// SUPPORT_NONPOINTER_ISA
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// not SUPPORT_NONPOINTER_ISA
+</span>
+
+inline Class 
+<span class="enscript-reference">objc_object</span>::ISA() 
+{
+    assert(!isTaggedPointer()); 
+    <span class="enscript-keyword">return</span> isa.cls;
+}
+
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::hasNonpointerIsa()
+{
+    <span class="enscript-keyword">return</span> false;
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initIsa(Class cls)
+{
+    assert(!isTaggedPointer()); 
+    isa = (uintptr_t)cls; 
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initClassIsa(Class cls)
+{
+    initIsa(cls);
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initProtocolIsa(Class cls)
+{
+    initIsa(cls);
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initInstanceIsa(Class cls, bool)
+{
+    initIsa(cls);
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::initIsa(Class cls, bool, bool)
+{ 
+    initIsa(cls);
+}
+
+
+inline Class 
+<span class="enscript-reference">objc_object</span>::changeIsa(Class cls)
+{
+    <span class="enscript-comment">// This is almost always rue but there are 
+</span>    <span class="enscript-comment">// enough edge cases that we can't assert it.
+</span>    <span class="enscript-comment">// assert(cls-&gt;isFuture()  ||  
+</span>    <span class="enscript-comment">//        cls-&gt;isInitializing()  ||  cls-&gt;isInitialized());
+</span>
+    assert(!isTaggedPointer()); 
+    
+    isa_t oldisa, newisa;
+    newisa.cls = cls;
+    <span class="enscript-keyword">do</span> {
+        oldisa = LoadExclusive(&amp;isa.bits);
+    } <span class="enscript-keyword">while</span> (!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits));
+    
+    <span class="enscript-keyword">if</span> (oldisa.cls  &amp;&amp;  oldisa.cls-&gt;instancesHaveAssociatedObjects()) {
+        cls-&gt;setInstancesHaveAssociatedObjects();
+    }
+    
+    <span class="enscript-keyword">return</span> oldisa.cls;
+}
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::hasAssociatedObjects()
+{
+    <span class="enscript-keyword">return</span> getIsa()-&gt;instancesHaveAssociatedObjects();
+}
+
+
+inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::setHasAssociatedObjects()
+{
+    getIsa()-&gt;setInstancesHaveAssociatedObjects();
+}
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::isWeaklyReferenced()
+{
+    assert(!isTaggedPointer());
+
+    <span class="enscript-keyword">return</span> sidetable_isWeaklyReferenced();
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::setWeaklyReferenced_nolock()
+{
+    assert(!isTaggedPointer());
+
+    sidetable_setWeaklyReferenced_nolock();
+}
+
+
+inline bool
+<span class="enscript-reference">objc_object</span>::hasCxxDtor()
+{
+    assert(!isTaggedPointer());
+    <span class="enscript-keyword">return</span> isa.cls-&gt;hasCxxDtor();
+}
+
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::rootIsDeallocating()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> false;
+    <span class="enscript-keyword">return</span> sidetable_isDeallocating();
+}
+
+
+inline <span class="enscript-type">void</span> 
+<span class="enscript-reference">objc_object</span>::clearDeallocating()
+{
+    sidetable_clearDeallocating();
+}
+
+
+inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::rootDealloc()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span>;
+    object_dispose((id)this);
+}
+
+
+<span class="enscript-comment">// Equivalent to calling [this retain], with shortcuts if there is no override
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::retain()
+{
+    assert(!isTaggedPointer());
+
+    <span class="enscript-keyword">if</span> (fastpath(!ISA()-&gt;hasCustomRR())) {
+        <span class="enscript-keyword">return</span> sidetable_retain();
+    }
+
+    <span class="enscript-keyword">return</span> ((id(*)(objc_object *, SEL))objc_msgSend)(this, SEL_retain);
+}
+
+
+<span class="enscript-comment">// Base retain implementation, ignoring overrides.
+</span><span class="enscript-comment">// This does not check isa.fast_rr; if there is an RR override then 
+</span><span class="enscript-comment">// it was already called and it chose to call [super retain].
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::rootRetain()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (id)this;
+    <span class="enscript-keyword">return</span> sidetable_retain();
+}
+
+
+<span class="enscript-comment">// Equivalent to calling [this release], with shortcuts if there is no override
+</span>inline <span class="enscript-type">void</span>
+<span class="enscript-reference">objc_object</span>::release()
+{
+    assert(!isTaggedPointer());
+
+    <span class="enscript-keyword">if</span> (fastpath(!ISA()-&gt;hasCustomRR())) {
+        sidetable_release();
+        <span class="enscript-keyword">return</span>;
+    }
+
+    ((<span class="enscript-type">void</span>(*)(objc_object *, SEL))objc_msgSend)(this, SEL_release);
+}
+
+
+<span class="enscript-comment">// Base release implementation, ignoring overrides.
+</span><span class="enscript-comment">// Does not call -dealloc.
+</span><span class="enscript-comment">// Returns true if the object should now be deallocated.
+</span><span class="enscript-comment">// This does not check isa.fast_rr; if there is an RR override then 
+</span><span class="enscript-comment">// it was already called and it chose to call [super release].
+</span>inline bool 
+<span class="enscript-reference">objc_object</span>::rootRelease()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> false;
+    <span class="enscript-keyword">return</span> sidetable_release(true);
+}
+
+inline bool 
+<span class="enscript-reference">objc_object</span>::rootReleaseShouldDealloc()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> false;
+    <span class="enscript-keyword">return</span> sidetable_release(false);
+}
+
+
+<span class="enscript-comment">// Equivalent to [this autorelease], with shortcuts if there is no override
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::autorelease()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (id)this;
+    <span class="enscript-keyword">if</span> (fastpath(!ISA()-&gt;hasCustomRR())) <span class="enscript-keyword">return</span> rootAutorelease();
+
+    <span class="enscript-keyword">return</span> ((id(*)(objc_object *, SEL))objc_msgSend)(this, SEL_autorelease);
+}
+
+
+<span class="enscript-comment">// Base autorelease implementation, ignoring overrides.
+</span>inline id 
+<span class="enscript-reference">objc_object</span>::rootAutorelease()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (id)this;
+    <span class="enscript-keyword">if</span> (prepareOptimizedReturn(ReturnAtPlus1)) <span class="enscript-keyword">return</span> (id)this;
+
+    <span class="enscript-keyword">return</span> rootAutorelease2();
+}
+
+
+<span class="enscript-comment">// Base tryRetain implementation, ignoring overrides.
+</span><span class="enscript-comment">// This does not check isa.fast_rr; if there is an RR override then 
+</span><span class="enscript-comment">// it was already called and it chose to call [super _tryRetain].
+</span>inline bool 
+<span class="enscript-reference">objc_object</span>::rootTryRetain()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> true;
+    <span class="enscript-keyword">return</span> sidetable_tryRetain();
+}
+
+
+inline uintptr_t 
+<span class="enscript-reference">objc_object</span>::rootRetainCount()
+{
+    <span class="enscript-keyword">if</span> (isTaggedPointer()) <span class="enscript-keyword">return</span> (uintptr_t)this;
+    <span class="enscript-keyword">return</span> sidetable_retainCount();
+}
+
+
+<span class="enscript-comment">// not SUPPORT_NONPOINTER_ISA
+</span>#<span class="enscript-reference">endif</span>
+
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">SUPPORT_RETURN_AUTORELEASE</span>
+
+<span class="enscript-comment">/***********************************************************************
+  Fast handling of return through Cocoa's +0 autoreleasing convention.
+  The caller and callee cooperate to keep the returned object 
+  out of the autorelease pool and eliminate redundant retain/release pairs.
+
+  An optimized callee looks at the caller's instructions following the 
+  return. If the caller's instructions are also optimized then the callee 
+  skips all retain count operations: no autorelease, no retain/autorelease.
+  Instead it saves the result's current retain count (+0 or +1) in 
+  thread-local storage. If the caller does not look optimized then 
+  the callee performs autorelease or retain/autorelease as usual.
+
+  An optimized caller looks at the thread-local storage. If the result 
+  is set then it performs any retain or release needed to change the 
+  result from the retain count left by the callee to the retain count 
+  desired by the caller. Otherwise the caller assumes the result is 
+  currently at +0 from an unoptimized callee and performs any retain 
+  needed for that case.
+
+  There are two optimized callees:
+    objc_autoreleaseReturnValue
+      result is currently +1. The unoptimized path autoreleases it.
+    objc_retainAutoreleaseReturnValue
+      result is currently +0. The unoptimized path retains and autoreleases it.
+
+  There are two optimized callers:
+    objc_retainAutoreleasedReturnValue
+      caller wants the value at +1. The unoptimized path retains it.
+    objc_unsafeClaimAutoreleasedReturnValue
+      caller wants the value at +0 unsafely. The unoptimized path does nothing.
+
+  Example:
+
+    Callee:
+      // compute ret at +1
+      return objc_autoreleaseReturnValue(ret);
+    
+    Caller:
+      ret = callee();
+      ret = objc_retainAutoreleasedReturnValue(ret);
+      // use ret at +1 here
+
+    Callee sees the optimized caller, sets TLS, and leaves the result at +1.
+    Caller sees the TLS, clears it, and accepts the result at +1 as-is.
+
+  The callee's recognition of the optimized caller is architecture-dependent.
+  x86_64: Callee looks for `mov rax, rdi` followed by a call or 
+    jump instruction to objc_retainAutoreleasedReturnValue or 
+    objc_unsafeClaimAutoreleasedReturnValue. 
+  i386:  Callee looks for a magic nop `movl %ebp, %ebp` (frame pointer register)
+  armv7: Callee looks for a magic nop `mov r7, r7` (frame pointer register). 
+  arm64: Callee looks for a magic nop `mov x29, x29` (frame pointer register). 
+
+  Tagged pointer objects do participate in the optimized return scheme, 
+  because it saves message sends. They are not entered in the autorelease 
+  pool in the unoptimized case.
+**********************************************************************/</span>
+
+# <span class="enscript-reference">if</span> <span class="enscript-variable-name">__x86_64__</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE bool 
+<span class="enscript-function-name">callerAcceptsOptimizedReturn</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> * <span class="enscript-type">const</span> ra0)
+{
+    <span class="enscript-type">const</span> uint8_t *ra1 = (<span class="enscript-type">const</span> uint8_t *)ra0;
+    <span class="enscript-type">const</span> unaligned_uint16_t *ra2;
+    <span class="enscript-type">const</span> unaligned_uint32_t *ra4 = (<span class="enscript-type">const</span> unaligned_uint32_t *)ra1;
+    <span class="enscript-type">const</span> <span class="enscript-type">void</span> **sym;
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">PREFER_GOTPCREL</span> 0
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">PREFER_GOTPCREL</span>
+    <span class="enscript-comment">// 48 89 c7    movq  %rax,%rdi
+</span>    <span class="enscript-comment">// ff 15       callq *symbol@GOTPCREL(%rip)
+</span>    <span class="enscript-keyword">if</span> (*ra4 != 0xffc78948) {
+        <span class="enscript-keyword">return</span> false;
+    }
+    <span class="enscript-keyword">if</span> (ra1[4] != 0x15) {
+        <span class="enscript-keyword">return</span> false;
+    }
+    ra1 += 3;
+#<span class="enscript-reference">else</span>
+    <span class="enscript-comment">// 48 89 c7    movq  %rax,%rdi
+</span>    <span class="enscript-comment">// e8          callq symbol
+</span>    <span class="enscript-keyword">if</span> (*ra4 != 0xe8c78948) {
+        <span class="enscript-keyword">return</span> false;
+    }
+    ra1 += (<span class="enscript-type">long</span>)*(<span class="enscript-type">const</span> unaligned_int32_t *)(ra1 + 4) + 8l;
+    ra2 = (<span class="enscript-type">const</span> unaligned_uint16_t *)ra1;
+    <span class="enscript-comment">// ff 25       jmpq *symbol@DYLDMAGIC(%rip)
+</span>    <span class="enscript-keyword">if</span> (*ra2 != 0x25ff) {
+        <span class="enscript-keyword">return</span> false;
+    }
+#<span class="enscript-reference">endif</span>
+    ra1 += 6l + (<span class="enscript-type">long</span>)*(<span class="enscript-type">const</span> unaligned_int32_t *)(ra1 + 2);
+    sym = (<span class="enscript-type">const</span> <span class="enscript-type">void</span> **)ra1;
+    <span class="enscript-keyword">if</span> (*sym != objc_retainAutoreleasedReturnValue  &amp;&amp;  
+        *sym != objc_unsafeClaimAutoreleasedReturnValue) 
+    {
+        <span class="enscript-keyword">return</span> false;
+    }
+
+    <span class="enscript-keyword">return</span> true;
+}
+
+<span class="enscript-comment">// __x86_64__
+</span># <span class="enscript-reference">elif</span> <span class="enscript-variable-name">__arm__</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE bool 
+<span class="enscript-function-name">callerAcceptsOptimizedReturn</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *ra)
+{
+    <span class="enscript-comment">// if the low bit is set, we're returning to thumb mode
+</span>    <span class="enscript-keyword">if</span> ((uintptr_t)ra &amp; 1) {
+        <span class="enscript-comment">// 3f 46          mov r7, r7
+</span>        <span class="enscript-comment">// we mask off the low bit via subtraction
+</span>        <span class="enscript-comment">// 16-bit instructions are well-aligned
+</span>        <span class="enscript-keyword">if</span> (*(uint16_t *)((uint8_t *)ra - 1) == 0x463f) {
+            <span class="enscript-keyword">return</span> true;
+        }
+    } <span class="enscript-keyword">else</span> {
+        <span class="enscript-comment">// 07 70 a0 e1    mov r7, r7
+</span>        <span class="enscript-comment">// 32-bit instructions may be only 16-bit aligned
+</span>        <span class="enscript-keyword">if</span> (*(unaligned_uint32_t *)ra == 0xe1a07007) {
+            <span class="enscript-keyword">return</span> true;
+        }
+    }
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-comment">// __arm__
+</span># <span class="enscript-reference">elif</span> <span class="enscript-variable-name">__arm64__</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE bool 
+<span class="enscript-function-name">callerAcceptsOptimizedReturn</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *ra)
+{
+    <span class="enscript-comment">// fd 03 1d aa    mov fp, fp
+</span>    <span class="enscript-comment">// arm64 instructions are well-aligned
+</span>    <span class="enscript-keyword">if</span> (*(uint32_t *)ra == 0xaa1d03fd) {
+        <span class="enscript-keyword">return</span> true;
+    }
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-comment">// __arm64__
+</span># <span class="enscript-reference">elif</span> <span class="enscript-variable-name">__i386__</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE bool 
+<span class="enscript-function-name">callerAcceptsOptimizedReturn</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *ra)
+{
+    <span class="enscript-comment">// 89 ed    movl %ebp, %ebp
+</span>    <span class="enscript-keyword">if</span> (*(unaligned_uint16_t *)ra == 0xed89) {
+        <span class="enscript-keyword">return</span> true;
+    }
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-comment">// __i386__
+</span># <span class="enscript-reference">else</span>
+
+#<span class="enscript-reference">warning</span> <span class="enscript-variable-name">unknown</span> <span class="enscript-variable-name">architecture</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE bool 
+<span class="enscript-function-name">callerAcceptsOptimizedReturn</span>(<span class="enscript-type">const</span> <span class="enscript-type">void</span> *ra)
+{
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-comment">// unknown architecture
+</span># <span class="enscript-reference">endif</span>
+
+
+<span class="enscript-type">static</span> ALWAYS_INLINE ReturnDisposition 
+<span class="enscript-function-name">getReturnDisposition</span>()
+{
+    <span class="enscript-keyword">return</span> (ReturnDisposition)(uintptr_t)tls_get_direct(RETURN_DISPOSITION_KEY);
+}
+
+
+<span class="enscript-type">static</span> ALWAYS_INLINE <span class="enscript-type">void</span> 
+<span class="enscript-function-name">setReturnDisposition</span>(ReturnDisposition disposition)
+{
+    tls_set_direct(RETURN_DISPOSITION_KEY, (<span class="enscript-type">void</span>*)(uintptr_t)disposition);
+}
+
+
+<span class="enscript-comment">// Try to prepare for optimized return with the given disposition (+0 or +1).
+</span><span class="enscript-comment">// Returns true if the optimized path is successful.
+</span><span class="enscript-comment">// Otherwise the return value must be retained and/or autoreleased as usual.
+</span><span class="enscript-type">static</span> ALWAYS_INLINE bool 
+<span class="enscript-function-name">prepareOptimizedReturn</span>(ReturnDisposition disposition)
+{
+    assert(getReturnDisposition() == ReturnAtPlus0);
+
+    <span class="enscript-keyword">if</span> (callerAcceptsOptimizedReturn(__builtin_return_address(0))) {
+        <span class="enscript-keyword">if</span> (disposition) setReturnDisposition(disposition);
+        <span class="enscript-keyword">return</span> true;
+    }
+
+    <span class="enscript-keyword">return</span> false;
+}
+
+
+<span class="enscript-comment">// Try to accept an optimized return.
+</span><span class="enscript-comment">// Returns the disposition of the returned object (+0 or +1).
+</span><span class="enscript-comment">// An un-optimized return is +0.
+</span><span class="enscript-type">static</span> ALWAYS_INLINE ReturnDisposition 
+<span class="enscript-function-name">acceptOptimizedReturn</span>()
+{
+    ReturnDisposition disposition = getReturnDisposition();
+    setReturnDisposition(ReturnAtPlus0);  <span class="enscript-comment">// reset to the unoptimized state
+</span>    <span class="enscript-keyword">return</span> disposition;
+}
+
+
+<span class="enscript-comment">// SUPPORT_RETURN_AUTORELEASE
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// not SUPPORT_RETURN_AUTORELEASE
+</span>
+
+<span class="enscript-type">static</span> ALWAYS_INLINE bool
+<span class="enscript-function-name">prepareOptimizedReturn</span>(ReturnDisposition disposition __unused)
+{
+    <span class="enscript-keyword">return</span> false;
+}
+
+
+<span class="enscript-type">static</span> ALWAYS_INLINE ReturnDisposition 
+<span class="enscript-function-name">acceptOptimizedReturn</span>()
+{
+    <span class="enscript-keyword">return</span> ReturnAtPlus0;
+}
+
+
+<span class="enscript-comment">// not SUPPORT_RETURN_AUTORELEASE
+</span>#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">// _OBJC_OBJECT_H_
+</span>#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

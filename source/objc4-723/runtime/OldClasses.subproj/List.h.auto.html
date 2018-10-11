@@ -1,0 +1,143 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>List.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">List.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="List.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2002, 2005-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+<span class="enscript-comment">/*
+    List.h
+    Copyright 1988-1996 NeXT Software, Inc.
+
+    DEFINED AS:	A common class
+    HEADER FILES:	objc/List.h
+
+*/</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_LIST_H_</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_LIST_H_</span>
+
+#<span class="enscript-reference">if</span> <span class="enscript-variable-name">__OBJC__</span>  &amp;&amp;  !<span class="enscript-variable-name">__OBJC2__</span>  &amp;&amp;  !<span class="enscript-variable-name">__cplusplus</span>  &amp;&amp;  !<span class="enscript-variable-name">__has_feature</span>(<span class="enscript-variable-name">objc_arc</span>)
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/Object.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;Availability.h&gt;</span>
+
+DEPRECATED_ATTRIBUTE
+@interface List : Object
+{
+@public
+    id 		*dataPtr  DEPRECATED_ATTRIBUTE;	<span class="enscript-comment">/* data of the List object */</span>
+    <span class="enscript-type">unsigned</span> 	numElements  DEPRECATED_ATTRIBUTE;	<span class="enscript-comment">/* Actual number of elements */</span>
+    <span class="enscript-type">unsigned</span> 	maxElements  DEPRECATED_ATTRIBUTE;	<span class="enscript-comment">/* Total allocated elements */</span>
+}
+
+<span class="enscript-comment">/* Creating, freeing */</span>
+
+- (id)free  DEPRECATED_ATTRIBUTE;
+- (id)freeObjects  DEPRECATED_ATTRIBUTE;
+- (id)copyFromZone:(<span class="enscript-type">void</span> *)z  DEPRECATED_ATTRIBUTE;
+  
+<span class="enscript-comment">/* Initializing */</span>
+
+- (id)init  DEPRECATED_ATTRIBUTE;
+- (id)initCount:(<span class="enscript-type">unsigned</span>)numSlots  DEPRECATED_ATTRIBUTE;
+
+<span class="enscript-comment">/* Comparing two lists */</span>
+
+- (BOOL)isEqual: anObject  DEPRECATED_ATTRIBUTE;
+  
+<span class="enscript-comment">/* Managing the storage capacity */</span>
+
+- (<span class="enscript-type">unsigned</span>)capacity  DEPRECATED_ATTRIBUTE;
+- (id)setAvailableCapacity:(<span class="enscript-type">unsigned</span>)numSlots  DEPRECATED_ATTRIBUTE;
+
+<span class="enscript-comment">/* Manipulating objects by index */</span>
+
+- (<span class="enscript-type">unsigned</span>)count  DEPRECATED_ATTRIBUTE;
+- (id)objectAt:(<span class="enscript-type">unsigned</span>)index  DEPRECATED_ATTRIBUTE;
+- (id)lastObject  DEPRECATED_ATTRIBUTE;
+- (id)addObject:anObject  DEPRECATED_ATTRIBUTE;
+- (id)insertObject:anObject at:(<span class="enscript-type">unsigned</span>)index  DEPRECATED_ATTRIBUTE;
+- (id)removeObjectAt:(<span class="enscript-type">unsigned</span>)index  DEPRECATED_ATTRIBUTE;
+- (id)removeLastObject  DEPRECATED_ATTRIBUTE;
+- (id)replaceObjectAt:(<span class="enscript-type">unsigned</span>)index with:newObject  DEPRECATED_ATTRIBUTE;
+- (id)appendList: (List *)otherList  DEPRECATED_ATTRIBUTE;
+
+<span class="enscript-comment">/* Manipulating objects by id */</span>
+
+- (<span class="enscript-type">unsigned</span>)indexOf:anObject  DEPRECATED_ATTRIBUTE;
+- (id)addObjectIfAbsent:anObject  DEPRECATED_ATTRIBUTE;
+- (id)removeObject:anObject  DEPRECATED_ATTRIBUTE;
+- (id)replaceObject:anObject with:newObject  DEPRECATED_ATTRIBUTE;
+
+<span class="enscript-comment">/* Emptying the list */</span>
+
+- (id)empty  DEPRECATED_ATTRIBUTE;
+
+<span class="enscript-comment">/* Sending messages to elements of the list */</span>
+
+- (id)makeObjectsPerform:(SEL)aSelector  DEPRECATED_ATTRIBUTE;
+- (id)makeObjectsPerform:(SEL)aSelector with:anObject  DEPRECATED_ATTRIBUTE;
+
+<span class="enscript-comment">/*
+ * The following new... methods are now obsolete.  They remain in this 
+ * interface file for backward compatibility only.  Use Object's alloc method 
+ * and the init... methods defined in this class instead.
+ */</span>
+
++ (id)new  DEPRECATED_ATTRIBUTE;
++ (id)newCount:(<span class="enscript-type">unsigned</span>)numSlots  DEPRECATED_ATTRIBUTE;
+
+@end
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">struct</span> {
+    @defs(List);
+} NXListId  DEPRECATED_ATTRIBUTE;
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">NX_ADDRESS</span>(x) (((NXListId *)(x))-&gt;dataPtr)
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">NX_NOT_IN_LIST</span>	0xffffffff
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span> <span class="enscript-comment">/* _OBJC_LIST_H_ */</span>
+</pre>
+<hr />
+</body></html>

@@ -1,0 +1,307 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50UARTSyncPower.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50UARTSyncPower.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50UARTSyncPower.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 2004-2006 Apple Computer, Inc. All rights reserved.
+ *
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * The contents of this file constitute Original Code as defined in and
+ * are subject to the Apple Public Source License Version 1.1 (the
+ * &quot;License&quot;).  You may not use this file except in compliance with the
+ * License.  Please obtain a copy of the License at
+ * <a href="http://www.apple.com/publicsource">http://www.apple.com/publicsource</a> and read it before using this file.
+ * 
+ * This Original Code and all software distributed under the License are
+ * distributed on an &quot;AS IS&quot; basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE OR NON-INFRINGEMENT.  Please see the
+ * License for the specific language governing rights and limitations
+ * under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50UARTSync.h&quot;</span>
+
+
+<span class="enscript-comment">/****** From iokit/IOKit/pwr_mgt/IOPMpowerState.h for reference (see ourPowerStates below) ******
+
+struct IOPMPowerState
+{
+    unsigned long	version;				// version number of this struct
+
+    IOPMPowerFlags	capabilityFlags;			// bits that describe the capability
+    IOPMPowerFlags	outputPowerCharacter;			// description (to power domain children)
+    IOPMPowerFlags	inputPowerRequirement;			// description (to power domain parent)
+
+    unsigned long	staticPower;				// average consumption in milliwatts
+    unsigned long	unbudgetedPower;			// additional consumption from separate power supply (mw)
+    unsigned long	powerToAttain;				// additional power to attain this state from next lower state (in mw)
+
+    unsigned long	timeToAttain;				// (microseconds)
+    unsigned long	settleUpTime;				// (microseconds)
+    unsigned long	timeToLower;				// (microseconds)
+    unsigned long	settleDownTime;				// (microseconds)
+
+    unsigned long	powerDomainBudget;			// power in mw a domain in this state can deliver to its children
+};
+
+*************************************************************************************************/</span>
+<span class="enscript-type">enum</span> {
+    kACPI_Settle_time = 500	<span class="enscript-comment">// guess 500 microseconds
+</span>};
+
+<span class="enscript-type">enum</span> {			<span class="enscript-comment">// just two power states supported, on and off.
+</span>    kACPI_PowerStateOff = 0,
+    kACPI_PowerStateOn,
+    kACPI_PowerStateCount
+};
+
+<span class="enscript-type">static</span> IOPMPowerState gOurPowerStates[kACPI_PowerStateCount] =
+{
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, IOPMDeviceUsable | IOPMMaxPerformance, IOPMPowerOn, IOPMPowerOn, 50, 0, 0,
+	kACPI_Settle_time, kACPI_Settle_time, kACPI_Settle_time, kACPI_Settle_time, 0}
+};
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">mark</span> -- <span class="enscript-variable-name">Class</span> <span class="enscript-variable-name">overrides</span>
+
+<span class="enscript-comment">/****************************************************************************************************/</span>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">//		Method:		Apple16X50UARTSync::registerWithPolicyMaker
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Inputs:		policyMaker - the power policy maker
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Outputs:	Return code - various
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Desc:		Initialize the driver for power management and register
+</span><span class="enscript-comment">//				ourselves with policy-maker. Called by superclass - not by
+</span><span class="enscript-comment">//				Power Management
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">/****************************************************************************************************/</span>
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50UARTSync::initForPM</span>(IOService *provider)
+{
+    IOReturn	rc;
+
+    PMinit();                   				<span class="enscript-comment">// Initialize superclass variables
+</span>    provider-&gt;joinPMtree(<span class="enscript-keyword">this</span>); 				<span class="enscript-comment">// Attach into the power management hierarchy
+</span>    <span class="enscript-keyword">if</span> (pm_vars == NULL) {					<span class="enscript-comment">// Did it work
+</span>        <span class="enscript-keyword">return</span> false;
+    }
+
+    <span class="enscript-comment">// Initialize power management support state.
+</span>    
+    <span class="enscript-comment">// if async on/off might need two of these
+</span>    fPowerThreadCall = thread_call_allocate(handleSetPowerState,
+					    (thread_call_param_t) <span class="enscript-keyword">this</span> );
+
+    <span class="enscript-keyword">if</span> (fPowerThreadCall == NULL) {		<span class="enscript-comment">// check early, check often
+</span>	<span class="enscript-keyword">return</span> false;
+    }
+
+    <span class="enscript-comment">// We've done the PMinit, so we're the policy mgr.  Register w/ourselves as the driver (yuck)
+</span>    rc = registerPowerDriver(<span class="enscript-keyword">this</span>, gOurPowerStates, kACPI_PowerStateCount);
+    <span class="enscript-keyword">if</span> (rc) {
+        <span class="enscript-keyword">return</span> false;
+    }
+
+    <span class="enscript-keyword">return</span> true;
+
+}<span class="enscript-comment">/* end registerWithPolicyMaker */</span>
+
+    
+
+<span class="enscript-comment">/****************************************************************************************************/</span>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">//		Method:		Apple16X50UARTSync::setPowerState
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Inputs:		powerStateOrdinal - the state being set
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Outputs:	Return code - IOPMAckImplied or IOPMNoSuchState
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Desc:		Power state is being set
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">/****************************************************************************************************/</span>
+
+IOReturn <span class="enscript-function-name">Apple16X50UARTSync::setPowerState</span>(<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> powerStateOrdinal, IOService *whatDevice)
+{
+    <span class="enscript-type">bool</span> ok;
+    UInt32 counter = 0;
+
+<span class="enscript-comment">//	IOLog(&quot;Apple16X50UARTSync::setPowerState (%ld) - &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;\n&quot;,powerStateOrdinal);
+</span>    	
+    retain();				<span class="enscript-comment">// paranoia is your friend, make sure we're not freed
+</span>	
+    fWaitForGatedCmd = true;		<span class="enscript-comment">// could do this async, but let's be sync initially
+</span>    
+    ok = thread_call_enter1(fPowerThreadCall, (<span class="enscript-type">void</span> *)powerStateOrdinal);     <span class="enscript-comment">// schedule work on workloop
+</span>	
+    <span class="enscript-keyword">if</span> (ok) {				<span class="enscript-comment">// if thread was already pending ...
+</span>	release();			<span class="enscript-comment">// don't need/want the retain, so undo it
+</span>    }
+
+    <span class="enscript-keyword">while</span> (fWaitForGatedCmd) {		<span class="enscript-comment">// we're being sync for now, wait for it to finish
+</span>	IOSleep(2);			<span class="enscript-comment">// it should be very fast
+</span>	counter++;
+    }
+    
+<span class="enscript-comment">//	IOLog(&quot;Apple16X50UARTSync::setPowerState - &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n&quot;);
+</span>    <span class="enscript-keyword">return</span> IOPMAckImplied;		<span class="enscript-comment">// we're done
+</span>    
+}<span class="enscript-comment">/* end setPowerState */</span>
+
+
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">mark</span> -- <span class="enscript-variable-name">Support</span> <span class="enscript-variable-name">and</span> <span class="enscript-variable-name">private</span> <span class="enscript-variable-name">Methods</span>
+
+<span class="enscript-comment">//---------------------------------------------------------------------------
+</span><span class="enscript-comment">// handleSetPowerState()
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// param0 - the object
+</span><span class="enscript-comment">// param1 - unsigned long, new power state ordinal
+</span><span class="enscript-comment">//---------------------------------------------------------------------------
+</span><span class="enscript-comment">//static
+</span><span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50UARTSync::handleSetPowerState</span>(thread_call_param_t param0, thread_call_param_t param1 )
+{
+    Apple16X50UARTSync *self = OSDynamicCast(Apple16X50UARTSync, (<span class="enscript-type">const</span> OSMetaClassBase *)param0);
+    UInt32 on_off = (UInt32)(uintptr_t)param1;		<span class="enscript-comment">// new power state
+</span>    
+    <span class="enscript-keyword">if</span> (self &amp;&amp; self-&gt;CommandGate) {
+	self-&gt;CommandGate-&gt;runAction(&amp;(self-&gt;setPowerStateGated), (<span class="enscript-type">void</span> *)on_off, (<span class="enscript-type">void</span> *)0, (<span class="enscript-type">void</span> *)0, (<span class="enscript-type">void</span> *)0);
+	self-&gt;release();		<span class="enscript-comment">// offset the retain in setPowerState()
+</span>    }
+}
+
+<span class="enscript-comment">//---------------------------------------------------------------------------
+</span><span class="enscript-comment">// setPowerState()
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">// owner = the object
+</span><span class="enscript-comment">// arg0 = boolean, true=power on, false=power off
+</span><span class="enscript-comment">//---------------------------------------------------------------------------
+</span><span class="enscript-comment">// static
+</span>IOReturn <span class="enscript-function-name">Apple16X50UARTSync::setPowerStateGated</span>(OSObject *owner, <span class="enscript-type">void</span> *arg0, <span class="enscript-type">void</span> *arg1, <span class="enscript-type">void</span> *arg2, <span class="enscript-type">void</span> *arg3)
+{
+    Apple16X50UARTSync *self = OSDynamicCast(Apple16X50UARTSync, (<span class="enscript-type">const</span> OSMetaClassBase *)owner);
+    UInt32 newState = (UInt32)(uintptr_t)arg0;		<span class="enscript-comment">// new power state to go to
+</span>    
+    <span class="enscript-comment">// sleep -&gt; save UART settings
+</span>    <span class="enscript-comment">// wake -&gt; restore UART settings
+</span>    <span class="enscript-comment">// assumptions: not powering off no need to fully reprogram the chip
+</span>    <span class="enscript-keyword">if</span> (self &amp;&amp; self-&gt;portOpened &amp;&amp; self-&gt;fCurrentPowerState != newState) 
+	{
+		<span class="enscript-keyword">if</span> (newState) 
+		{
+			self-&gt;restoreUART();
+			self-&gt;setStateGated(PD_RS232_S_CAR, PD_RS232_S_CAR);
+		}
+		<span class="enscript-keyword">else</span> 
+		{
+			self-&gt;saveUART();
+			self-&gt;setStateGated(0, PD_RS232_S_CAR);
+		}
+    }
+    
+    self-&gt;fCurrentPowerState = newState;
+    self-&gt;fWaitForGatedCmd = false;	    <span class="enscript-comment">// release caller (power thread)
+</span>    <span class="enscript-keyword">return</span> kIOReturnSuccess;
+}
+
+
+<span class="enscript-comment">/****************************************************************************************************/</span>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">//		Method:		Apple16X50UARTSync::maxCapabilityForDomainState
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Inputs:		domainState - current state
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Outputs:	Return code - maximum state
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Desc:		Returns the maximum state of card power, which would be
+</span><span class="enscript-comment">//		  		power on without any attempt to manager power
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">/****************************************************************************************************/</span>
+
+<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-function-name">Apple16X50UARTSync::maxCapabilityForDomainState</span>(IOPMPowerFlags domainState)
+{
+    <span class="enscript-keyword">if</span> (domainState &amp; IOPMPowerOn ) {
+        <span class="enscript-keyword">return</span> kACPI_PowerStateCount - 1;
+    }
+
+    <span class="enscript-keyword">return</span> 0;
+
+}<span class="enscript-comment">/* end maxCapabilityForDomainState */</span>
+
+<span class="enscript-comment">/****************************************************************************************************/</span>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">//		Method:		Apple16X50UARTSync::initialPowerStateForDomainState
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Inputs:		domainState - current state
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Outputs:	Return code - initial state
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Desc:		The power domain may be changing state.	If power is on in the new
+</span><span class="enscript-comment">//				state, that will not affect our state at all. If domain power is off,
+</span><span class="enscript-comment">//				we can attain only our lowest state, which is off
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">/****************************************************************************************************/</span>
+
+<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-function-name">Apple16X50UARTSync::initialPowerStateForDomainState</span>(IOPMPowerFlags domainState)
+{
+    <span class="enscript-keyword">if</span> (domainState &amp; IOPMPowerOn) {
+        <span class="enscript-keyword">return</span> kACPI_PowerStateCount - 1;
+    }
+    <span class="enscript-keyword">return</span> 0;
+
+}<span class="enscript-comment">/* end initialPowerStateForDomainState */</span>
+
+<span class="enscript-comment">/****************************************************************************************************/</span>
+<span class="enscript-comment">//
+</span><span class="enscript-comment">//		Method:		Apple16X50UARTSync::powerStateForDomainState
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Inputs:		domainState - current state
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Outputs:	Return code - power state
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">//		Desc:		The power domain may be changing state.	If power is on in the new
+</span><span class="enscript-comment">//				state, that will not affect our state at all. If domain power is off,
+</span><span class="enscript-comment">//				we can attain only our lowest state, which is off
+</span><span class="enscript-comment">//
+</span><span class="enscript-comment">/****************************************************************************************************/</span>
+
+<span class="enscript-type">unsigned</span> <span class="enscript-type">long</span> <span class="enscript-function-name">Apple16X50UARTSync::powerStateForDomainState</span>(IOPMPowerFlags domainState )
+{
+
+    <span class="enscript-keyword">if</span> (domainState &amp; IOPMPowerOn) {
+        <span class="enscript-keyword">return</span> 1;						<span class="enscript-comment">// This should answer What If?
+</span>    }
+    <span class="enscript-keyword">return</span> 0;
+
+}<span class="enscript-comment">/* end powerStateForDomainState */</span>
+
+
+
+</pre>
+<hr />
+</body></html>

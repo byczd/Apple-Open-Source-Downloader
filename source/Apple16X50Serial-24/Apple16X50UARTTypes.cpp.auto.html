@@ -1,0 +1,141 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50UARTTypes.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50UARTTypes.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50UARTTypes.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2002 Apple Computer, Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * Apple16X50UARTTypes.cpp
+ * Determine what type of UART is present, determine it's capabilities such as FIFO depth
+ * and Master Clock frequency, and verify that it is working as expected.  These routines
+ * are expected to be called prior to Apple16X50UARTSync::start(), and so
+ *
+ * 2002-04-10	dreece	created.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50UARTTypes.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50BusInterface.h&quot;</span>
+
+<span class="enscript-type">extern</span> <span class="enscript-type">const</span> IONamedValue gUARTnames[] = {
+    { kUART_Unknown,	<span class="enscript-string">&quot;Unknown&quot;</span> },	<span class="enscript-comment">// Unknown UART
+</span>    { kUART_8250, 	<span class="enscript-string">&quot;i8250&quot;</span> },	<span class="enscript-comment">// Original ACE UART
+</span>    { kUART_16450,	<span class="enscript-string">&quot;16450&quot;</span> },	<span class="enscript-comment">// Improved UART, No FIFO
+</span>    { kUART_16550,	<span class="enscript-string">&quot;16550&quot;</span> },	<span class="enscript-comment">// Broken FIFO (unusable)
+</span>    { kUART_16550C,	<span class="enscript-string">&quot;16550AF/C/CF&quot;</span>},<span class="enscript-comment">// Working 16 byte FIFO
+</span>    { kUART_16C1550,	<span class="enscript-string">&quot;16C1550&quot;</span> },	<span class="enscript-comment">// Powerdown Mode &amp; FIFO
+</span>    { kUART_16C650,	<span class="enscript-string">&quot;16C650&quot;</span> },	<span class="enscript-comment">// 32 byte FIFO
+</span>    { kUART_16C750,	<span class="enscript-string">&quot;16C750&quot;</span> },	<span class="enscript-comment">// 128 byte FIFO
+</span>    { kUART_16C950,	<span class="enscript-string">&quot;16C950&quot;</span> },	<span class="enscript-comment">// 128 byte FIFO
+</span>};
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">INB</span>(reg)	( provider-&gt;getReg((reg), refCon) )
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">OUTB</span>(reg,val)	( provider-&gt;setReg((reg), val, refCon) )
+
+<span class="enscript-comment">/* identifyUART() - This function attempts to identify the type of UART
+ * present.  This routine is only intended to be run from the init method, before the chip is
+ * active.
+ */</span>
+tUART_Type <span class="enscript-comment">//Apple16X50UARTSync::
+</span><span class="enscript-function-name">identifyUART</span>(Apple16X50BusInterface *provider, <span class="enscript-type">void</span> *refCon)
+{
+    <span class="enscript-type">register</span> UInt32 tmp;
+ 
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART()\n&quot;</span>);
+    
+    <span class="enscript-comment">/* Verify that the BRG Divisor Register is accessable */</span>
+    OUTB(kREG_LineControl, kLCR_DivisorAccess);	<span class="enscript-comment">/* Set DLAB=1 */</span>
+    OUTB(kREG_DivisorLSB, 0x5a);
+    <span class="enscript-keyword">if</span> (INB(kREG_DivisorLSB)!=0x5a) <span class="enscript-keyword">return</span> kUART_Unknown;
+    OUTB(kREG_DivisorLSB, 0xa5);
+    <span class="enscript-keyword">if</span> (INB(kREG_DivisorLSB)!=0xa5) <span class="enscript-keyword">return</span> kUART_Unknown;
+    OUTB(kREG_LineControl, 0x00);	<span class="enscript-comment">/* Set DLAB=0 */</span>
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() BRG Divisor is accessable\n&quot;</span>);
+    
+    <span class="enscript-comment">/* Verify that the Scratch Pad Register is accessable */</span>
+    OUTB(kREG_Scratch, 0x5a);
+    <span class="enscript-keyword">if</span> (INB(kREG_Scratch)!=0x5a) <span class="enscript-keyword">return</span> kUART_8250;
+    OUTB(kREG_Scratch, 0xa5);
+    <span class="enscript-keyword">if</span> (INB(kREG_Scratch)!=0xa5) <span class="enscript-keyword">return</span> kUART_8250;
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() Scratchpad is accessable\n&quot;</span>);
+    
+    <span class="enscript-comment">/* Look for FIFO Bits in FIFO Control Register */</span>
+    OUTB(kREG_FIFOControl, kFIFO_Enable);
+    tmp = INB(kREG_IRQ_Ident) &amp; kIRQID_FIFOEnabled;
+    OUTB(kREG_FIFOControl, 0x00);
+    <span class="enscript-keyword">switch</span> (tmp) {
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0x00</span> : <span class="enscript-keyword">return</span> kUART_16450;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0x40</span> : <span class="enscript-keyword">return</span> kUART_16C650;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0x80</span> : <span class="enscript-keyword">return</span> kUART_16550;
+        <span class="enscript-keyword">case</span> <span class="enscript-reference">0xC0</span> : <span class="enscript-keyword">break</span>;
+    }
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() FIFO Enable status returned 0xC0\n&quot;</span>);
+
+    <span class="enscript-comment">// Check for an alternate version of the Scratchpad...
+</span>    OUTB(kREG_LineControl, 0x00);
+    OUTB(kREG_Scratch, 0xde);
+    OUTB(kREG_LineControl, kLCR_DivisorAccess);
+    OUTB(kREG_Scratch, 0xa9);
+    tmp = INB(kREG_Scratch);
+    OUTB(kREG_Scratch, 0x00);
+    OUTB(kREG_LineControl, 0x00);
+    <span class="enscript-keyword">if</span> ((INB(kREG_Scratch) == 0xde) &amp;&amp; (tmp == 0xa9)) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() Alternate Scratchpad is accessable\n&quot;</span>);
+        <span class="enscript-keyword">return</span> kUART_16C650;
+    }
+
+    <span class="enscript-comment">// Check for power-down bit in the 16X1550
+</span>    tmp = INB(kREG_ModemControl) &amp; 0x80;
+    OUTB(kREG_ModemControl, 0x00);
+    <span class="enscript-keyword">if</span> (tmp == 0x80) <span class="enscript-keyword">return</span> kUART_16C1550;
+
+    <span class="enscript-comment">// Look for the FCR, which is present only in the 16750 and later
+</span>    OUTB(kREG_FIFOControl, kFIFO_Enable);
+    OUTB(kREG_LineControl, 0x00);	<span class="enscript-comment">/* Set DLAB=0 */</span>
+    OUTB(kREG_LineControl, 0xbf);	<span class="enscript-comment">/* Set DLAB=1 */</span>
+    tmp = INB(kREG_LineControl);
+    OUTB(kREG_LineControl, 0x00);	<span class="enscript-comment">/* Set DLAB=0 */</span>
+    OUTB(kREG_FIFOControl, 0x00);
+    <span class="enscript-keyword">if</span> (tmp == 0x80) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50UARTSync::identifyUART() 0xBF Magic number accepted!\n&quot;</span>);
+        <span class="enscript-keyword">return</span> kUART_16C750;
+    }
+    
+    <span class="enscript-keyword">return</span> kUART_16550C;
+}
+
+<span class="enscript-comment">// XXX Need to move a few other functions here, like determineMasterClock()
+</span>
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">INB</span>
+#<span class="enscript-reference">undef</span> <span class="enscript-variable-name">OUTB</span>
+</pre>
+<hr />
+</body></html>

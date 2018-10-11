@@ -1,0 +1,395 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>message.h</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">message.h&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="message.h">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+ * Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ * 
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+ */</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">_OBJC_MESSAGE_H</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">_OBJC_MESSAGE_H</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/objc.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;objc/runtime.h&gt;</span>
+
+#<span class="enscript-reference">ifndef</span> <span class="enscript-variable-name">OBJC_SUPER</span>
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">OBJC_SUPER</span>
+
+<span class="enscript-comment">/// Specifies the superclass of an instance. 
+</span><span class="enscript-type">struct</span> objc_super {
+    <span class="enscript-comment">/// Specifies an instance of a class.
+</span>    __unsafe_unretained _Nonnull id receiver;
+
+    <span class="enscript-comment">/// Specifies the particular superclass of the instance to message. 
+</span>#<span class="enscript-reference">if</span> !<span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__cplusplus</span>)  &amp;&amp;  !<span class="enscript-variable-name">__OBJC2__</span>
+    <span class="enscript-comment">/* For compatibility with old objc-runtime.h header */</span>
+    __unsafe_unretained _Nonnull Class class;
+#<span class="enscript-reference">else</span>
+    __unsafe_unretained _Nonnull Class super_class;
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-comment">/* super_class is the first class to search */</span>
+};
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* Basic Messaging Primitives
+ *
+ * On some architectures, use objc_msgSend_stret for some struct return types.
+ * On some architectures, use objc_msgSend_fpret for some float return types.
+ * On some architectures, use objc_msgSend_fp2ret for some float return types.
+ *
+ * These functions must be cast to an appropriate function pointer type 
+ * before being called. 
+ */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id self, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* struct objc_super *super, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+#<span class="enscript-reference">else</span>
+<span class="enscript-comment">/** 
+ * Sends a message with a simple return value to an instance of a class.
+ * 
+ * @param self A pointer to the instance of the class that is to receive the message.
+ * @param op The selector of the method that handles the message.
+ * @param ... 
+ *   A variable argument list containing the arguments to the method.
+ * 
+ * @return The return value of the method.
+ * 
+ * @note When it encounters a method call, the compiler generates a call to one of the
+ *  functions \c objc_msgSend, \c objc_msgSend_stret, \c objc_msgSendSuper, or \c objc_msgSendSuper_stret.
+ *  Messages sent to an object’s superclass (using the \c super keyword) are sent using \c objc_msgSendSuper; 
+ *  other messages are sent using \c objc_msgSend. Methods that have data structures as return values
+ *  are sent using \c objc_msgSendSuper_stret and \c objc_msgSend_stret.
+ */</span>
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSend</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+<span class="enscript-comment">/** 
+ * Sends a message with a simple return value to the superclass of an instance of a class.
+ * 
+ * @param super A pointer to an \c objc_super data structure. Pass values identifying the
+ *  context the message was sent to, including the instance of the class that is to receive the
+ *  message and the superclass at which to start searching for the method implementation.
+ * @param op A pointer of type SEL. Pass the selector of the method that will handle the message.
+ * @param ...
+ *   A variable argument list containing the arguments to the method.
+ * 
+ * @return The return value of the method identified by \e op.
+ * 
+ * @see objc_msgSend
+ */</span>
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSendSuper</span>(<span class="enscript-type">struct</span> objc_super * _Nonnull super, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* Struct-returning Messaging Primitives
+ *
+ * Use these functions to call methods that return structs on the stack. 
+ * On some architectures, some structures are returned in registers. 
+ * Consult your local function call ABI documentation for details.
+ * 
+ * These functions must be cast to an appropriate function pointer type 
+ * before being called. 
+ */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_stret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id self, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper_stret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* struct objc_super *super, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+#<span class="enscript-reference">else</span>
+<span class="enscript-comment">/** 
+ * Sends a message with a data-structure return value to an instance of a class.
+ * 
+ * @see objc_msgSend
+ */</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_stret</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+
+<span class="enscript-comment">/** 
+ * Sends a message with a data-structure return value to the superclass of an instance of a class.
+ * 
+ * @see objc_msgSendSuper
+ */</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendSuper_stret</span>(<span class="enscript-type">struct</span> objc_super * _Nonnull super,
+                        SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* Floating-point-returning Messaging Primitives
+ * 
+ * Use these functions to call methods that return floating-point values 
+ * on the stack. 
+ * Consult your local function call ABI documentation for details.
+ * 
+ * arm:    objc_msgSend_fpret not used
+ * i386:   objc_msgSend_fpret used for `float`, `double`, `long double`.
+ * x86-64: objc_msgSend_fpret used for `long double`.
+ *
+ * arm:    objc_msgSend_fp2ret not used
+ * i386:   objc_msgSend_fp2ret not used
+ * x86-64: objc_msgSend_fp2ret used for `_Complex long double`.
+ *
+ * These functions must be cast to an appropriate function pointer type 
+ * before being called. 
+ */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+
+# <span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__i386__</span>)
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fpret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id self, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.4, 2.0, 9.0, 1.0, 2.0);
+
+# <span class="enscript-reference">elif</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__x86_64__</span>)
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fpret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id self, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSend_fp2ret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id self, SEL op, ... */</span> )
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+# <span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// !OBJC_OLD_DISPATCH_PROTOTYPES
+</span>#<span class="enscript-reference">else</span>
+<span class="enscript-comment">// OBJC_OLD_DISPATCH_PROTOTYPES
+</span># <span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__i386__</span>)
+
+<span class="enscript-comment">/** 
+ * Sends a message with a floating-point return value to an instance of a class.
+ * 
+ * @see objc_msgSend
+ * @note On the i386 platform, the ABI for functions returning a floating-point value is
+ *  incompatible with that for functions returning an integral type. On the i386 platform, therefore, 
+ *  you must use \c objc_msgSend_fpret for functions returning non-integral type. For \c float or 
+ *  \c long \c double return types, cast the function to an appropriate function pointer type first.
+ */</span>
+OBJC_EXPORT <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSend_fpret</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.4, 2.0, 9.0, 1.0, 2.0);
+
+<span class="enscript-comment">/* Use objc_msgSendSuper() for fp-returning messages to super. */</span>
+<span class="enscript-comment">/* See also objc_msgSendv_fpret() below. */</span>
+
+# <span class="enscript-reference">elif</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__x86_64__</span>)
+<span class="enscript-comment">/** 
+ * Sends a message with a floating-point return value to an instance of a class.
+ * 
+ * @see objc_msgSend
+ */</span>
+OBJC_EXPORT <span class="enscript-type">long</span> <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSend_fpret</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+#  <span class="enscript-reference">if</span> <span class="enscript-variable-name">__STDC_VERSION__</span> &gt;= 199901L
+OBJC_EXPORT _Complex <span class="enscript-type">long</span> <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSend_fp2ret</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+#  <span class="enscript-reference">else</span>
+OBJC_EXPORT <span class="enscript-type">void</span> <span class="enscript-function-name">objc_msgSend_fp2ret</span>(id _Nullable self, SEL _Nonnull op, ...)
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+#  <span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">/* Use objc_msgSendSuper() for fp-returning messages to super. */</span>
+<span class="enscript-comment">/* See also objc_msgSendv_fpret() below. */</span>
+
+# <span class="enscript-reference">endif</span>
+
+<span class="enscript-comment">// OBJC_OLD_DISPATCH_PROTOTYPES
+</span>#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* Direct Method Invocation Primitives
+ * Use these functions to call the implementation of a given Method.
+ * This is faster than calling method_getImplementation() and method_getName().
+ *
+ * The receiver must not be nil.
+ *
+ * These functions must be cast to an appropriate function pointer type 
+ * before being called. 
+ */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">method_invoke</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id receiver, Method m, ... */</span> ) 
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">method_invoke_stret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id receiver, Method m, ... */</span> ) 
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+#<span class="enscript-reference">else</span>
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">method_invoke</span>(id _Nullable receiver, Method _Nonnull m, ...) 
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">method_invoke_stret</span>(id _Nullable receiver, Method _Nonnull m, ...) 
+    OBJC_AVAILABLE(10.5, 2.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* Message Forwarding Primitives
+ * Use these functions to forward a message as if the receiver did not 
+ * respond to it. 
+ *
+ * The receiver must not be nil.
+ * 
+ * class_getMethodImplementation() may return (IMP)_objc_msgForward.
+ * class_getMethodImplementation_stret() may return (IMP)_objc_msgForward_stret
+ * 
+ * These functions must be cast to an appropriate function pointer type 
+ * before being called. 
+ *
+ * Before Mac OS X 10.6, _objc_msgForward must not be called directly 
+ * but may be compared to other IMP values.
+ */</span>
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">OBJC_OLD_DISPATCH_PROTOTYPES</span>
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_msgForward</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id receiver, SEL sel, ... */</span> ) 
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_msgForward_stret</span>(<span class="enscript-type">void</span> <span class="enscript-comment">/* id receiver, SEL sel, ... */</span> ) 
+    OBJC_AVAILABLE(10.6, 3.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+#<span class="enscript-reference">else</span>
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">_objc_msgForward</span>(id _Nonnull receiver, SEL _Nonnull sel, ...) 
+    OBJC_AVAILABLE(10.0, 2.0, 9.0, 1.0, 2.0);
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">_objc_msgForward_stret</span>(id _Nonnull receiver, SEL _Nonnull sel, ...) 
+    OBJC_AVAILABLE(10.6, 3.0, 9.0, 1.0, 2.0)
+    OBJC_ARM64_UNAVAILABLE;
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* Variable-argument Messaging Primitives
+ *
+ * Use these functions to call methods with a list of arguments, such 
+ * as the one passed to forward:: .
+ *
+ * The contents of the argument list are architecture-specific. 
+ * Consult your local function call ABI documentation for details.
+ * 
+ * These functions must be cast to an appropriate function pointer type 
+ * before being called, except for objc_msgSendv_stret() which must not 
+ * be cast to a struct-returning type.
+ */</span>
+
+<span class="enscript-type">typedef</span> <span class="enscript-type">void</span>* marg_list;
+
+OBJC_EXPORT id _Nullable
+<span class="enscript-function-name">objc_msgSendv</span>(id _Nullable self, SEL _Nonnull op, size_t arg_size,
+              marg_list _Nonnull arg_frame)
+    OBJC2_UNAVAILABLE;
+
+OBJC_EXPORT <span class="enscript-type">void</span>
+<span class="enscript-function-name">objc_msgSendv_stret</span>(<span class="enscript-type">void</span> * _Nonnull stretAddr, id _Nullable self,
+                    SEL _Nonnull op, size_t arg_size,
+                    marg_list _Nullable arg_frame)
+    OBJC2_UNAVAILABLE;
+<span class="enscript-comment">/* Note that objc_msgSendv_stret() does not return a structure type, 
+ * and should not be cast to do so. This is unlike objc_msgSend_stret() 
+ * and objc_msgSendSuper_stret().
+ */</span>
+#<span class="enscript-reference">if</span> <span class="enscript-reference">defined</span>(<span class="enscript-variable-name">__i386__</span>)
+OBJC_EXPORT <span class="enscript-type">double</span>
+<span class="enscript-function-name">objc_msgSendv_fpret</span>(id _Nullable self, SEL _Nonnull op,
+                    <span class="enscript-type">unsigned</span> arg_size, marg_list _Nullable arg_frame)
+    OBJC2_UNAVAILABLE;
+#<span class="enscript-reference">endif</span>
+
+
+<span class="enscript-comment">/* The following marg_list macros are of marginal utility. They
+ * are included for compatibility with the old objc-class.h header. */</span>
+
+#<span class="enscript-reference">if</span> !<span class="enscript-variable-name">__OBJC2__</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">marg_prearg_size</span>	0
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">marg_malloc</span>(margs, method) \
+	<span class="enscript-keyword">do</span> { \
+		margs = (marg_list *)malloc (marg_prearg_size + ((7 + method_getSizeOfArguments(method)) &amp; ~7)); \
+	} <span class="enscript-keyword">while</span> (0)
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">marg_free</span>(margs) \
+	<span class="enscript-keyword">do</span> { \
+		free(margs); \
+	} <span class="enscript-keyword">while</span> (0)
+	
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">marg_adjustedOffset</span>(method, offset) \
+	(marg_prearg_size + offset)
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">marg_getRef</span>(margs, offset, type) \
+	( (type *)((<span class="enscript-type">char</span> *)margs + marg_adjustedOffset(method,offset) ) )
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">marg_getValue</span>(margs, offset, type) \
+	( *marg_getRef(margs, offset, type) )
+
+#<span class="enscript-reference">define</span> <span class="enscript-function-name">marg_setValue</span>(margs, offset, type, value) \
+	( marg_getValue(margs, offset, type) = (value) )
+
+#<span class="enscript-reference">endif</span>
+
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>

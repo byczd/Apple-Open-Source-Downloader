@@ -1,0 +1,186 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50ACPI.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50ACPI.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50ACPI.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2008 Apple Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * Apple16X50ACPI.cpp
+ * This file contains the implementation of device driver for a 16650-family
+ * serial device connected as an ACPI device.  This subclass provides only the routines
+ * necessary to detect and initialize the hardware, as well as map the
+ * device registers and field interrupts.  All other functions are handled
+ * by the client-class &quot;com_apple_driver_16X50UARTSync&quot;.
+ * 
+ * 2002-02-15	dreece	I/O Kit port, based on NeXT drvISASerialPort DriverKit driver.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50ACPI.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/serial/IOSerialKeys.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/IOPlatformExpert.h&gt;</span>
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">super</span> Apple16X50BusInterface
+<span class="enscript-function-name">OSDefineMetaClassAndStructors</span>(com_apple_driver_16X50ACPI, com_apple_driver_16X50BusInterface)
+
+IOService *Apple16X50ACPI::
+<span class="enscript-function-name">probe</span>(IOService *provider, SInt32 *score)
+{
+    Provider = OSDynamicCast(IOACPIPlatformDevice, provider);
+    <span class="enscript-keyword">if</span> (!Provider) {
+        IOLog (<span class="enscript-string">&quot;Apple16X50ACPI: Attached to non-IOACPIPlatformDevice provider!  Failing probe()\n&quot;</span>);
+        <span class="enscript-keyword">return</span> NULL;
+    }
+
+    <span class="enscript-comment">// fail probe if polled-mode kprintf driver is active
+</span>    UInt32 debugFlags = 0;
+    PE_parse_boot_argn(<span class="enscript-string">&quot;debug&quot;</span>, &amp;debugFlags, <span class="enscript-keyword">sizeof</span>(debugFlags));
+    <span class="enscript-keyword">if</span> (debugFlags &amp; 0x8)
+        <span class="enscript-keyword">return</span> NULL;
+
+    <span class="enscript-keyword">if</span> (!super::probe(provider, score)) <span class="enscript-keyword">return</span> NULL;
+
+    <span class="enscript-type">char</span> buf[80];
+
+    snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf),  <span class="enscript-string">&quot;ACPI Device=%s&quot;</span>, Provider-&gt;getName());
+    setProperty(kLocationKey, buf);
+    Location = OSDynamicCast(OSString, getProperty(kLocationKey))-&gt;getCStringNoCopy();
+
+    <span class="enscript-comment">// this will be the TTY base name for all UARTS
+</span>    setProperty(kIOTTYBaseNameKey, <span class="enscript-string">&quot;serial&quot;</span>);
+
+    <span class="enscript-comment">// this will (eventually) be displayed in NetworkPrefs
+</span>    InterfaceBaseName = <span class="enscript-string">&quot;Built-in Serial Port&quot;</span>;
+
+    <span class="enscript-comment">// when multiple serial ports are available, each should have an unique ID (_UID)
+</span>    InterfaceInstance = 0;
+	Provider-&gt;evaluateInteger( gIOACPIUniqueIDKey, &amp;InterfaceInstance );
+
+    snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;Apple16X50ACPI%d&quot;</span>, (<span class="enscript-type">int</span>)InterfaceInstance);
+    setName(buf);
+
+    <span class="enscript-keyword">return</span> <span class="enscript-keyword">this</span>;
+}
+
+Apple16X50UARTSync *Apple16X50ACPI::
+<span class="enscript-function-name">probeUART</span>(<span class="enscript-type">void</span>* refCon, Apple16X50UARTSync *uart, OSDictionary *properties)
+{
+    <span class="enscript-type">char</span> buf[80];
+
+    uart = super::probeUART(refCon, uart, properties);
+    <span class="enscript-keyword">if</span> (!uart) <span class="enscript-keyword">return</span> false;
+
+    snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;%s Base=0x%x&quot;</span>, Location, (UInt16)Map-&gt;getPhysicalAddress());
+    uart-&gt;setProperty(kLocationKey, buf);
+
+    <span class="enscript-keyword">return</span> uart;
+}
+
+<span class="enscript-type">bool</span> Apple16X50ACPI::
+<span class="enscript-function-name">start</span>(IOService *provider)
+{
+    OSString *connectorName;
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: %s\n&quot;</span>, Name, Location);
+
+	Map = provider-&gt;mapDeviceMemoryWithIndex(0);
+    <span class="enscript-keyword">if</span> (!Map) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+
+    <span class="enscript-comment">/*
+     * Lookup IO register base address now to avoid this later,
+     * since getPhysicalAddress() needs to take a mutex.
+     */</span>
+    RegBase = Map-&gt;getPhysicalAddress();
+
+    probeUART(0);
+
+    <span class="enscript-keyword">if</span> (!UARTInstance) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    <span class="enscript-keyword">if</span> (!super::start(provider)) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+
+    IOLog(<span class="enscript-string">&quot;%s: Identified Serial Port on %s\n&quot;</span>, Name, Location);
+    connectorName = OSDynamicCast(OSString, provider-&gt;getProperty(<span class="enscript-string">&quot;AAPL,connector&quot;</span>));
+    <span class="enscript-keyword">if</span> (connectorName) {
+        <span class="enscript-keyword">if</span> (connectorName-&gt;isEqualTo(<span class="enscript-string">&quot;DB9&quot;</span>)) {
+            IOLog(<span class="enscript-string">&quot;Apple16X50ACPI::start FOUND DB9 Property for AAPL,connector\n&quot;</span> );
+            startUARTs(true);
+            <span class="enscript-keyword">return</span> true;
+        }
+    }
+
+    startUARTs(false);
+
+    <span class="enscript-keyword">return</span> true;
+
+<span class="enscript-reference">fail</span>:
+    stop(Provider);
+    <span class="enscript-keyword">return</span> false;
+}
+
+<span class="enscript-type">void</span> Apple16X50ACPI::
+<span class="enscript-function-name">stop</span>(IOService *provider)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: stop(%p)\n&quot;</span>, Name, provider);
+    <span class="enscript-reference">super</span>::stop(provider);
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::stop() releasing UARTs\n&quot;</span>, Name);
+    <span class="enscript-keyword">for</span> (UInt32 i=0; i&lt;UARTInstance; i++)
+        RELEASE(UART[i]);
+
+    <span class="enscript-comment">// It is possible to disable the device here by evaluating the
+</span>    <span class="enscript-comment">// _DIS method on our provider, though turning it back on again
+</span>    <span class="enscript-comment">// will not be so easy (apply resource settings through _SRS).
+</span>}
+
+<span class="enscript-type">void</span> Apple16X50ACPI::
+<span class="enscript-function-name">free</span>()
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s: free()\n&quot;</span>, Name);
+    RELEASE(Map);
+    <span class="enscript-reference">super</span>::free();
+}
+
+UInt8 Apple16X50ACPI::
+<span class="enscript-function-name">getReg</span>(UInt32 reg, <span class="enscript-type">void</span> *refCon)
+{
+    <span class="enscript-keyword">return</span> (Provider-&gt;ioRead8(RegBase + reg, 0));
+}
+
+<span class="enscript-type">void</span> Apple16X50ACPI::
+<span class="enscript-function-name">setReg</span>(UInt32 reg, UInt8 val, <span class="enscript-type">void</span> *refCon)
+{
+    Provider-&gt;ioWrite8(RegBase + reg, val, 0);
+}
+
+
+#<span class="enscript-reference">pragma</span> <span class="enscript-variable-name">mark</span> -- <span class="enscript-variable-name">Power</span> <span class="enscript-variable-name">Management</span>
+
+
+</pre>
+<hr />
+</body></html>

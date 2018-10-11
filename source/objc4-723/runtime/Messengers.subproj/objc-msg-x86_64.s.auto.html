@@ -1,0 +1,1309 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>objc-msg-x86_64.s</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">objc-msg-x86_64.s&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="objc-msg-x86_64.s">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+/*
+ <span class="enscript-keyword">*</span> Copyright (c) 1999-2007 Apple Inc.  All Rights Reserved.
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> @APPLE_LICENSE_HEADER_START@
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> This file contains Original Code and/or Modifications of Original Code
+ <span class="enscript-keyword">*</span> as defined in and that are subject to the Apple Public Source License
+ <span class="enscript-keyword">*</span> Version 2.0 (the 'License'). You may not use this file except in
+ <span class="enscript-keyword">*</span> compliance with the License. Please obtain a copy of the License at
+ <span class="enscript-keyword">*</span> <a href="http://www.opensource.apple.com/apsl/">http://www.opensource.apple.com/apsl/</a> and read it before using this
+ <span class="enscript-keyword">*</span> file.
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> The Original Code and all software distributed under the License are
+ <span class="enscript-keyword">*</span> distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ <span class="enscript-keyword">*</span> EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ <span class="enscript-keyword">*</span> INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ <span class="enscript-keyword">*</span> FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ <span class="enscript-keyword">*</span> Please see the License for the specific language governing rights and
+ <span class="enscript-keyword">*</span> limitations under the License.
+ <span class="enscript-keyword">*</span> 
+ <span class="enscript-keyword">*</span> @APPLE_LICENSE_HEADER_END@
+ <span class="enscript-keyword">*/
+</span>
+#include &lt;TargetConditionals.h&gt;
+#if __x86_64__  &amp;&amp;  !TARGET_OS_SIMULATOR
+
+/********************************************************************
+ <span class="enscript-keyword">********************************************************************
+</span> <span class="enscript-keyword">**
+</span> <span class="enscript-keyword">**</span>  objc-msg-x86_64.s - x86-64 code to support objc messaging.
+ <span class="enscript-keyword">**
+</span> <span class="enscript-keyword">********************************************************************
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+.data
+
+// _objc_entryPoints and _objc_exitPoints are used by objc
+// to get the critical regions for which method caches 
+// cannot be garbage collected.
+
+.align 4
+.private_extern	_objc_entryPoints
+<span class="enscript-function-name">_objc_entryPoints:</span>
+	<span class="enscript-keyword">.quad</span>	_cache_getImp
+	<span class="enscript-keyword">.quad</span>	_objc_msgSend
+	<span class="enscript-keyword">.quad</span>	_objc_msgSend_fpret
+	<span class="enscript-keyword">.quad</span>	_objc_msgSend_fp2ret
+	<span class="enscript-keyword">.quad</span>	_objc_msgSend_stret
+	<span class="enscript-keyword">.quad</span>	_objc_msgSendSuper
+	<span class="enscript-keyword">.quad</span>	_objc_msgSendSuper_stret
+	<span class="enscript-keyword">.quad</span>	_objc_msgSendSuper2
+	<span class="enscript-keyword">.quad</span>	_objc_msgSendSuper2_stret
+	<span class="enscript-keyword">.quad</span>	_objc_msgLookup
+	<span class="enscript-keyword">.quad</span>	_objc_msgLookup_fpret
+	<span class="enscript-keyword">.quad</span>	_objc_msgLookup_fp2ret
+	<span class="enscript-keyword">.quad</span>	_objc_msgLookup_stret
+	<span class="enscript-keyword">.quad</span>	_objc_msgLookupSuper2
+	<span class="enscript-keyword">.quad</span>	_objc_msgLookupSuper2_stret
+	<span class="enscript-keyword">.quad</span>	0
+
+.private_extern	_objc_exitPoints
+<span class="enscript-function-name">_objc_exitPoints:</span>
+	<span class="enscript-keyword">.quad</span>	LExit_cache_getImp
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSend
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSend_fpret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSend_fp2ret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSend_stret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSendSuper
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSendSuper_stret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSendSuper2
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgSendSuper2_stret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgLookup
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgLookup_fpret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgLookup_fp2ret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgLookup_stret
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgLookupSuper2
+	<span class="enscript-keyword">.quad</span>	LExit_objc_msgLookupSuper2_stret
+	<span class="enscript-keyword">.quad</span>	0
+
+
+/********************************************************************
+* List every exit insn from every messenger for debugger use.
+* Format:
+* (
+*   1 word instruction's address
+*   1 word type (ENTER or FAST_EXIT or SLOW_EXIT or NIL_EXIT)
+* )
+* 1 word zero
+*
+* ENTER is the start of a dispatcher
+* FAST_EXIT is method dispatch
+* SLOW_EXIT is uncached method lookup
+* NIL_EXIT is returning zero from a message sent to nil
+* These must match objc-gdb.h.
+********************************************************************/
+	<span class="enscript-keyword">
+</span>#define ENTER     1
+#define FAST_EXIT 2
+#define SLOW_EXIT 3
+#define NIL_EXIT  4
+
+.section __DATA,__objc_msg_break
+.globl _gdb_objc_messenger_breakpoints
+<span class="enscript-function-name">_gdb_objc_messenger_breakpoints:</span>
+// contents populated by the macros below
+
+.macro MESSENGER_START
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> ENTER
+	<span class="enscript-keyword">.text
+</span>.endmacro
+.macro MESSENGER_END_FAST
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> FAST_EXIT
+	<span class="enscript-keyword">.text
+</span>.endmacro
+.macro MESSENGER_END_SLOW
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> SLOW_EXIT
+	<span class="enscript-keyword">.text
+</span>.endmacro
+.macro MESSENGER_END_NIL
+<span class="enscript-function-name">4:</span>
+	<span class="enscript-keyword">.section</span> __DATA,__objc_msg_break
+	<span class="enscript-keyword">.quad</span> 4b
+	<span class="enscript-keyword">.quad</span> NIL_EXIT
+	<span class="enscript-keyword">.text
+</span>.endmacro
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> Recommended multi-byte NOP instructions
+ <span class="enscript-keyword">*</span> (Intel 64 and IA-32 Architectures Software Developer's Manual Volume 2B)
+ <span class="enscript-keyword">********************************************************************/
+</span>#define nop1 .byte 0x90
+#define nop2 .byte 0x66,0x90
+#define nop3 .byte 0x0F,0x1F,0x00
+#define nop4 .byte 0x0F,0x1F,0x40,0x00
+#define nop5 .byte 0x0F,0x1F,0x44,0x00,0x00
+#define nop6 .byte 0x66,0x0F,0x1F,0x44,0x00,0x00
+#define nop7 .byte 0x0F,0x1F,0x80,0x00,0x00,0x00,0x00
+#define nop8 .byte 0x0F,0x1F,0x84,0x00,0x00,0x00,0x00,0x00
+#define nop9 .byte 0x66,0x0F,0x1F,0x84,0x00,0x00,0x00,0x00,0x00
+
+	<span class="enscript-keyword">
+</span>/********************************************************************
+ <span class="enscript-keyword">*</span> Harmless branch prefix hint for instruction alignment
+ <span class="enscript-keyword">********************************************************************/
+</span>	<span class="enscript-keyword">
+</span>#define PN .byte 0x2e
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> Names for parameter registers.
+ <span class="enscript-keyword">********************************************************************/
+</span>
+#define a1  rdi
+#define a1d edi
+#define a1b dil
+#define a2  rsi
+#define a2d esi
+#define a2b sil
+#define a3  rdx
+#define a3d edx
+#define a4  rcx
+#define a4d ecx
+#define a5  r8
+#define a5d r8d
+#define a6  r9
+#define a6d r9d
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> Names for relative labels
+ <span class="enscript-keyword">*</span> DO NOT USE THESE LABELS ELSEWHERE
+ <span class="enscript-keyword">*</span> Reserved labels: 6: 7: 8: 9:
+ <span class="enscript-keyword">********************************************************************/
+</span>#define LCacheMiss 	6
+#define LCacheMiss_f 	6f
+#define LCacheMiss_b 	6b
+#define LNilTestSlow 	7
+#define LNilTestSlow_f 	7f
+#define LNilTestSlow_b 	7b
+#define LGetIsaDone 	8
+#define LGetIsaDone_f 	8f
+#define LGetIsaDone_b 	8b
+#define LGetIsaSlow 	9
+#define LGetIsaSlow_f 	9f
+#define LGetIsaSlow_b 	9b
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> Macro parameters
+ <span class="enscript-keyword">********************************************************************/
+</span>
+#define NORMAL 0
+#define FPRET 1
+#define FP2RET 2
+#define STRET 3
+
+#define CALL 100
+#define GETIMP 101
+#define LOOKUP 102
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> Structure definitions.
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+// objc_super parameter to sendSuper
+#define receiver 	0
+#define class 		8
+
+// Selected field offsets in class structure
+// #define isa		0    USE GetIsa INSTEAD
+
+// Method descriptor
+#define method_name 	0
+#define method_imp 	16
+
+
+//////////////////////////////////////////////////////////////////////
+//
+// ENTRY		functionName
+//
+// Assembly directives to begin an exported function.
+//
+// Takes: functionName - name of the exported function
+//////////////////////////////////////////////////////////////////////
+
+.macro ENTRY
+	<span class="enscript-keyword">.text
+</span>	<span class="enscript-keyword">.globl</span>	$0
+	<span class="enscript-keyword">.align</span>	6, 0x90
+<span class="enscript-function-name">$0:</span>
+.endmacro
+
+.macro STATIC_ENTRY
+	<span class="enscript-keyword">.text
+</span>	<span class="enscript-keyword">.private_extern</span>	$0
+	<span class="enscript-keyword">.align</span>	2, 0x90
+<span class="enscript-function-name">$0:</span>
+.endmacro
+
+//////////////////////////////////////////////////////////////////////
+//
+// END_ENTRY	functionName
+//
+// Assembly directives to end an exported function.  Just a placeholder,
+// a close-parenthesis for ENTRY, until it is needed for something.
+//
+// Takes: functionName - name of the exported function
+//////////////////////////////////////////////////////////////////////
+
+.macro END_ENTRY
+<span class="enscript-function-name">LExit$0:</span>
+.endmacro
+
+
+ <span class="enscript-keyword">/********************************************************************
+</span> <span class="enscript-keyword">*</span> UNWIND name, flags
+ <span class="enscript-keyword">*</span> Unwind info generation	
+ <span class="enscript-keyword">********************************************************************/
+</span>.macro UNWIND
+	<span class="enscript-keyword">.section</span> __LD,__compact_unwind,regular,debug
+	<span class="enscript-keyword">.quad</span> $0
+	<span class="enscript-keyword">.set</span>  LUnwind$0, LExit$0 - $0
+	<span class="enscript-keyword">.long</span> LUnwind$0
+	<span class="enscript-keyword">.long</span> $1
+	<span class="enscript-keyword">.quad</span> 0	 /* no personality */
+	<span class="enscript-keyword">.quad</span> 0  /* no LSDA */
+	<span class="enscript-keyword">.text
+</span>.endmacro
+
+#define NoFrame 0x02010000  // no frame, no SP adjustment except return address
+#define FrameWithNoSaves 0x01000000  // frame, no non-volatile saves
+
+
+/////////////////////////////////////////////////////////////////////
+//
+// CacheLookup	return-type, caller
+//
+// Locate the implementation for a class in a selector's method cache.
+//
+// Takes: 
+//	  $0 = NORMAL, FPRET, FP2RET, STRET
+//	  $1 = CALL, LOOKUP, GETIMP
+//	  a1 or a2 (STRET) = receiver
+//	  a2 or a3 (STRET) = selector
+//	  r10 = class to search
+//
+// On exit: r10 clobbered
+//	    (found) calls or returns IMP in r11, eq/ne set for forwarding
+//	    (not found) jumps to LCacheMiss, class still in r10
+//
+/////////////////////////////////////////////////////////////////////
+
+.macro CacheHit
+
+	<span class="enscript-keyword">//</span> CacheHit must always be preceded by a not-taken `jne` instruction
+	<span class="enscript-keyword">//</span> in order to set the correct flags for _objc_msgForward_impcache.
+
+	<span class="enscript-keyword">//</span> r11 = found bucket
+	<span class="enscript-keyword">
+</span>.if $1 == GETIMP
+	<span class="enscript-keyword">movq</span>	8(%r11), %rax		// return imp
+	<span class="enscript-keyword">ret
+</span>
+.else
+
+.if $0 != STRET
+	<span class="enscript-keyword">//</span> eq already set for forwarding by `jne`
+.else
+	<span class="enscript-keyword">test</span>	%r11, %r11		// set ne for stret forwarding
+.endif
+
+.if $1 == CALL
+	<span class="enscript-keyword">MESSENGER_END_FAST
+</span>	<span class="enscript-keyword">jmp</span>	*8(%r11)		// call imp
+	<span class="enscript-keyword">
+</span>.elseif $1 == LOOKUP
+	<span class="enscript-keyword">movq</span>	8(%r11), %r11		// return imp
+	<span class="enscript-keyword">ret
+</span>	<span class="enscript-keyword">
+</span>.else
+.abort oops
+.endif
+
+.endif
+
+.endmacro
+
+
+.macro	CacheLookup
+.if $0 != STRET
+	<span class="enscript-keyword">movq</span>	%a2, %r11		// r11 = _cmd
+.else
+	<span class="enscript-keyword">movq</span>	%a3, %r11		// r11 = _cmd
+.endif
+	<span class="enscript-keyword">andl</span>	24(%r10), %r11d		// r11 = _cmd &amp; class-&gt;cache.mask
+	<span class="enscript-keyword">shlq</span>	$$4, %r11		// r11 = offset = (_cmd &amp; mask)&lt;&lt;4
+	<span class="enscript-keyword">addq</span>	16(%r10), %r11		// r11 = class-&gt;cache.buckets + offset
+
+.if $0 != STRET
+	<span class="enscript-keyword">cmpq</span>	(%r11), %a2		// if (bucket-&gt;sel != _cmd)
+.else
+	<span class="enscript-keyword">cmpq</span>	(%r11), %a3		// if (bucket-&gt;sel != _cmd)
+.endif
+	<span class="enscript-keyword">jne</span> 	1f			//     scan more
+	<span class="enscript-keyword">//</span> CacheHit must always be preceded by a not-taken `jne` instruction
+	<span class="enscript-keyword">CacheHit</span> $0, $1			// call or return imp
+
+<span class="enscript-function-name">1:</span>
+	<span class="enscript-keyword">//</span> loop
+	<span class="enscript-keyword">cmpq</span>	$$1, (%r11)
+	<span class="enscript-keyword">jbe</span>	3f			// if (bucket-&gt;sel &lt;= 1) wrap or miss
+
+	<span class="enscript-keyword">addq</span>	$$16, %r11		// bucket++
+<span class="enscript-function-name">2:</span>	
+.if $0 != STRET
+	<span class="enscript-keyword">cmpq</span>	(%r11), %a2		// if (bucket-&gt;sel != _cmd)
+.else
+	<span class="enscript-keyword">cmpq</span>	(%r11), %a3		// if (bucket-&gt;sel != _cmd)
+.endif
+	<span class="enscript-keyword">jne</span> 	1b			//     scan more
+	<span class="enscript-keyword">//</span> CacheHit must always be preceded by a not-taken `jne` instruction
+	<span class="enscript-keyword">CacheHit</span> $0, $1			// call or return imp
+
+<span class="enscript-function-name">3:</span>
+	<span class="enscript-keyword">//</span> wrap or miss
+	<span class="enscript-keyword">jb</span>	LCacheMiss_f		// if (bucket-&gt;sel &lt; 1) cache miss
+	<span class="enscript-keyword">//</span> wrap
+	<span class="enscript-keyword">movq</span>	8(%r11), %r11		// bucket-&gt;imp is really first bucket
+	<span class="enscript-keyword">jmp</span> 	2f
+
+	<span class="enscript-keyword">//</span> Clone scanning loop to miss instead of hang when cache is corrupt.
+	<span class="enscript-keyword">//</span> The slow path may detect any corruption and halt later.
+
+<span class="enscript-function-name">1:</span>
+	<span class="enscript-keyword">//</span> loop
+	<span class="enscript-keyword">cmpq</span>	$$1, (%r11)
+	<span class="enscript-keyword">jbe</span>	3f			// if (bucket-&gt;sel &lt;= 1) wrap or miss
+
+	<span class="enscript-keyword">addq</span>	$$16, %r11		// bucket++
+<span class="enscript-function-name">2:</span>	
+.if $0 != STRET
+	<span class="enscript-keyword">cmpq</span>	(%r11), %a2		// if (bucket-&gt;sel != _cmd)
+.else
+	<span class="enscript-keyword">cmpq</span>	(%r11), %a3		// if (bucket-&gt;sel != _cmd)
+.endif
+	<span class="enscript-keyword">jne</span> 	1b			//     scan more
+	<span class="enscript-keyword">//</span> CacheHit must always be preceded by a not-taken `jne` instruction
+	<span class="enscript-keyword">CacheHit</span> $0, $1			// call or return imp
+
+<span class="enscript-function-name">3:</span>
+	<span class="enscript-keyword">//</span> double wrap or miss
+	<span class="enscript-keyword">jmp</span>	LCacheMiss_f
+
+.endmacro
+
+
+/////////////////////////////////////////////////////////////////////
+//
+// MethodTableLookup NORMAL|STRET
+//
+// Takes:	a1 or a2 (STRET) = receiver
+//		a2 or a3 (STRET) = selector to search for
+// 		r10 = class to search
+//
+// On exit: imp in %r11, eq/ne set for forwarding
+//
+/////////////////////////////////////////////////////////////////////
+
+.macro MethodTableLookup
+
+	<span class="enscript-keyword">push</span>	%rbp
+	<span class="enscript-keyword">mov</span>	%rsp, %rbp
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">sub</span>	$$0x80+8, %rsp		// +8 for alignment
+
+	<span class="enscript-keyword">movdqa</span>	%xmm0, -0x80(%rbp)
+	<span class="enscript-keyword">push</span>	%rax			// might be xmm parameter count
+	<span class="enscript-keyword">movdqa</span>	%xmm1, -0x70(%rbp)
+	<span class="enscript-keyword">push</span>	%a1
+	<span class="enscript-keyword">movdqa</span>	%xmm2, -0x60(%rbp)
+	<span class="enscript-keyword">push</span>	%a2
+	<span class="enscript-keyword">movdqa</span>	%xmm3, -0x50(%rbp)
+	<span class="enscript-keyword">push</span>	%a3
+	<span class="enscript-keyword">movdqa</span>	%xmm4, -0x40(%rbp)
+	<span class="enscript-keyword">push</span>	%a4
+	<span class="enscript-keyword">movdqa</span>	%xmm5, -0x30(%rbp)
+	<span class="enscript-keyword">push</span>	%a5
+	<span class="enscript-keyword">movdqa</span>	%xmm6, -0x20(%rbp)
+	<span class="enscript-keyword">push</span>	%a6
+	<span class="enscript-keyword">movdqa</span>	%xmm7, -0x10(%rbp)
+
+	<span class="enscript-keyword">//</span> _class_lookupMethodAndLoadCache3(receiver, selector, class)
+
+.if $0 == NORMAL
+	<span class="enscript-keyword">//</span> receiver already in a1
+	<span class="enscript-keyword">//</span> selector already in a2
+.else
+	<span class="enscript-keyword">movq</span>	%a2, %a1
+	<span class="enscript-keyword">movq</span>	%a3, %a2
+.endif
+	<span class="enscript-keyword">movq</span>	%r10, %a3
+	<span class="enscript-keyword">call</span>	__class_lookupMethodAndLoadCache3
+
+	<span class="enscript-keyword">//</span> IMP is now in %rax
+	<span class="enscript-keyword">movq</span>	%rax, %r11
+
+	<span class="enscript-keyword">movdqa</span>	-0x80(%rbp), %xmm0
+	<span class="enscript-keyword">pop</span>	%a6
+	<span class="enscript-keyword">movdqa</span>	-0x70(%rbp), %xmm1
+	<span class="enscript-keyword">pop</span>	%a5
+	<span class="enscript-keyword">movdqa</span>	-0x60(%rbp), %xmm2
+	<span class="enscript-keyword">pop</span>	%a4
+	<span class="enscript-keyword">movdqa</span>	-0x50(%rbp), %xmm3
+	<span class="enscript-keyword">pop</span>	%a3
+	<span class="enscript-keyword">movdqa</span>	-0x40(%rbp), %xmm4
+	<span class="enscript-keyword">pop</span>	%a2
+	<span class="enscript-keyword">movdqa</span>	-0x30(%rbp), %xmm5
+	<span class="enscript-keyword">pop</span>	%a1
+	<span class="enscript-keyword">movdqa</span>	-0x20(%rbp), %xmm6
+	<span class="enscript-keyword">pop</span>	%rax
+	<span class="enscript-keyword">movdqa</span>	-0x10(%rbp), %xmm7
+
+.if $0 == NORMAL
+	<span class="enscript-keyword">cmp</span>	%r11, %r11		// set eq for nonstret forwarding
+.else
+	<span class="enscript-keyword">test</span>	%r11, %r11		// set ne for stret forwarding
+.endif
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">leave
+</span>
+.endmacro
+
+
+/////////////////////////////////////////////////////////////////////
+//
+// GetIsaFast return-type
+// GetIsaSupport return-type
+//
+// Sets r10 = obj-&gt;isa. Consults the tagged isa table if necessary.
+//
+// Takes:	$0 = NORMAL or FPRET or FP2RET or STRET
+//		a1 or a2 (STRET) = receiver
+//
+// On exit: 	r10 = receiver-&gt;isa
+//		r11 is clobbered
+//
+/////////////////////////////////////////////////////////////////////
+
+.macro GetIsaFast
+.if $0 != STRET
+	<span class="enscript-keyword">testb</span>	$$1, %a1b
+	<span class="enscript-keyword">PN
+</span>	<span class="enscript-keyword">jnz</span>	LGetIsaSlow_f
+	<span class="enscript-keyword">movq</span>	$$0x00007ffffffffff8, %r10
+	<span class="enscript-keyword">andq</span>	(%a1), %r10
+.else
+	<span class="enscript-keyword">testb</span>	$$1, %a2b
+	<span class="enscript-keyword">PN
+</span>	<span class="enscript-keyword">jnz</span>	LGetIsaSlow_f
+	<span class="enscript-keyword">movq</span>	$$0x00007ffffffffff8, %r10
+	<span class="enscript-keyword">andq</span>	(%a2), %r10
+.endif
+<span class="enscript-function-name">LGetIsaDone:</span>	
+.endmacro
+
+.macro GetIsaSupport
+<span class="enscript-function-name">LGetIsaSlow:</span>
+.if $0 != STRET
+	<span class="enscript-keyword">movl</span>	%a1d, %r11d
+.else
+	<span class="enscript-keyword">movl</span>	%a2d, %r11d
+.endif
+	<span class="enscript-keyword">andl</span>	$$0xF, %r11d
+	<span class="enscript-keyword">cmp</span>	$$0xF, %r11d
+	<span class="enscript-keyword">je</span>	1f
+	<span class="enscript-keyword">//</span> basic tagged
+	<span class="enscript-keyword">leaq</span>	_objc_debug_taggedpointer_classes(%rip), %r10
+	<span class="enscript-keyword">movq</span>	(%r10, %r11, 8), %r10	// read isa from table
+	<span class="enscript-keyword">jmp</span>	LGetIsaDone_b
+<span class="enscript-function-name">1:</span>
+	<span class="enscript-keyword">//</span> extended tagged
+.if $0 != STRET
+	<span class="enscript-keyword">movl</span>	%a1d, %r11d
+.else
+	<span class="enscript-keyword">movl</span>	%a2d, %r11d
+.endif
+	<span class="enscript-keyword">shrl</span>	$$4, %r11d
+	<span class="enscript-keyword">andl</span>	$$0xFF, %r11d
+	<span class="enscript-keyword">leaq</span>	_objc_debug_taggedpointer_ext_classes(%rip), %r10
+	<span class="enscript-keyword">movq</span>	(%r10, %r11, 8), %r10	// read isa from table
+	<span class="enscript-keyword">jmp</span>	LGetIsaDone_b
+.endmacro
+
+	<span class="enscript-keyword">
+</span>/////////////////////////////////////////////////////////////////////
+//
+// NilTest return-type
+//
+// Takes:	$0 = NORMAL or FPRET or FP2RET or STRET
+//		%a1 or %a2 (STRET) = receiver
+//
+// On exit: 	Loads non-nil receiver in %a1 or %a2 (STRET)
+//		or returns.
+//
+// NilTestReturnZero return-type
+//
+// Takes:	$0 = NORMAL or FPRET or FP2RET or STRET
+//		%a1 or %a2 (STRET) = receiver
+//
+// On exit: 	Loads non-nil receiver in %a1 or %a2 (STRET)
+//		or returns zero.
+//
+// NilTestReturnIMP return-type
+//
+// Takes:	$0 = NORMAL or FPRET or FP2RET or STRET
+//		%a1 or %a2 (STRET) = receiver
+//
+// On exit: 	Loads non-nil receiver in %a1 or %a2 (STRET)
+//		or returns an IMP in r11 that returns zero.
+//
+/////////////////////////////////////////////////////////////////////
+
+.macro ZeroReturn
+	<span class="enscript-keyword">xorl</span>	%eax, %eax
+	<span class="enscript-keyword">xorl</span>	%edx, %edx
+	<span class="enscript-keyword">xorps</span>	%xmm0, %xmm0
+	<span class="enscript-keyword">xorps</span>	%xmm1, %xmm1
+.endmacro
+
+.macro ZeroReturnFPRET
+	<span class="enscript-keyword">fldz
+</span>	<span class="enscript-keyword">ZeroReturn
+</span>.endmacro
+
+.macro ZeroReturnFP2RET
+	<span class="enscript-keyword">fldz
+</span>	<span class="enscript-keyword">fldz
+</span>	<span class="enscript-keyword">ZeroReturn
+</span>.endmacro
+
+.macro ZeroReturnSTRET
+	<span class="enscript-keyword">//</span> rax gets the struct-return address as passed in rdi
+	<span class="enscript-keyword">movq</span>	%rdi, %rax
+.endmacro
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgNil
+	<span class="enscript-keyword">ZeroReturn
+</span>	<span class="enscript-keyword">ret
+</span>	<span class="enscript-keyword">END_ENTRY</span> __objc_msgNil
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgNil_fpret
+	<span class="enscript-keyword">ZeroReturnFPRET
+</span>	<span class="enscript-keyword">ret
+</span>	<span class="enscript-keyword">END_ENTRY</span> __objc_msgNil_fpret
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgNil_fp2ret
+	<span class="enscript-keyword">ZeroReturnFP2RET
+</span>	<span class="enscript-keyword">ret
+</span>	<span class="enscript-keyword">END_ENTRY</span> __objc_msgNil_fp2ret
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgNil_stret
+	<span class="enscript-keyword">ZeroReturnSTRET
+</span>	<span class="enscript-keyword">ret
+</span>	<span class="enscript-keyword">END_ENTRY</span> __objc_msgNil_stret
+
+
+.macro NilTest
+.if $0 != STRET
+	<span class="enscript-keyword">testq</span>	%a1, %a1
+.else
+	<span class="enscript-keyword">testq</span>	%a2, %a2
+.endif
+	<span class="enscript-keyword">PN
+</span>	<span class="enscript-keyword">jz</span>	LNilTestSlow_f
+.endmacro
+
+
+.macro NilTestReturnZero
+	<span class="enscript-keyword">.align</span> 3
+<span class="enscript-function-name">LNilTestSlow:</span>
+	<span class="enscript-keyword">
+</span>.if $0 == NORMAL
+	<span class="enscript-keyword">ZeroReturn
+</span>.elseif $0 == FPRET
+	<span class="enscript-keyword">ZeroReturnFPRET
+</span>.elseif $0 == FP2RET
+	<span class="enscript-keyword">ZeroReturnFP2RET
+</span>.elseif $0 == STRET
+	<span class="enscript-keyword">ZeroReturnSTRET
+</span>.else
+.abort oops
+.endif
+	<span class="enscript-keyword">MESSENGER_END_NIL
+</span>	<span class="enscript-keyword">ret</span>	
+.endmacro
+
+
+.macro NilTestReturnIMP
+	<span class="enscript-keyword">.align</span> 3
+<span class="enscript-function-name">LNilTestSlow:</span>
+	<span class="enscript-keyword">
+</span>.if $0 == NORMAL
+	<span class="enscript-keyword">leaq</span>	__objc_msgNil(%rip), %r11
+.elseif $0 == FPRET
+	<span class="enscript-keyword">leaq</span>	__objc_msgNil_fpret(%rip), %r11
+.elseif $0 == FP2RET
+	<span class="enscript-keyword">leaq</span>	__objc_msgNil_fp2ret(%rip), %r11
+.elseif $0 == STRET
+	<span class="enscript-keyword">leaq</span>	__objc_msgNil_stret(%rip), %r11
+.else
+.abort oops
+.endif
+	<span class="enscript-keyword">ret
+</span>.endmacro
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> IMP cache_getImp(Class cls, SEL sel)
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> On entry:	a1 = class whose cache is to be searched
+ <span class="enscript-keyword">*</span>		a2 = selector to search for
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> If found, returns method implementation.
+ <span class="enscript-keyword">*</span> If not found, returns NULL.
+ <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">STATIC_ENTRY</span> _cache_getImp
+
+// do lookup
+	<span class="enscript-keyword">movq</span>	%a1, %r10		// move class to r10 for CacheLookup
+	<span class="enscript-keyword">CacheLookup</span> NORMAL, GETIMP	// returns IMP on success
+
+<span class="enscript-function-name">LCacheMiss:</span>
+// cache miss, return nil
+	<span class="enscript-keyword">xorl</span>	%eax, %eax
+	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> _cache_getImp
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> id objc_msgSend(id self, SEL	_cmd,...)<span class="enscript-comment">;
+ * IMP objc_msgLookup(id self, SEL _cmd, ...);
+</span> <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> objc_msgLookup ABI:
+ <span class="enscript-keyword">*</span> IMP returned in r11
+ <span class="enscript-keyword">*</span> Forwarding returned in Z flag
+ <span class="enscript-keyword">*</span> r10 reserved for our use but not used
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">.data
+</span>	<span class="enscript-keyword">.align</span> 3
+	<span class="enscript-keyword">.globl</span> _objc_debug_taggedpointer_classes
+<span class="enscript-function-name">_objc_debug_taggedpointer_classes:</span>
+	<span class="enscript-keyword">.fill</span> 16, 8, 0
+	<span class="enscript-keyword">.globl</span> _objc_debug_taggedpointer_ext_classes
+<span class="enscript-function-name">_objc_debug_taggedpointer_ext_classes:</span>
+	<span class="enscript-keyword">.fill</span> 256, 8, 0
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSend, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>
+	<span class="enscript-keyword">NilTest</span>	NORMAL
+
+	<span class="enscript-keyword">GetIsaFast</span> NORMAL		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> NORMAL, CALL	// calls IMP on success
+
+	<span class="enscript-keyword">NilTestReturnZero</span> NORMAL
+
+	<span class="enscript-keyword">GetIsaSupport</span> NORMAL
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgLookup
+
+	<span class="enscript-keyword">NilTest</span>	NORMAL
+
+	<span class="enscript-keyword">GetIsaFast</span> NORMAL		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> NORMAL, LOOKUP	// returns IMP on success
+
+	<span class="enscript-keyword">NilTestReturnIMP</span> NORMAL
+
+	<span class="enscript-keyword">GetIsaSupport</span> NORMAL
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">jmp</span>	__objc_msgLookup_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fixup
+	<span class="enscript-keyword">int3
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fixup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> _objc_msgSend_fixedup
+	<span class="enscript-keyword">//</span> Load _cmd from the message_ref
+	<span class="enscript-keyword">movq</span>	8(%a2), %a2
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fixedup
+
+	<span class="enscript-keyword">
+</span>/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> id objc_msgSendSuper(struct objc_super *super, SEL _cmd,...)<span class="enscript-comment">;
+ *
+</span> <span class="enscript-keyword">*</span> struct objc_super {
+ <span class="enscript-keyword">*</span>		id	receiver<span class="enscript-comment">;
+ *		Class	class;
+</span> <span class="enscript-keyword">*</span> }<span class="enscript-comment">;
+ ********************************************************************/
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSendSuper, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>// search the cache (objc_super in %a1)
+	<span class="enscript-keyword">movq</span>	class(%a1), %r10	// class = objc_super-&gt;class
+	<span class="enscript-keyword">movq</span>	receiver(%a1), %a1	// load real receiver
+	<span class="enscript-keyword">CacheLookup</span> NORMAL, CALL	// calls IMP on success
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> class still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_uncached
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> id objc_msgSendSuper2
+ <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSendSuper2, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> objc_super-&gt;class is superclass of class to search
+	<span class="enscript-keyword">
+</span>// search the cache (objc_super in %a1)
+	<span class="enscript-keyword">movq</span>	class(%a1), %r10	// cls = objc_super-&gt;class
+	<span class="enscript-keyword">movq</span>	receiver(%a1), %a1	// load real receiver
+	<span class="enscript-keyword">movq</span>	8(%r10), %r10		// cls = class-&gt;superclass
+	<span class="enscript-keyword">CacheLookup</span> NORMAL, CALL	// calls IMP on success
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> superclass still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_uncached
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgLookupSuper2
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> objc_super-&gt;class is superclass of class to search
+	<span class="enscript-keyword">
+</span>// search the cache (objc_super in %a1)
+	<span class="enscript-keyword">movq</span>	class(%a1), %r10	// cls = objc_super-&gt;class
+	<span class="enscript-keyword">movq</span>	receiver(%a1), %a1	// load real receiver
+	<span class="enscript-keyword">movq</span>	8(%r10), %r10		// cls = class-&gt;superclass
+	<span class="enscript-keyword">CacheLookup</span> NORMAL, LOOKUP	// returns IMP on success
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> superclass still in r10
+	<span class="enscript-keyword">jmp</span>	__objc_msgLookup_uncached
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookupSuper2
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2_fixup
+	<span class="enscript-keyword">int3
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_fixup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> _objc_msgSendSuper2_fixedup
+	<span class="enscript-keyword">//</span> Load _cmd from the message_ref
+	<span class="enscript-keyword">movq</span>	8(%a2), %a2
+	<span class="enscript-keyword">jmp</span> 	_objc_msgSendSuper2
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_fixedup
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> double objc_msgSend_fpret(id self, SEL _cmd,...)<span class="enscript-comment">;
+ * Used for `long double` return only. `float` and `double` use objc_msgSend.
+</span> <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fpret
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSend_fpret, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">NilTest</span>	FPRET
+
+	<span class="enscript-keyword">GetIsaFast</span> FPRET		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> FPRET, CALL		// calls IMP on success
+
+	<span class="enscript-keyword">NilTestReturnZero</span> FPRET
+
+	<span class="enscript-keyword">GetIsaSupport</span> FPRET
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fpret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgLookup_fpret
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">NilTest</span>	FPRET
+
+	<span class="enscript-keyword">GetIsaFast</span> FPRET		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> FPRET, LOOKUP	// returns IMP on success
+
+	<span class="enscript-keyword">NilTestReturnIMP</span> FPRET
+
+	<span class="enscript-keyword">GetIsaSupport</span> FPRET
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">jmp</span>	__objc_msgLookup_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookup_fpret
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fpret_fixup
+	<span class="enscript-keyword">int3
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fpret_fixup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> _objc_msgSend_fpret_fixedup
+	<span class="enscript-keyword">//</span> Load _cmd from the message_ref
+	<span class="enscript-keyword">movq</span>	8(%a2), %a2
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend_fpret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fpret_fixedup
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> double objc_msgSend_fp2ret(id self, SEL _cmd,...)<span class="enscript-comment">;
+ * Used for `complex long double` return only.
+</span> <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fp2ret
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSend_fp2ret, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">NilTest</span>	FP2RET
+
+	<span class="enscript-keyword">GetIsaFast</span> FP2RET		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> FP2RET, CALL	// calls IMP on success
+
+	<span class="enscript-keyword">NilTestReturnZero</span> FP2RET
+
+	<span class="enscript-keyword">GetIsaSupport</span> FP2RET
+	<span class="enscript-keyword">
+</span>// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fp2ret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgLookup_fp2ret
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">NilTest</span>	FP2RET
+
+	<span class="enscript-keyword">GetIsaFast</span> FP2RET		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> FP2RET, LOOKUP	// returns IMP on success
+
+	<span class="enscript-keyword">NilTestReturnIMP</span> FP2RET
+
+	<span class="enscript-keyword">GetIsaSupport</span> FP2RET
+	<span class="enscript-keyword">
+</span>// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">jmp</span>	__objc_msgLookup_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookup_fp2ret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fp2ret_fixup
+	<span class="enscript-keyword">int3
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fp2ret_fixup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> _objc_msgSend_fp2ret_fixedup
+	<span class="enscript-keyword">//</span> Load _cmd from the message_ref
+	<span class="enscript-keyword">movq</span>	8(%a2), %a2
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend_fp2ret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fp2ret_fixedup
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> void	objc_msgSend_stret(void *st_addr, id self, SEL _cmd, ...)<span class="enscript-comment">;
+ *
+</span> <span class="enscript-keyword">*</span> objc_msgSend_stret is the struct-return form of msgSend.
+ <span class="enscript-keyword">*</span> The ABI calls for %a1 to be used as the address of the structure
+ <span class="enscript-keyword">*</span> being returned, with the parameters in the succeeding locations.
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> On entry:	%a1 is the address where the structure is returned,
+ <span class="enscript-keyword">*</span>		%a2 is the message receiver,
+ <span class="enscript-keyword">*</span>		%a3 is the selector
+ <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_stret
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSend_stret, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">NilTest</span>	STRET
+
+	<span class="enscript-keyword">GetIsaFast</span> STRET		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> STRET, CALL		// calls IMP on success
+
+	<span class="enscript-keyword">NilTestReturnZero</span> STRET
+
+	<span class="enscript-keyword">GetIsaSupport</span> STRET
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_stret_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_stret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgLookup_stret
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">NilTest</span>	STRET
+
+	<span class="enscript-keyword">GetIsaFast</span> STRET		// r10 = self-&gt;isa
+	<span class="enscript-keyword">CacheLookup</span> STRET, LOOKUP	// returns IMP on success
+
+	<span class="enscript-keyword">NilTestReturnIMP</span> STRET
+
+	<span class="enscript-keyword">GetIsaSupport</span> STRET
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> isa still in r10
+	<span class="enscript-keyword">jmp</span>	__objc_msgLookup_stret_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookup_stret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_stret_fixup
+	<span class="enscript-keyword">int3
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_stret_fixup
+
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> _objc_msgSend_stret_fixedup
+	<span class="enscript-keyword">//</span> Load _cmd from the message_ref
+	<span class="enscript-keyword">movq</span>	8(%a3), %a3
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend_stret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_stret_fixedup
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> void objc_msgSendSuper_stret(void *st_addr, struct objc_super *super, SEL _cmd, ...)<span class="enscript-comment">;
+ *
+</span> <span class="enscript-keyword">*</span> struct objc_super {
+ <span class="enscript-keyword">*</span>		id	receiver<span class="enscript-comment">;
+ *		Class	class;
+</span> <span class="enscript-keyword">*</span> }<span class="enscript-comment">;
+ *
+</span> <span class="enscript-keyword">*</span> objc_msgSendSuper_stret is the struct-return form of msgSendSuper.
+ <span class="enscript-keyword">*</span> The ABI calls for (sp+4) to be used as the address of the structure
+ <span class="enscript-keyword">*</span> being returned, with the parameters in the succeeding registers.
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> On entry:	%a1 is the address where the structure is returned,
+ <span class="enscript-keyword">*</span>		%a2 is the address of the objc_super structure,
+ <span class="enscript-keyword">*</span>		%a3 is the selector
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper_stret
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSendSuper_stret, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>// search the cache (objc_super in %a2)
+	<span class="enscript-keyword">movq</span>	class(%a2), %r10	// class = objc_super-&gt;class
+	<span class="enscript-keyword">movq</span>	receiver(%a2), %a2	// load real receiver
+	<span class="enscript-keyword">CacheLookup</span> STRET, CALL		// calls IMP on success
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> class still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_stret_uncached
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper_stret
+
+
+/********************************************************************
+ <span class="enscript-keyword">*</span> id objc_msgSendSuper2_stret
+ <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2_stret
+	<span class="enscript-keyword">UNWIND</span> _objc_msgSendSuper2_stret, NoFrame
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">
+</span>// search the cache (objc_super in %a2)
+	<span class="enscript-keyword">movq</span>	class(%a2), %r10	// class = objc_super-&gt;class
+	<span class="enscript-keyword">movq</span>	receiver(%a2), %a2	// load real receiver
+	<span class="enscript-keyword">movq</span>	8(%r10), %r10		// class = class-&gt;superclass
+	<span class="enscript-keyword">CacheLookup</span> STRET, CALL		// calls IMP on success
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> superclass still in r10
+	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">jmp</span>	__objc_msgSend_stret_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_stret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgLookupSuper2_stret
+	<span class="enscript-keyword">
+</span>// search the cache (objc_super in %a2)
+	<span class="enscript-keyword">movq</span>	class(%a2), %r10	// class = objc_super-&gt;class
+	<span class="enscript-keyword">movq</span>	receiver(%a2), %a2	// load real receiver
+	<span class="enscript-keyword">movq</span>	8(%r10), %r10		// class = class-&gt;superclass
+	<span class="enscript-keyword">CacheLookup</span> STRET, LOOKUP	// returns IMP on success
+
+// cache miss: go search the method lists
+<span class="enscript-function-name">LCacheMiss:</span>
+	<span class="enscript-keyword">//</span> superclass still in r10
+	<span class="enscript-keyword">jmp</span>	__objc_msgLookup_stret_uncached
+
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgLookupSuper2_stret
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2_stret_fixup
+	<span class="enscript-keyword">int3
+</span>	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_stret_fixup
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> _objc_msgSendSuper2_stret_fixedup
+	<span class="enscript-keyword">//</span> Load _cmd from the message_ref
+	<span class="enscript-keyword">movq</span>	8(%a3), %a3
+	<span class="enscript-keyword">jmp</span>	_objc_msgSendSuper2_stret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_stret_fixedup
+
+
+/********************************************************************
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> _objc_msgSend_uncached
+ <span class="enscript-keyword">*</span> _objc_msgSend_stret_uncached
+ <span class="enscript-keyword">*</span> _objc_msgLookup_uncached
+ <span class="enscript-keyword">*</span> _objc_msgLookup_stret_uncached
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">*</span> The uncached method lookup.
+ <span class="enscript-keyword">*
+</span> <span class="enscript-keyword">********************************************************************/
+</span>
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgSend_uncached
+	<span class="enscript-keyword">UNWIND</span> __objc_msgSend_uncached, FrameWithNoSaves
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band r10 is the searched class
+
+	<span class="enscript-keyword">//</span> r10 is already the class to search
+	<span class="enscript-keyword">MethodTableLookup</span> NORMAL	// r11 = IMP
+	<span class="enscript-keyword">jmp</span>	*%r11			// goto *imp
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgSend_uncached
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgSend_stret_uncached
+	<span class="enscript-keyword">UNWIND</span> __objc_msgSend_stret_uncached, FrameWithNoSaves
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band r10 is the searched class
+
+	<span class="enscript-keyword">//</span> r10 is already the class to search
+	<span class="enscript-keyword">MethodTableLookup</span> STRET		// r11 = IMP
+	<span class="enscript-keyword">jmp</span>	*%r11			// goto *imp
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgSend_stret_uncached
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgLookup_uncached
+	<span class="enscript-keyword">UNWIND</span> __objc_msgLookup_uncached, FrameWithNoSaves
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band r10 is the searched class
+
+	<span class="enscript-keyword">//</span> r10 is already the class to search
+	<span class="enscript-keyword">MethodTableLookup</span> NORMAL	// r11 = IMP
+	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgLookup_uncached
+
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgLookup_stret_uncached
+	<span class="enscript-keyword">UNWIND</span> __objc_msgLookup_stret_uncached, FrameWithNoSaves
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band r10 is the searched class
+
+	<span class="enscript-keyword">//</span> r10 is already the class to search
+	<span class="enscript-keyword">MethodTableLookup</span> STRET		// r11 = IMP
+	<span class="enscript-keyword">ret
+</span>
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgLookup_stret_uncached
+
+	<span class="enscript-keyword">
+</span>/********************************************************************
+*
+* id _objc_msgForward(id self, SEL _cmd,...)<span class="enscript-comment">;
+*
+</span>* _objc_msgForward and _objc_msgForward_stret are the externally-callable
+*   functions returned by things like method_getImplementation().
+* _objc_msgForward_impcache is the function pointer actually stored in
+*   method caches.
+*
+********************************************************************/
+
+	<span class="enscript-keyword">STATIC_ENTRY</span> __objc_msgForward_impcache
+	<span class="enscript-keyword">//</span> Method cache version
+
+	<span class="enscript-keyword">//</span> THIS IS NOT A CALLABLE C FUNCTION
+	<span class="enscript-keyword">//</span> Out-of-band condition register is NE for stret, EQ otherwise.
+
+	<span class="enscript-keyword">MESSENGER_START
+</span>	<span class="enscript-keyword">nop
+</span>	<span class="enscript-keyword">MESSENGER_END_SLOW
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">jne</span>	__objc_msgForward_stret
+	<span class="enscript-keyword">jmp</span>	__objc_msgForward
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgForward_impcache
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">ENTRY</span> __objc_msgForward
+	<span class="enscript-keyword">//</span> Non-stret version
+
+	<span class="enscript-keyword">movq</span>	__objc_forward_handler(%rip), %r11
+	<span class="enscript-keyword">jmp</span>	*%r11
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgForward
+
+
+	<span class="enscript-keyword">ENTRY</span> __objc_msgForward_stret
+	<span class="enscript-keyword">//</span> Struct-return version
+
+	<span class="enscript-keyword">movq</span>	__objc_forward_stret_handler(%rip), %r11
+	<span class="enscript-keyword">jmp</span>	*%r11
+
+	<span class="enscript-keyword">END_ENTRY</span> __objc_msgForward_stret
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_debug
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_debug
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2_debug
+	<span class="enscript-keyword">jmp</span>	_objc_msgSendSuper2
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_debug
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_stret_debug
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend_stret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_stret_debug
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSendSuper2_stret_debug
+	<span class="enscript-keyword">jmp</span>	_objc_msgSendSuper2_stret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSendSuper2_stret_debug
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fpret_debug
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend_fpret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fpret_debug
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_fp2ret_debug
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend_fp2ret
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_fp2ret_debug
+
+
+	<span class="enscript-keyword">ENTRY</span> _objc_msgSend_noarg
+	<span class="enscript-keyword">jmp</span>	_objc_msgSend
+	<span class="enscript-keyword">END_ENTRY</span> _objc_msgSend_noarg
+
+
+	<span class="enscript-keyword">ENTRY</span> _method_invoke
+
+	<span class="enscript-keyword">movq</span>	method_imp(%a2), %r11
+	<span class="enscript-keyword">movq</span>	method_name(%a2), %a2
+	<span class="enscript-keyword">jmp</span>	*%r11
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> _method_invoke
+
+
+	<span class="enscript-keyword">ENTRY</span> _method_invoke_stret
+
+	<span class="enscript-keyword">movq</span>	method_imp(%a3), %r11
+	<span class="enscript-keyword">movq</span>	method_name(%a3), %a3
+	<span class="enscript-keyword">jmp</span>	*%r11
+	<span class="enscript-keyword">
+</span>	<span class="enscript-keyword">END_ENTRY</span> _method_invoke_stret
+
+
+.section __DATA,__objc_msg_break
+.quad 0
+.quad 0
+
+#endif
+</pre>
+<hr />
+</body></html>

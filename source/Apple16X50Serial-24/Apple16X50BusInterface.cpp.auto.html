@@ -1,0 +1,218 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Apple16X50BusInterface.cpp</title>
+<style type="text/css">
+.enscript-comment { font-style: italic; color: rgb(178,34,34); }
+.enscript-function-name { font-weight: bold; color: rgb(0,0,255); }
+.enscript-variable-name { font-weight: bold; color: rgb(184,134,11); }
+.enscript-keyword { font-weight: bold; color: rgb(160,32,240); }
+.enscript-reference { font-weight: bold; color: rgb(95,158,160); }
+.enscript-string { font-weight: bold; color: rgb(188,143,143); }
+.enscript-builtin { font-weight: bold; color: rgb(218,112,214); }
+.enscript-type { font-weight: bold; color: rgb(34,139,34); }
+.enscript-highlight { text-decoration: underline; color: 0; }
+</style>
+</head>
+<body id="top">
+<h1 style="margin:8px;" id="f1">Apple16X50BusInterface.cpp&nbsp;&nbsp;&nbsp;<span style="font-weight: normal; font-size: 0.5em;">[<a href="Apple16X50BusInterface.cpp">plain text</a>]</span></h1>
+<hr/>
+<div></div>
+<pre>
+<span class="enscript-comment">/*
+Copyright (c) 1997-2008 Apple Inc. All rights reserved.
+Copyright (c) 1994-1996 NeXT Software, Inc.  All rights reserved.
+ 
+IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc. (“Apple”) in consideration of your agreement to the following terms, and your use, installation, modification or redistribution of this Apple software constitutes acceptance of these terms.  If you do not agree with these terms, please do not use, install, modify or redistribute this Apple software.
+
+In consideration of your agreement to abide by the following terms, and subject to these terms, Apple grants you a personal, non-exclusive license, under Apple’s copyrights in this original Apple software (the “Apple Software”), to use, reproduce, modify and redistribute the Apple Software, with or without modifications, in source and/or binary forms; provided that if you redistribute the Apple Software in its entirety and without modifications, you must retain this notice and the following text and disclaimers in all such redistributions of the Apple Software.  Neither the name, trademarks, service marks or logos of Apple Computer, Inc. may be used to endorse or promote products derived from the Apple Software without specific prior written permission from Apple.  Except as expressly stated in this notice, no other rights or licenses, express or implied, are granted by Apple herein, including but not limited to any patent rights that may be infringed by your derivative works or by other works in which the Apple Software may be incorporated.
+
+The Apple Software is provided by Apple on an &quot;AS IS&quot; basis.  APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+
+IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/</span>
+
+<span class="enscript-comment">/*
+ * Apple16X50BusInterface.cpp
+ * This file contains the basic implementation of device driver for a 16650-family
+ * serial device connected via an unspecified bus.  This class provides only the
+ * abstraction used by one or more Apple16X50UARTSync object(s) to get at the
+ * underlying hardware.  The real work is done in bus-specific subclasses.
+ * 
+ * 2002-02-15	dreece	I/O Kit port, based on NeXT drvISASerialPort DriverKit driver.
+ */</span>
+
+#<span class="enscript-reference">include</span> <span class="enscript-string">&quot;Apple16X50BusInterface.h&quot;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;IOKit/serial/IOSerialKeys.h&gt;</span>
+#<span class="enscript-reference">include</span> <span class="enscript-string">&lt;libkern/OSAtomic.h&gt;</span>
+
+SInt32 nextInterfaceInstance = 0;
+
+#<span class="enscript-reference">define</span> <span class="enscript-variable-name">super</span> IOService
+<span class="enscript-function-name">OSDefineMetaClassAndAbstractStructors</span>(com_apple_driver_16X50BusInterface, IOService);
+
+IOService *Apple16X50BusInterface::
+<span class="enscript-function-name">probe</span>(IOService *provider, SInt32 *score)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50BusInterface::probe() Compiled with DEBUG defined\n&quot;</span>);
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">ASSERT</span>
+    Debugger(<span class="enscript-string">&quot;Apple16X50BusInterface::probe() Compiled with ASSERT defined - Entering debugger to set breakpoints&quot;</span>);
+#<span class="enscript-reference">endif</span>
+    <span class="enscript-keyword">return</span> super::probe(provider, score);
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::setName</span>(<span class="enscript-type">const</span> <span class="enscript-type">char</span> *name, <span class="enscript-type">const</span> IORegistryPlane *plane)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;Apple16X50BusInterface::setName(%s)\n&quot;</span>, name);
+    <span class="enscript-reference">super</span>::setName(name, plane);
+    Name=getName();
+}
+
+<span class="enscript-type">bool</span> <span class="enscript-function-name">Apple16X50BusInterface::start</span>(IOService *provider)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::start() WorkLoop=%p InterruptSource=%p\n&quot;</span>, Name, WorkLoop, InterruptSource);
+    <span class="enscript-keyword">if</span> (!WorkLoop) {
+        WorkLoop = IOWorkLoop::workLoop();
+        <span class="enscript-keyword">if</span> (!WorkLoop) <span class="enscript-keyword">return</span> false;
+        InterruptSource = IOInterruptEventSource::interruptEventSource(
+            <span class="enscript-keyword">this</span>, (IOInterruptEventAction)&amp;handleInterruptAction, getProvider()
+        );
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::start() WorkLoop=%p InterruptSource=%p\n&quot;</span>, Name, WorkLoop, InterruptSource);
+        <span class="enscript-keyword">if</span> (!InterruptSource) {
+            RELEASE(WorkLoop);
+            <span class="enscript-keyword">return</span> false;
+        }
+        WorkLoop-&gt;addEventSource(InterruptSource);
+        InterruptSource-&gt;enable();
+    }
+
+    <span class="enscript-keyword">return</span> super::start(provider);
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::startUARTs</span>(<span class="enscript-type">bool</span> noSuffix)
+{
+    <span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> masterClock=0;
+
+    OSNumber *masterClockObj = OSDynamicCast(OSNumber, getProperty(kMasterClock));
+    <span class="enscript-keyword">if</span> (masterClockObj) {
+        masterClock = masterClockObj-&gt;unsigned32BitValue();
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::startUARTs(): Master Clock specified as %d Hz\n&quot;</span>, Name, masterClock);
+    }
+    
+    <span class="enscript-keyword">if</span>( !(InterfaceBaseName &amp;&amp; (*InterfaceBaseName)) )
+        InterfaceBaseName=<span class="enscript-string">&quot;Serial&quot;</span>;
+    
+    <span class="enscript-keyword">for</span> (<span class="enscript-type">unsigned</span> <span class="enscript-type">int</span> uart=0; uart&lt;UARTInstance; uart++) {
+        <span class="enscript-keyword">if</span> (!(UART[uart])) <span class="enscript-keyword">continue</span>;
+        UART[uart]-&gt;setProperty(kCFBundleIdentifierKey, getProperty(kCFBundleIdentifierKey));
+        <span class="enscript-keyword">if</span> (masterClock)
+            UART[uart]-&gt;setMasterClock(masterClock);
+        <span class="enscript-keyword">else</span> {
+            masterClock = UART[uart]-&gt;determineMasterClock();
+            <span class="enscript-keyword">if</span> (!masterClock)
+                <span class="enscript-keyword">continue</span>;
+            <span class="enscript-keyword">else</span>
+                DEBUG_IOLog(<span class="enscript-string">&quot;%s::startUARTs(): Master Clock determined to be %d Hz\n&quot;</span>, Name, masterClock);
+        }
+        
+        <span class="enscript-type">char</span> pre[8], buf[80];
+        snprintf(pre, <span class="enscript-keyword">sizeof</span> (pre), <span class="enscript-string">&quot;%d%c&quot;</span>, (<span class="enscript-type">int</span>)InterfaceInstance, (UARTInstance&gt;1)?(<span class="enscript-string">'a'</span>+uart):(<span class="enscript-string">'\0'</span>) );
+
+        <span class="enscript-keyword">if</span> ( (!noSuffix)  || (uart &gt; 0) )
+            UART[uart]-&gt;setProperty(kIOTTYSuffixKey, pre);
+
+        UART[uart]-&gt;setProperty(kIOTTYBaseNameKey, getProperty(kIOTTYBaseNameKey));
+        snprintf(buf, <span class="enscript-keyword">sizeof</span> (buf), <span class="enscript-string">&quot;%s (%s)&quot;</span>, InterfaceBaseName, pre);
+        UART[uart]-&gt;setProperty(kNPProductNameKey, buf);
+
+        <span class="enscript-keyword">if</span> (!(UART[uart]-&gt;start(<span class="enscript-keyword">this</span>))) {
+            UART[uart]-&gt;detach(<span class="enscript-keyword">this</span>);
+            RELEASE(UART[uart]);
+        }
+    }
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::stop</span>(IOService *provider)
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::stop()\n&quot;</span>, Name);
+    <span class="enscript-reference">super</span>::stop(provider);
+    <span class="enscript-keyword">if</span> (InterruptSource) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::stop() releasing InterruptSource\n&quot;</span>, Name);
+        InterruptSource-&gt;disable();
+        WorkLoop-&gt;removeEventSource(InterruptSource);
+        RELEASE(InterruptSource);
+    }
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::free</span>()
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::free()\n&quot;</span>, Name);
+
+    <span class="enscript-keyword">if</span> (WorkLoop) {
+        DEBUG_IOLog(<span class="enscript-string">&quot;%s::free() releasing WorkLoop\n&quot;</span>, Name);
+        RELEASE(WorkLoop);
+    }
+
+    <span class="enscript-reference">super</span>::free();
+}
+
+Apple16X50UARTSync * Apple16X50BusInterface::
+<span class="enscript-function-name">probeUART</span>(<span class="enscript-type">void</span>* refCon, Apple16X50UARTSync *uart, OSDictionary *properties)
+{
+    <span class="enscript-keyword">if</span> (UARTInstance &gt;= MAX_UARTS) <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    
+    <span class="enscript-keyword">if</span> (!uart) uart = Apple16X50UARTSync::probeUART(<span class="enscript-keyword">this</span>, refCon);
+    <span class="enscript-keyword">if</span> (uart) {
+        <span class="enscript-keyword">if</span> (!properties) properties = OSDictionary::withCapacity(6);
+        <span class="enscript-keyword">if</span> (properties) {
+            <span class="enscript-keyword">if</span> (uart-&gt;init(properties, refCon)) {
+                uart-&gt;attach(<span class="enscript-keyword">this</span>);
+                UART[UARTInstance++] = uart;
+            } <span class="enscript-keyword">else</span> <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+        } <span class="enscript-keyword">else</span> <span class="enscript-keyword">goto</span> <span class="enscript-reference">fail</span>;
+    }
+    <span class="enscript-keyword">return</span> uart;
+    
+fail :
+    RELEASE(uart);
+    RELEASE(properties);
+    <span class="enscript-keyword">return</span> NULL;
+}
+
+IOWorkLoop *<span class="enscript-function-name">Apple16X50BusInterface::getWorkLoop</span>(<span class="enscript-type">void</span> *refCon)
+{
+    <span class="enscript-comment">// We could return a WorkLoop-per-port given the refCon parameter.
+</span>    DEBUG_IOLog(<span class="enscript-string">&quot;%s::getWorkLoop()=%p\n&quot;</span>, Name, WorkLoop);
+    <span class="enscript-keyword">return</span> WorkLoop;
+}
+
+<span class="enscript-type">void</span> Apple16X50BusInterface::
+<span class="enscript-function-name">handleInterruptAction</span>(OSObject *target, IOInterruptEventSource *source, <span class="enscript-type">int</span> count)
+{ ((Apple16X50BusInterface *)target)-&gt;handleInterrupt(source, count); }
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::handleInterrupt</span>(IOInterruptEventSource *source, <span class="enscript-type">int</span> count)
+{
+    UInt32 i;
+    DEBUG_IOLog(<span class="enscript-string">&quot;I%d+&quot;</span>, count);
+    <span class="enscript-keyword">for</span> (i=0; i&lt;UARTInstance; i++)
+        <span class="enscript-keyword">if</span> (UART[i]) UART[i]-&gt;interrupt();
+    DEBUG_IOLog(<span class="enscript-string">&quot;-I\n&quot;</span>);
+}
+
+#<span class="enscript-reference">ifdef</span> <span class="enscript-variable-name">REFBUG</span>
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::retain</span>() <span class="enscript-type">const</span>
+{
+    <span class="enscript-reference">super</span>::retain();
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::retain()==%d\n&quot;</span>, Name, getRetainCount());
+}
+
+<span class="enscript-type">void</span> <span class="enscript-function-name">Apple16X50BusInterface::release</span>() <span class="enscript-type">const</span>
+{
+    DEBUG_IOLog(<span class="enscript-string">&quot;%s::release()==%d\n&quot;</span>,Name, getRetainCount());
+    <span class="enscript-reference">super</span>::release();
+}
+#<span class="enscript-reference">endif</span>
+</pre>
+<hr />
+</body></html>
