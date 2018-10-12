@@ -2,6 +2,7 @@
 Apple Open Source Downloader
 
 解决了Apple Open Source网站上没有类似GitHub的打包下载的方式。
+（附带了runtime源码：objc4-723）
 
 ## Usage
 	git clone https://github.com/byczd/Apple-Open-Source-Downloader.git
