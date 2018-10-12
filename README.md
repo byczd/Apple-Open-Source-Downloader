@@ -13,6 +13,8 @@ Apple Open Source Downloader
 
 ![预览](https://github.com/byczd/Apple-Open-Source-Downloader/raw/master/Preview.png "Preview")
 
-[感谢BlueCocoa！参考来自]:
+
+[Blog Link]
+[(感谢BlueCocoa)参考来自]:
 https://blog.0xbbc.com/2015/05/下载apple开源项目/
 	
