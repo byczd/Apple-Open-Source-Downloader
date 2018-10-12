@@ -15,6 +15,6 @@ Apple Open Source Downloader
 
 
 [Blog Link]
-[(感谢BlueCocoa)参考来自]:
+感谢BlueCocoa！ 参考:
 https://blog.0xbbc.com/2015/05/下载apple开源项目/
 	
